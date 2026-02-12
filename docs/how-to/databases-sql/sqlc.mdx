@@ -1,0 +1,197 @@
+---
+sidebar_position: 1
+title: sqlc - SQL Client
+---
+
+import { CodeBlock } from '../../components.jsx';
+import Config from "!!raw-loader!./src/sqlc/config.dist.yml";
+import Main from "!!raw-loader!./src/sqlc/main.go";
+
+The `sqlc` package provides a fluent API for building and executing SQL queries against relational databases. It supports MySQL and PostgreSQL, and offers connection management, query building, and transaction handling.
+
+## Getting Started
+
+Add the dependency to your Go module:
+
+```bash
+go get github.com/gosoline-project/sqlc
+```
+
+Then import the package in your Go code:
+
+```go
+import "github.com/gosoline-project/sqlc"
+```
+
+## Configuration
+
+A gosoline application can have **multiple `sqlc` clients**, each identified by a unique name (e.g., `default`, `analytics`, `readonly`). Every client you intend to use **must be configured before use** — attempting to create a client without a matching configuration entry will result in an error at startup.
+
+Configure database connections under the `sqlc` key in your configuration file, with each connection name as a sub-key:
+
+```yaml
+sqlc:
+  default:       # primary database
+    # ...
+  analytics:     # separate analytics database
+    # ...
+```
+
+Each connection requires driver and connection details as shown below:
+
+<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{Config}</CodeBlock>
+
+### Connection Settings
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `driver` | Database driver (`mysql` or `postgres`) | Required |
+| `uri.host` | Database host | `localhost` |
+| `uri.port` | Database port | `3306` (MySQL) / `5432` (PostgreSQL) |
+| `uri.user` | Database user | Required |
+| `uri.password` | Database password | Required |
+| `uri.database` | Database name | Required |
+| `charset` | Character set | `utf8mb4` |
+| `max_open_connections` | Maximum open connections | `0` (unlimited) |
+| `max_idle_connections` | Maximum idle connections | `2` |
+| `connection_max_lifetime` | Maximum connection lifetime | `120s` |
+| `connection_max_idletime` | Maximum idle time | `120s` |
+
+## Migrations
+
+The `sqlc` package can automatically run database migrations when the client is created. It uses [goose](https://github.com/pressly/goose) as the default migration provider.
+
+### Enabling Migrations
+
+Add migration settings to your database configuration:
+
+```yaml
+sqlc:
+  default:
+    migrations:
+      enabled: true
+      path: migrations
+```
+
+### Migration Settings
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `enabled` | Run migrations automatically | `false` |
+| `path` | Path to migration files | Required if enabled |
+| `provider` | Migration provider | `goose` |
+| `reset` | Drop and recreate database before migrations | `false` |
+| `prefixed_tables` | Prefix tables with application name | `false` |
+
+### Migration Files
+
+Create migration files in the specified path using the goose format:
+
+```sql
+-- +goose Up
+CREATE TABLE authors (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- +goose Down
+DROP TABLE authors;
+```
+
+The `reset: true` option is useful for development - it drops and recreates the database before running migrations, ensuring a clean state.
+
+## Creating the Client
+
+Create a client using `sqlc.NewClient()` within a gosoline application. The client reads configuration from the specified connection name.
+
+<CodeBlock title="main.go" language="go" snippet="main">{Main}</CodeBlock>
+
+The client provides:
+
+**Query Methods (from Querier interface):**
+- `Get(ctx, dest, query, args...)` - Executes a query returning at most one row, scans into dest
+- `Select(ctx, dest, query, args...)` - Executes a query and scans all rows into a slice
+- `Query(ctx, query, args...)` - Executes a query returning rows for iteration
+- `QueryRow(ctx, query, args...)` - Executes a query returning at most one row
+- `Exec(ctx, query, args...)` - Executes a query without returning rows (INSERT, UPDATE, DELETE)
+- `NamedExec(ctx, query, arg)` - Executes a named query using `:name` syntax from struct/map
+- `Prepare(ctx, query)` - Creates a prepared statement for later execution
+
+**Transaction Methods:**
+- `WithTx(ctx, fn, opts...)` - Executes a function within a transaction (auto commit/rollback)
+- `BeginTx(ctx, opts...)` - Starts a new transaction manually
+
+**Other Methods:**
+- `Q()` - Returns a QueryBuilder for constructing SQL queries
+- `Close()` - Closes the database connection
+
+## Data Models
+
+Define struct types that map to your database tables using `db` struct tags:
+
+<CodeBlock title="main.go" language="go" snippet="models">{Main}</CodeBlock>
+
+The `db` tag specifies the column name. Create composite structs for join results by embedding base types and adding additional fields.
+
+## INSERT Operations
+
+### Single Record
+
+Use `Into()` to create an INSERT builder, then `Records()` to pass a struct:
+
+<CodeBlock title="main.go" language="go" snippet="create author">{Main}</CodeBlock>
+
+The `Exec()` method returns a `Result` with `LastInsertId()` and `RowsAffected()`.
+
+### Bulk Insert
+
+Pass a slice of structs to `Records()` for bulk insertion:
+
+<CodeBlock title="main.go" language="go" snippet="create tags">{Main}</CodeBlock>
+
+## Query Operations
+
+### Simple Queries
+
+Use `From()` to create a SELECT builder. Chain methods like `Where()`, `OrderBy()`, and `Limit()`:
+
+<CodeBlock title="main.go" language="go" snippet="query posts">{Main}</CodeBlock>
+
+### Queries with JOINs
+
+Build joins using `LeftJoin()`, `InnerJoin()`, `RightJoin()`, etc. Each join returns a `JoinBuilder` that must be finalized with `On()`:
+
+<CodeBlock title="main.go" language="go" snippet="query joins">{Main}</CodeBlock>
+
+Use `As()` for table aliases and column aliases. Call `Columns()` before and after joins to specify which columns to select.
+
+## UPDATE Operations
+
+Use `Update()` to create an UPDATE builder. Chain `Set()` for column values and `Where()` for conditions:
+
+<CodeBlock title="main.go" language="go" snippet="update">{Main}</CodeBlock>
+
+Multiple `Set()` calls are combined in the UPDATE clause. Use `SetExpr()` for SQL expressions:
+
+```go
+sqlc.Update("posts").
+    SetExpr("updated_at", "NOW()").
+    Set("status", "published")
+```
+
+## DELETE Operations
+
+Use `Delete()` to create a DELETE builder with `Where()` conditions:
+
+<CodeBlock title="main.go" language="go" snippet="delete">{Main}</CodeBlock>
+
+## Transactions
+
+Use `WithTx()` to execute multiple operations atomically. The transaction automatically commits on success or rolls back on error:
+
+<CodeBlock title="main.go" language="go" snippet="transaction">{Main}</CodeBlock>
+
+Inside the transaction callback, use `tx.Q()` instead of `client.Q()` to execute queries within the transaction scope. If the callback returns an error, all changes are rolled back; if it returns `nil`, changes are committed.

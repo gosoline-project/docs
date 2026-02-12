@@ -1,0 +1,278 @@
+---
+sidebar_position: 2
+title: sqlr - SQL Repository
+---
+
+import { CodeBlock } from '../../components.jsx';
+import Config from "!!raw-loader!./src/sqlr/config.dist.yml";
+import Main from "!!raw-loader!./src/sqlr/main.go";
+
+The `sqlr` package provides a generic, type-safe repository layer built on top of [`sqlc`](./sqlc.mdx). It offers CRUD operations, relationship management, eager loading via joins and preloads, and transaction support — all using Go generics for compile-time type safety.
+
+## Getting Started
+
+Add the dependency to your Go module:
+
+```bash
+go get github.com/gosoline-project/sqlr
+```
+
+Then import the package in your Go code:
+
+```go
+import "github.com/gosoline-project/sqlr"
+```
+
+## Configuration
+
+The `sqlr` package uses `sqlc` under the hood for database connections. Configure your database using the same `sqlc` configuration key described in the [sqlc documentation](./sqlc.mdx#configuration):
+
+<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{Config}</CodeBlock>
+
+## Defining Entities
+
+Entities are Go structs that map to database tables. Embed `sqlr.Entity[K]` to get a primary key (`Id`), and automatic timestamp fields (`CreatedAt`, `UpdatedAt`):
+
+<CodeBlock title="main.go" language="go" snippet="entities">{Main}</CodeBlock>
+
+### Entity Base Struct
+
+The `sqlr.Entity[K]` base struct provides:
+
+| Field | Tag | Description |
+|-------|-----|-------------|
+| `Id` | `db:"id,primaryKey"` | Primary key, auto-increment for integer types |
+| `CreatedAt` | `db:"created_at,autoCreateTime"` | Set automatically on insert |
+| `UpdatedAt` | `db:"updated_at,autoUpdateTime"` | Set automatically on insert and update |
+
+All entities must implement the `Entitier[K]` interface (satisfied automatically by embedding `Entity[K]`):
+
+```go
+type Entitier[K KeyTypes] interface {
+    GetId() K
+    GetUpdatedAt() time.Time
+    GetCreatedAt() time.Time
+}
+```
+
+### Struct Tags
+
+Column mappings and behavior are controlled via the `db` struct tag:
+
+| Tag | Description |
+|-----|-------------|
+| `db:"column_name"` | Maps the field to a database column |
+| `db:"column_name,primaryKey"` | Marks the field as the primary key |
+| `db:"column_name,autoCreateTime"` | Auto-sets the field to `time.Now()` on insert |
+| `db:"column_name,autoUpdateTime"` | Auto-sets the field to `time.Now()` on insert and update |
+| `db:"-,foreignKey:col"` | Defines a HasOne or HasMany relationship (see [Relationships](#relationships)) |
+| `db:"-,belongsTo:col"` | Defines a BelongsTo relationship |
+| `db:"-,many2many:table"` | Defines a ManyToMany relationship |
+
+### Table Name Derivation
+
+Table names are automatically derived from the struct type name by converting PascalCase to snake_case and pluralizing:
+
+| Struct Name | Table Name |
+|-------------|------------|
+| `Author` | `authors` |
+| `Post` | `posts` |
+| `PostTag` | `post_tags` |
+
+To override the default table name, implement the `TableNamer` interface:
+
+```go
+type TableNamer interface {
+    TableName() string
+}
+
+func (a Author) TableName() string {
+    return "my_authors"
+}
+```
+
+### Supported Key Types
+
+Primary keys can be any of these types (or their pointer variants):
+
+```go
+bool | string | int | int64 | uint | uint64 | float32 | float64
+```
+
+Integer primary key types (`int`, `int64`, `uint`, `uint64`) are automatically treated as auto-increment — they are excluded from INSERT statements and their value is set from `LastInsertId()` after creation.
+
+## Relationships
+
+Relationships are declared using `db` struct tags with a `-` column name (since relationship fields don't map to a direct column):
+
+### HasOne / HasMany
+
+Use `foreignKey:column` to define a relationship where the foreign key lives on the **related** table. The relationship type is inferred from the field type — a single struct for HasOne, a slice for HasMany:
+
+```go
+type Author struct {
+    sqlr.Entity[int64]
+    Name    string  `db:"name"`
+    Profile Profile `db:"-,foreignKey:author_id"` // HasOne
+    Posts   []Post  `db:"-,foreignKey:author_id"` // HasMany
+}
+```
+
+### BelongsTo
+
+Use `belongsTo:column` when the foreign key lives on the **current** entity's table:
+
+```go
+type Post struct {
+    sqlr.Entity[int64]
+    AuthorID int64  `db:"author_id"`
+    Author   Author `db:"-,belongsTo:author_id"` // BelongsTo
+}
+```
+
+### ManyToMany
+
+Use `many2many:join_table` for many-to-many relationships through a join table:
+
+```go
+type Post struct {
+    sqlr.Entity[int64]
+    Tags []Tag `db:"-,many2many:post_tags"` // ManyToMany
+}
+```
+
+The join table (`post_tags`) must have columns named after the primary key columns of both tables (e.g., `post_id` and `tag_id`).
+
+## Creating the Repository
+
+Create a repository using `sqlr.NewRepository[K, E]()` within a gosoline application. The type parameters specify the primary key type and the entity type:
+
+<CodeBlock title="main.go" language="go" snippet="create repository">{Main}</CodeBlock>
+
+The last argument (`"default"` above) is the **sqlc client name**. It must match a key under the `sqlc` block in your configuration file — the repository uses that named client for all database operations. You can have multiple repositories pointing to different clients (e.g., `"default"`, `"analytics"`, `"readonly"`) by passing different names.
+
+The `Repository` interface provides:
+
+| Method | Description |
+|--------|-------------|
+| `Create(ctx, entity)` | Inserts the entity, sets auto-increment ID and timestamps |
+| `Read(ctx, id, opts...)` | Loads one entity by primary key, with optional joins/preloads |
+| `Query(ctx, opts...)` | Loads entities matching query conditions |
+| `Update(ctx, entity)` | Updates all fields of the entity |
+| `Delete(ctx, id)` | Deletes the entity by primary key |
+| `Close()` | Releases resources (prepared statements, etc.) |
+
+## CRUD Operations
+
+### Create
+
+Pass a pointer to an entity. Auto-increment IDs and timestamp fields are set automatically:
+
+<CodeBlock title="main.go" language="go" snippet="create">{Main}</CodeBlock>
+
+### Read
+
+Load a single entity by its primary key:
+
+<CodeBlock title="main.go" language="go" snippet="read">{Main}</CodeBlock>
+
+### Update
+
+Modify the entity and pass it to `Update()`. The `UpdatedAt` timestamp is refreshed automatically:
+
+<CodeBlock title="main.go" language="go" snippet="update">{Main}</CodeBlock>
+
+### Delete
+
+Remove an entity by its primary key. Returns `ErrNotFound` if the entity doesn't exist:
+
+<CodeBlock title="main.go" language="go" snippet="delete">{Main}</CodeBlock>
+
+## Query Operations
+
+Use `Query()` with a `QueryBuilderSelect` to filter, sort, and paginate results:
+
+<CodeBlock title="main.go" language="go" snippet="query">{Main}</CodeBlock>
+
+The `QueryBuilderSelect` supports:
+
+| Method | Description |
+|--------|-------------|
+| `Where(condition, params...)` | Adds a WHERE condition (multiple calls are ANDed) |
+| `OrderBy(cols...)` | Sets the ORDER BY clause |
+| `Limit(n)` | Limits the number of results |
+| `Offset(n)` | Skips the first n results |
+| `GroupBy(cols...)` | Sets the GROUP BY clause |
+| `Having(condition, params...)` | Adds a HAVING condition |
+
+WHERE conditions use the same `sqlc.Col()` expression API from the [`sqlc` package](./sqlc.mdx):
+
+```go
+qb.Where(sqlc.Col("status").Eq("published"))
+qb.Where(sqlc.Col("age").Gt(18))
+qb.Where(sqlc.And(sqlc.Col("a").Eq(1), sqlc.Col("b").Eq(2)))
+```
+
+## Eager Loading with Preload
+
+Use `Preload()` to load related entities in separate queries. Preloads support all relationship types: HasOne, HasMany, BelongsTo, and ManyToMany.
+
+<CodeBlock title="main.go" language="go" snippet="query preload">{Main}</CodeBlock>
+
+### Nested Preloads
+
+Load nested relationships using dot-separated paths. Conditions on nested paths apply to the leaf relation only:
+
+```go
+qb.Preload("Posts.Comments")
+qb.Preload("Posts.Comments", sqlr.Condition("body != ?", ""))
+```
+
+### Auto-Preload
+
+Add the `preload` tag option to a relationship to automatically load it on every Read and Query — without requiring an explicit `Preload()` call:
+
+<CodeBlock title="main.go" language="go" snippet="entity auto-preload">{Main}</CodeBlock>
+
+Auto-preloads are recursively discovered across nested relationships and merged with any explicit preloads (explicit preloads take precedence when both are present).
+
+### Preload Conditions
+
+Pass conditions to `Preload()` to filter which related entities are loaded:
+
+```go
+qb.Preload("Posts", sqlr.Condition("status = ?", "published"))
+```
+
+## Eager Loading with Joins
+
+Use `LeftJoin()`, `InnerJoin()`, `RightJoin()`, or `CrossJoin()` to load related entities via SQL JOINs. Joins support HasOne, HasMany, and BelongsTo relationships (ManyToMany and nested paths require `Preload`).
+
+### Joins on Query
+
+<CodeBlock title="main.go" language="go" snippet="query join">{Main}</CodeBlock>
+
+### Joins on Read
+
+Joins can also be used with `Read()` to load relations alongside a single entity lookup:
+
+<CodeBlock title="main.go" language="go" snippet="read with join">{Main}</CodeBlock>
+
+### Join Conditions
+
+Pass conditions to restrict the joined rows:
+
+```go
+qb.LeftJoin("Posts", sqlr.Condition("status = ?", "published"))
+```
+
+## Error Handling
+
+The `sqlr.ErrNotFound` sentinel error is returned when `Read()` or `Delete()` cannot find the requested entity:
+
+```go
+author, err := repo.Read(ctx, id)
+if errors.Is(err, sqlr.ErrNotFound) {
+    // entity does not exist
+}
+```

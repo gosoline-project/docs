@@ -1,0 +1,27 @@
+env: dev
+
+app_project: gosoline
+app_family: docs
+app_group: database-sql
+app_name: sqlr
+
+log:
+  handlers:
+    main:
+      level: debug
+
+# snippet-start: config
+sqlc:
+  default:
+    driver: mysql
+    uri:
+      host: 127.0.0.1
+      port: 3306
+      user: root
+      password: gosoline
+      database: blog
+    migrations:
+      enabled: true
+      reset: true
+      path: migrations
+# snippet-end: config

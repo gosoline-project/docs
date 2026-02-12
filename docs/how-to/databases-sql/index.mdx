@@ -1,0 +1,81 @@
+---
+sidebar_position: 1
+title: Working with Relational Databases
+---
+
+# Working with Relational Databases
+
+The gosoline framework provides three layered packages for working with relational databases, each building on top of the previous one:
+
+## Architecture Overview
+
+```
+sqlh (HTTP Layer)      → Exposes CRUD operations via HTTP endpoints
+    ↑
+sqlr (Repository Layer) → Provides ORM-like experience with entities
+    ↑
+sqlc (Client Layer)     → Core database client and query builder
+```
+
+## sqlc - SQL Client
+
+The `sqlc` package is the foundation layer providing direct access to relational databases. It handles connection management, query building, and execution.
+
+**When to use sqlc:**
+- You need fine-grained control over SQL queries
+- Building custom queries with complex joins or aggregations
+- Working with raw SQL or requiring maximum performance
+- Implementing custom data access patterns
+
+**Key capabilities:**
+- Database connection management for MySQL and PostgreSQL
+- Fluent query builder for SELECT, INSERT, UPDATE, DELETE operations
+- Expression-based WHERE conditions with type-safe operators
+- Transaction support with automatic rollback on error
+- Prepared statement caching
+
+## sqlr - SQL Repository
+
+The `sqlr` package provides an ORM-like experience built on top of `sqlc`. It uses Go generics to offer type-safe CRUD operations for entities.
+
+**When to use sqlr:**
+- You want type-safe entity operations without writing SQL
+- Working with domain entities that map to database tables
+- Need automatic handling of timestamps and auto-increment IDs
+- Loading related entities through relationships
+
+**Key capabilities:**
+- Generic Repository pattern with Create, Read, Update, Delete, Query operations
+- Entity definition with struct tags for schema mapping
+- Relationship support: HasOne, HasMany, BelongsTo, ManyToMany
+- Eager loading via Preload for related entities
+- Join support for HasOne, HasMany, BelongsTo relations
+- Transaction-aware repository variant
+
+## sqlh - SQL HTTP Handlers
+
+The `sqlh` package exposes repository CRUD operations through HTTP endpoints. It integrates with the gosoline HTTP server.
+
+**When to use sqlh:**
+- Building REST APIs for entity management
+- Need quick CRUD endpoints without boilerplate
+- Want consistent API patterns across entities
+
+**Key capabilities:**
+- Automatic CRUD handler generation for entities
+- Transformer pattern for input/output mapping
+- JSON filter support for query endpoints
+- Integration with gosoline HTTP server routing
+
+## Choosing the Right Layer
+
+| Need | Recommended Layer |
+|------|-------------------|
+| Raw SQL execution, complex queries | sqlc |
+| Entity CRUD with relationships | sqlr |
+| REST API endpoints for entities | sqlh |
+| Performance-critical operations | sqlc |
+| Rapid development of CRUD APIs | sqlh + sqlr |
+| Custom business logic | sqlr or sqlc |
+
+You can use multiple layers together within the same application—using `sqlh` for standard CRUD endpoints while leveraging `sqlc` directly for complex reporting queries.

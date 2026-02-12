@@ -1,0 +1,23 @@
+app:
+  env: dev
+  name: server
+  namespace: "{app.tags.project}.{app.env}.{app.tags.family}.{app.tags.group}"
+  tags:
+    project: gosoline
+    family: how-to
+    group: crud
+
+db:
+  default:
+    driver: mysql
+    parse_time: true
+    uri:
+      host: 127.0.0.1
+      port: 3306
+      user: gosoline
+      password: gosoline
+      database: gosoline
+    migrations:
+      enabled: true
+      table_prefixed: false
+      path: file://migrations
