@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkgosoline_docs=self.webpackChunkgosoline_docs||[]).push([["962"],{7888(l){l.exports=JSON.parse('{"tags":[{"label":"logging","permalink":"/docs/blog/tags/logging","count":1},{"label":"sampling","permalink":"/docs/blog/tags/sampling","count":1},{"label":"observability","permalink":"/docs/blog/tags/observability","count":1}]}')}}]);
