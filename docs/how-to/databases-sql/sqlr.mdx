@@ -14,7 +14,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlr
+go get github.com/gosoline-project/sqlr@v0.1.0
 ```
 
 Then import the package in your Go code:
@@ -155,7 +155,7 @@ The `Repository` interface provides:
 
 | Method | Description |
 |--------|-------------|
-| `Create(ctx, entity)` | Inserts the entity, sets auto-increment ID and timestamps |
+| `Create(ctx, entity)` | Inserts the entity and any populated association fields; sets auto-increment IDs and timestamps |
 | `Read(ctx, id, opts...)` | Loads one entity by primary key, with optional joins/preloads |
 | `Query(ctx, opts...)` | Loads entities matching query conditions |
 | `Update(ctx, entity)` | Updates all fields of the entity |
@@ -169,6 +169,21 @@ The `Repository` interface provides:
 Pass a pointer to an entity. Auto-increment IDs and timestamp fields are set automatically:
 
 <CodeBlock title="main.go" language="go" snippet="create">{Main}</CodeBlock>
+
+### Create with Associations
+
+Populate relationship fields on the entity before calling `Create()` and `sqlr` will automatically persist them in the correct order within a single transaction:
+
+<CodeBlock title="main.go" language="go" snippet="create with associations">{Main}</CodeBlock>
+
+The association save order is:
+
+1. **BelongsTo** — related entity inserted first so the parent's FK column is set before the parent row is written.
+2. **Parent entity** — the base row is inserted.
+3. **HasOne / HasMany** — related entities are inserted with their FK pointing to the parent PK.
+4. **ManyToMany** — related entities with zero PKs are inserted, then join table rows are created for all of them.
+
+Entities with a non-zero primary key are treated as already-persisted: they are skipped for insertion but the FK or join table row is still created. `Update` and `Delete` only affect the base entity row and are not association-aware.
 
 ### Read
 
@@ -240,9 +255,7 @@ Auto-preloads are recursively discovered across nested relationships and merged 
 
 Pass conditions to `Preload()` to filter which related entities are loaded:
 
-```go
-qb.Preload("Posts", sqlr.Condition("status = ?", "published"))
-```
+<CodeBlock title="main.go" language="go" snippet="query preload condition">{Main}</CodeBlock>
 
 ## Eager Loading with Joins
 
@@ -262,9 +275,7 @@ Joins can also be used with `Read()` to load relations alongside a single entity
 
 Pass conditions to restrict the joined rows:
 
-```go
-qb.LeftJoin("Posts", sqlr.Condition("status = ?", "published"))
-```
+<CodeBlock title="main.go" language="go" snippet="query join condition">{Main}</CodeBlock>
 
 ## Error Handling
 

@@ -22,6 +22,5 @@ sqlc:
       database: blog
     migrations:
       enabled: true
-      reset: true
       path: migrations
 # snippet-end: config

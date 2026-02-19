@@ -93,9 +93,9 @@ export function CodeBlock({ children, snippet, ...props }) {
         }
     )
     
-    if (foundMatch) {
-        code = code.slice(1, -1)
-    }
+    // Drop leading and trailing empty lines
+    while (code.length > 0 && code[0].trim() === '') code = code.slice(1);
+    while (code.length > 0 && code[code.length - 1].trim() === '') code = code.slice(0, -1);
 
     code = code.join('\n')
 

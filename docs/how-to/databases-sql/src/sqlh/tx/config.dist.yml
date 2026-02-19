@@ -3,7 +3,7 @@ env: dev
 app_project: gosoline
 app_family: docs
 app_group: database-sql
-app_name: sqlc
+app_name: sqlh-tx
 
 log:
   handlers:
@@ -11,6 +11,11 @@ log:
       level: debug
 
 # snippet-start: config
+httpserver:
+  default:
+    port: 8080
+    mode: release
+
 sqlc:
   default:
     driver: mysql
@@ -22,5 +27,6 @@ sqlc:
       database: blog
     migrations:
       enabled: true
+      reset: true
       path: migrations
 # snippet-end: config

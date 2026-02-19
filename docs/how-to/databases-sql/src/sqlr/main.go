@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/gosoline-project/sqlc"
 	"github.com/gosoline-project/sqlr"
@@ -83,26 +82,18 @@ func main() {
 			}
 
 			return func(ctx context.Context) error {
-				timestamp := time.Now().UnixNano()
-
 				// Create entities
-				alice, err := service.createAuthor(ctx, "Alice", fmt.Sprintf("alice-%d@mail.io", timestamp))
+				alice, err := service.createAuthor(ctx, "Alice", "alice-@mail.io")
 				if err != nil {
 					return fmt.Errorf("failed to create author: %w", err)
 				}
 				logger.Info(ctx, "created author: %s (id=%d)", alice.Name, alice.Id)
 
-				post, err := service.createPost(ctx, alice.Id, "Hello World", "My first post!", "draft")
+				post, err := service.createPost(ctx, alice.Id, "Hello World", "My first post!", "draft", Tag{Name: "golang"})
 				if err != nil {
 					return fmt.Errorf("failed to create post: %w", err)
 				}
-				logger.Info(ctx, "created post: %s (id=%d)", post.Title, post.Id)
-
-				tag, err := service.createTag(ctx, "golang")
-				if err != nil {
-					return fmt.Errorf("failed to create tag: %w", err)
-				}
-				logger.Info(ctx, "created tag: %s (id=%d)", tag.Name, tag.Id)
+				logger.Info(ctx, "created post: %s (id=%d) with %d tag(s)", post.Title, post.Id, len(post.Tags))
 
 				// Read by ID
 				readAuthor, err := service.readAuthor(ctx, alice.Id)
@@ -146,11 +137,25 @@ func main() {
 				}
 				logger.Info(ctx, "found %d posts with author joined", len(postsWithJoin))
 
+				// Query with preload condition
+				postsWithPreloadCond, err := service.queryPostsPreloadWithCondition(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to query posts with preload condition: %w", err)
+				}
+				logger.Info(ctx, "found %d posts with conditional preload", len(postsWithPreloadCond))
+
+				// Query with join condition
+				postsWithJoinCond, err := service.queryPostsJoinWithCondition(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to query posts with join condition: %w", err)
+				}
+				logger.Info(ctx, "found %d posts with conditional join", len(postsWithJoinCond))
+
 				// Delete entity
-				if err = service.deleteTag(ctx, tag.Id); err != nil {
+				if err = service.deleteTag(ctx, post.Tags[0].Id); err != nil {
 					return fmt.Errorf("failed to delete tag: %w", err)
 				}
-				logger.Info(ctx, "deleted tag %d", tag.Id)
+				logger.Info(ctx, "deleted tag %d", post.Tags[0].Id)
 
 				// Error handling
 				_, err = service.readAuthor(ctx, 999999)
@@ -190,20 +195,26 @@ func (s *BlogService) createAuthor(ctx context.Context, name, email string) (*Au
 
 // snippet-end: create
 
-func (s *BlogService) createPost(ctx context.Context, authorId int64, title, body, status string) (*Post, error) {
+// snippet-start: create with associations
+func (s *BlogService) createPost(ctx context.Context, authorId int64, title, body, status string, tags ...Tag) (*Post, error) {
 	post := &Post{
 		AuthorID: authorId,
 		Title:    title,
 		Body:     body,
 		Status:   status,
+		Tags:     tags,
 	}
 
+	// When Tags is populated, sqlr automatically inserts the tag rows and
+	// the post_tags join table entries within a single transaction.
 	if err := s.postRepo.Create(ctx, post); err != nil {
 		return nil, fmt.Errorf("failed to create post: %w", err)
 	}
 
 	return post, nil
 }
+
+// snippet-end: create with associations
 
 func (s *BlogService) createTag(ctx context.Context, name string) (*Tag, error) {
 	tag := &Tag{
@@ -321,3 +332,31 @@ func (s *BlogService) queryPostsWithAuthorJoin(ctx context.Context) ([]Post, err
 }
 
 // snippet-end: query join
+
+// snippet-start: query preload condition
+func (s *BlogService) queryPostsPreloadWithCondition(ctx context.Context) ([]Post, error) {
+	posts, err := s.postRepo.Query(ctx, func(qb *sqlr.QueryBuilderSelect) {
+		qb.Preload("Author").Preload("Tags", sqlr.Condition(sqlc.Col("name").NotEq("")))
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to query posts: %w", err)
+	}
+
+	return posts, nil
+}
+
+// snippet-end: query preload condition
+
+// snippet-start: query join condition
+func (s *BlogService) queryPostsJoinWithCondition(ctx context.Context) ([]Post, error) {
+	posts, err := s.postRepo.Query(ctx, func(qb *sqlr.QueryBuilderSelect) {
+		qb.LeftJoin("Author", sqlr.Condition(sqlc.Col("name").Eq("Alice")))
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to query posts: %w", err)
+	}
+
+	return posts, nil
+}
+
+// snippet-end: query join condition

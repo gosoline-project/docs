@@ -1,0 +1,229 @@
+---
+sidebar_position: 3
+title: sqlh - SQL HTTP Handlers
+---
+
+import { CodeBlock } from '../../components.jsx';
+import CrudConfig from "!!raw-loader!./src/sqlh/crud/config.dist.yml";
+import CrudMain from "!!raw-loader!./src/sqlh/crud/main.go";
+import TxConfig from "!!raw-loader!./src/sqlh/tx/config.dist.yml";
+import TxMain from "!!raw-loader!./src/sqlh/tx/main.go";
+
+The `sqlh` package exposes database entities as REST API endpoints. Built on top of [`sqlr`](./sqlr.mdx) and [`sqlc`](./sqlc.mdx), it provides automatic CRUD handler generation, a transformer pattern for input/output mapping, and transaction middleware for wrapping HTTP requests in database transactions.
+
+## Getting Started
+
+Add the dependency to your Go module:
+
+```bash
+go get github.com/gosoline-project/sqlh@v0.1.0
+```
+
+Then import the package in your Go code:
+
+```go
+import "github.com/gosoline-project/sqlh"
+```
+
+## Configuration
+
+The `sqlh` package requires both an HTTP server and a database client. Configure them under the `httpserver` and `sqlc` keys respectively:
+
+<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{CrudConfig}</CodeBlock>
+
+The HTTP server configuration is described in the httpserver documentation. The database configuration follows the same format described in the [sqlc documentation](./sqlc.mdx#configuration).
+
+## CRUD Handlers
+
+The `WithCrudHandlers` function generates a complete set of REST endpoints for an entity. It connects an `sqlr` repository with a transformer to handle input/output mapping.
+
+### Defining Entities
+
+Entities use the same `sqlr.Entity` base struct described in the [sqlr documentation](./sqlr.mdx#defining-entities):
+
+<CodeBlock title="main.go" language="go" snippet="entities">{CrudMain}</CodeBlock>
+
+### Input and Output Types
+
+Define separate types for create input, update input, and API output. These decouple the HTTP API from the database entity:
+
+<CodeBlock title="main.go" language="go" snippet="input output">{CrudMain}</CodeBlock>
+
+Using separate types lets you:
+- Validate input with `binding` tags (e.g., `binding:"required"`)
+- Exclude internal fields (like `Id` or `CreatedAt`) from create/update input
+- Shape the API response independently from the database schema
+
+### Implementing the Transformer
+
+The `Transformer[K, E, IC, IU, O]` interface converts between input types and entity types. Implement `TransformCreate` and `TransformUpdate`:
+
+<CodeBlock title="main.go" language="go" snippet="transformer">{CrudMain}</CodeBlock>
+
+The type parameters are:
+
+| Parameter | Description |
+|-----------|-------------|
+| `K` | Primary key type (e.g., `int64`) |
+| `E` | Entity type (e.g., `Author`) |
+| `IC` | Create input type (e.g., `AuthorCreateInput`) |
+| `IU` | Update input type (e.g., `AuthorUpdateInput`) |
+| `O` | Output type (e.g., `AuthorOutput`) |
+
+#### TransformerOutput (Optional)
+
+If the transformer also implements `TransformerOutput[K, E, O]`, the output is transformed before being returned as JSON. If not implemented, the raw entity is returned directly:
+
+```go
+type TransformerOutput[K sqlr.KeyTypes, E sqlr.Entitier[K], O any] interface {
+    TransformOutput(ctx context.Context, entity *E) (*O, error)
+}
+```
+
+In the example above, `AuthorTransformer` implements both `Transformer` and `TransformerOutput`, so API responses use the `AuthorOutput` shape.
+
+#### SimpleTransformer Helper
+
+Use `sqlh.SimpleTransformer()` when your transformer has no dependencies and doesn't need access to `config` or `logger` during construction:
+
+```go
+sqlh.SimpleTransformer[K, E, IC, IU, O](&MyTransformer{})
+```
+
+For transformers that need dependencies, implement `TransformerFactory` directly:
+
+```go
+type TransformerFactory[K, E, IC, IU, O] func(ctx context.Context, config cfg.Config, logger log.Logger) (Transformer[K, E, IC, IU, O], error)
+```
+
+### Registering CRUD Handlers
+
+Use `WithCrudHandlers` to generate all endpoints and register them with the HTTP server:
+
+<CodeBlock title="main.go" language="go" snippet="crud handlers">{CrudMain}</CodeBlock>
+
+The arguments are:
+
+| Argument | Description |
+|----------|-------------|
+| `version` | API version number, used in the URL path (e.g., `1` produces `/v1/...`) |
+| `entityName` | Singular entity name for the URL path (e.g., `"author"`) |
+| `transformerFactory` | Factory that creates the transformer instance |
+
+### Generated Endpoints
+
+`WithCrudHandlers` registers five endpoints:
+
+| Method | Path | Handler | Description |
+|--------|------|---------|-------------|
+| `POST` | `/v{n}/{entity}` | `HandleCreate` | Creates an entity from `IC` input |
+| `GET` | `/v{n}/{entity}/:id` | `HandleRead` | Reads a single entity by ID |
+| `PUT` | `/v{n}/{entity}/:id` | `HandleUpdate` | Updates an entity from `IU` input |
+| `DELETE` | `/v{n}/{entity}/:id` | `HandleDelete` | Deletes an entity by ID |
+| `POST` | `/v{n}/{entities}` | `HandleQuery` | Queries entities with a JSON filter |
+
+The query endpoint uses the **plural** form of the entity name (e.g., `"author"` becomes `"/v1/authors"`). Pluralization is handled automatically.
+
+### Query with JSON Filter
+
+The query endpoint accepts a JSON body with a `filter` field that maps to `sqlc.JsonFilter`:
+
+```json
+{
+  "filter": {
+    "column": "name",
+    "operator": "=",
+    "value": "Alice"
+  }
+}
+```
+
+The filter is converted to an `sqlc.Expression` and applied as a WHERE condition on the query. See the [sqlc JSON filter documentation](./sqlc.mdx) for the full filter syntax.
+
+### Wiring into the Application
+
+Register handlers with the gosoline HTTP server using `router.HandleWith()`:
+
+<CodeBlock title="main.go" language="go" snippet="main">{CrudMain}</CodeBlock>
+
+## Transaction Middleware
+
+The `WithTx` function wraps a group of HTTP routes in a database transaction. Each request automatically begins a transaction before the handler runs, commits on success, and rolls back if any error occurs.
+
+### Setting Up WithTx
+
+Create a handler struct with a factory function, then use `WithTx` to register routes:
+
+<CodeBlock title="main.go" language="go" snippet="with tx handler">{TxMain}</CodeBlock>
+
+<CodeBlock title="main.go" language="go" snippet="with tx register">{TxMain}</CodeBlock>
+
+Notice that the handler struct does not create or hold a repository. Instead of manually setting up database access, each handler receives an active `sqlc.Tx` directly through the `Bind*` helpers — the transaction is started automatically before the handler runs and committed or rolled back afterward.
+
+`WithTx` takes two arguments:
+
+| Argument | Description |
+|----------|-------------|
+| `handlerFactory` | Factory that creates the handler struct (with access to `config` and `logger`) |
+| `register` | Function that registers routes on the router, receiving the handler instance |
+
+The middleware:
+1. Begins a transaction via `sqlClient.BeginTx()` before each request
+2. Stores the transaction in the gin context
+3. Calls the next handler
+4. **Commits** if no errors occurred
+5. **Rolls back** if any handler in the chain added an error to the gin context
+
+### Transaction Binding Helpers
+
+Inside a `WithTx`-wrapped route group, use the `BindTx` family of functions to extract the transaction and bind request input:
+
+#### BindTx — With Input
+
+Use `BindTx` when the handler needs both the transaction and a parsed request body:
+
+<CodeBlock title="main.go" language="go" snippet="bind tx handler">{TxMain}</CodeBlock>
+
+`BindTx` automatically:
+- Binds the request body to the input type `I`
+- Extracts the `sqlc.Tx` from the gin context
+- Calls the handler with both
+- Writes the response
+
+#### BindTxN — No Input
+
+Use `BindTxN` when the handler only needs the transaction (no request body):
+
+<CodeBlock title="main.go" language="go" snippet="bind tx no input">{TxMain}</CodeBlock>
+
+Since `sqlc.Tx` implements `Querier`, you can pass it to `WithClient()` on query builders to execute queries within the transaction.
+
+#### BindTxR / BindTxNR — With Raw Request
+
+For handlers that need access to the raw `*http.Request` (e.g., to read headers or query parameters), use the `R` variants:
+
+```go
+// With input + raw request
+sqlh.BindTxR(func(cttx sqlc.Tx, req *http.Request, input *MyInput) (httpserver.Response, error) {
+    userAgent := req.Header.Get("User-Agent")
+    // ...
+})
+
+// No input + raw request
+sqlh.BindTxNR(func(cttx sqlc.Tx, req *http.Request) (httpserver.Response, error) {
+    // ...
+})
+```
+
+### Wiring into the Application
+
+<CodeBlock title="main.go" language="go" snippet="main">{TxMain}</CodeBlock>
+
+### Summary of Binding Functions
+
+| Function | Input | Raw Request | Signature |
+|----------|-------|-------------|-----------|
+| `BindTx` | Yes | No | `func(cttx sqlc.Tx, input *I) (Response, error)` |
+| `BindTxR` | Yes | Yes | `func(cttx sqlc.Tx, req *http.Request, input *I) (Response, error)` |
+| `BindTxN` | No | No | `func(cttx sqlc.Tx) (Response, error)` |
+| `BindTxNR` | No | Yes | `func(cttx sqlc.Tx, req *http.Request) (Response, error)` |
