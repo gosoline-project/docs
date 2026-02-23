@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkgosoline_docs=self.webpackChunkgosoline_docs||[]).push([["5520"],{8101(e){e.exports=JSON.parse('{"metadata":{"permalink":"/docs/blog","page":1,"postsPerPage":10,"totalPages":1,"totalCount":1,"blogDescription":"Articles and announcements from the gosoline project","blogTitle":"Gosoline Blog"}}')}}]);
