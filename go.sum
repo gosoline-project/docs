@@ -287,10 +287,14 @@ github.com/gosoline-project/sqlc v0.1.0 h1:IFqvx+v4JajK2UUZcA09xX2b8+5/59UEMTBlf
 github.com/gosoline-project/sqlc v0.1.0/go.mod h1:doRYpD31sXZpNwBzZmCfKV0+rKGVntVUS/clN66RPyY=
 github.com/gosoline-project/sqlh v0.1.0 h1:cS6GTHPoH0EUH2ySnAAQhVxipvaZ+R+CWiSdSmiVlBg=
 github.com/gosoline-project/sqlh v0.1.0/go.mod h1:GL0hcxtgt4oy1sEg4SxVOfTbZ4yZmDMZptJBYOV6/E4=
+github.com/gosoline-project/sqlh v0.2.0 h1:WIz9Pot2xSyy2ErccK/F8OVeANjaGemDmB6URVX2Lk0=
+github.com/gosoline-project/sqlh v0.2.0/go.mod h1:ZJvhXM0UPbIcXGJhp9aF8oGdtBgCyJBr0R9x/t15T1U=
 github.com/gosoline-project/sqlr v0.0.0-20260218123002-1bcf5aaee58b h1:M6oY1bnhMpzA5BOGoN9fHnhEVxXsmK0FYkCzg1j09e4=
 github.com/gosoline-project/sqlr v0.0.0-20260218123002-1bcf5aaee58b/go.mod h1:I5uTFA5Ezoj0VLe0Vi3mDMctvBX5MRMXaO3vpzWz1mw=
 github.com/gosoline-project/sqlr v0.1.0 h1:Nknm5DSYjB5zNLDlZ8BEGmAX5xGJJ6zj2AoJoemOrbs=
 github.com/gosoline-project/sqlr v0.1.0/go.mod h1:u9y+nfLz5kyD5yWyyK0HLNO6kMEhKkqrzsKvWW+1GvA=
+github.com/gosoline-project/sqlr v0.2.0 h1:I01eTGpNVaoZ+aQOvPo3ne6WwNDe715oyIvPKQgh9pg=
+github.com/gosoline-project/sqlr v0.2.0/go.mod h1:u9y+nfLz5kyD5yWyyK0HLNO6kMEhKkqrzsKvWW+1GvA=
 github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 h1:+9834+KizmvFV7pXQGSXQTsaWhq2GjuNUt0aUU0YBYw=
 github.com/grpc-ecosystem/go-grpc-middleware v1.3.0/go.mod h1:z0ButlSOZa5vEBq9m2m2hlwIgKw+rp3sdCBRoJY+30Y=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.23.0 h1:ad0vkEBuk23VJzZR9nkLVG0YAoN9coASF1GusYX6AlU=

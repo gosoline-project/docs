@@ -4,7 +4,7 @@ go 1.25.7
 
 require (
 	github.com/gosoline-project/sqlc v0.1.0
-	github.com/gosoline-project/sqlr v0.1.0
+	github.com/gosoline-project/sqlr v0.2.0
 	github.com/justtrackio/gosoline v0.55.0
 )
 
@@ -96,7 +96,7 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gosoline-project/httpserver v0.2.0 // indirect
-	github.com/gosoline-project/sqlh v0.1.0 // indirect
+	github.com/gosoline-project/sqlh v0.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.23.0 // indirect
 	github.com/hamba/avro/v2 v2.29.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect

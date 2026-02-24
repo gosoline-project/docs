@@ -3,7 +3,7 @@ env: dev
 app_project: gosoline
 app_family: docs
 app_group: database-sql
-app_name: sqlr
+app_name: sqlr-auto
 
 log:
   handlers:

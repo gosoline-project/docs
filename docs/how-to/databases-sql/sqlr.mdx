@@ -4,8 +4,8 @@ title: sqlr - SQL Repository
 ---
 
 import { CodeBlock } from '../../components.jsx';
-import Config from "!!raw-loader!./src/sqlr/config.dist.yml";
-import Main from "!!raw-loader!./src/sqlr/main.go";
+import Config from "!!raw-loader!./src/sqlr/auto/config.dist.yml";
+import Auto from "!!raw-loader!./src/sqlr/auto/main.go";
 
 The `sqlr` package provides a generic, type-safe repository layer built on top of [`sqlc`](./sqlc.mdx). It offers CRUD operations, relationship management, eager loading via joins and preloads, and transaction support — all using Go generics for compile-time type safety.
 
@@ -14,7 +14,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlr@v0.1.0
+go get github.com/gosoline-project/sqlr@v0.2.0
 ```
 
 Then import the package in your Go code:
@@ -33,7 +33,7 @@ The `sqlr` package uses `sqlc` under the hood for database connections. Configur
 
 Entities are Go structs that map to database tables. Embed `sqlr.Entity[K]` to get a primary key (`Id`), and automatic timestamp fields (`CreatedAt`, `UpdatedAt`):
 
-<CodeBlock title="main.go" language="go" snippet="entities">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="entities">{Auto}</CodeBlock>
 
 ### Entity Base Struct
 
@@ -57,7 +57,7 @@ type Entitier[K KeyTypes] interface {
 
 ### Struct Tags
 
-Column mappings and behavior are controlled via the `db` struct tag:
+Column mappings and behavior are controlled via the `db` struct tag. The `db` tag is **optional** for public fields — when omitted, the field name is converted to a column name using [`SchemaNameTransformer`](#schemanametransformer) (default: snake_case). Public struct and slice-of-struct fields without a `db` tag are auto-detected as relationships (see [Auto-detected Relationships](#auto-detected-relationships)). To explicitly exclude a public field from all mapping, use `db:"-"` (without any options after the comma).
 
 | Tag | Description |
 |-----|-------------|
@@ -68,16 +68,23 @@ Column mappings and behavior are controlled via the `db` struct tag:
 | `db:"-,foreignKey:col"` | Defines a HasOne or HasMany relationship (see [Relationships](#relationships)) |
 | `db:"-,belongsTo:col"` | Defines a BelongsTo relationship |
 | `db:"-,many2many:table"` | Defines a ManyToMany relationship |
+| `db:"-,many2many:table,parentKey:col"` | Overrides the join table column that references the parent entity's PK |
+| `db:"-,many2many:table,relatedKey:col"` | Overrides the join table column that references the related entity's PK |
+| `db:"-"` | Explicitly excludes a public field from column and relationship mapping |
+
+### Excluding Fields
+
+To exclude a public field from all mapping (no column, no relationship), use `db:"-"`:
 
 ### Table Name Derivation
 
-Table names are automatically derived from the struct type name by converting PascalCase to snake_case and pluralizing:
+Table names are automatically derived from the struct type name by applying [`SchemaNameTransformer`](#schemanametransformer) (default: snake_case conversion) and then pluralizing:
 
 | Struct Name | Table Name |
 |-------------|------------|
 | `Author` | `authors` |
 | `Post` | `posts` |
-| `PostTag` | `post_tags` |
+| `PostTag` | `posts_tags` |
 
 To override the default table name, implement the `TableNamer` interface:
 
@@ -91,6 +98,31 @@ func (a Author) TableName() string {
 }
 ```
 
+### SchemaNameTransformer
+
+`SchemaNameTransformer` is a package-level variable that controls how Go field names and type names are converted to database identifiers. It is used for:
+
+- Deriving column names for untagged public fields
+- Deriving table names from struct type names (before pluralization)
+- Deriving foreign key column names for auto-detected relationships
+- Deriving join table column names for ManyToMany relationships when no `parentKey:`/`relatedKey:` override is set
+
+The default transformer is `toSnakeCase` (PascalCase/camelCase → snake_case). You can replace it at program startup before any repository is created:
+
+```go
+import (
+    "strings"
+    "github.com/gosoline-project/sqlr"
+)
+
+func init() {
+    // Use lowercase field names instead of snake_case
+    sqlr.SchemaNameTransformer = strings.ToLower
+}
+```
+
+The transformer must be set **before** any repository or schema parsing occurs, as schemas are cached after first use.
+
 ### Supported Key Types
 
 Primary keys can be any of these types (or their pointer variants):
@@ -103,51 +135,296 @@ Integer primary key types (`int`, `int64`, `uint`, `uint64`) are automatically t
 
 ## Relationships
 
-Relationships are declared using `db` struct tags with a `-` column name (since relationship fields don't map to a direct column):
+Relationships can be declared in two ways: via **auto-detection** of untagged public fields (convention over configuration) or via **explicit `db` struct tags** (full control over every name).
 
-### HasOne / HasMany
+### HasOne
 
-Use `foreignKey:column` to define a relationship where the foreign key lives on the **related** table. The relationship type is inferred from the field type — a single struct for HasOne, a slice for HasMany:
+The foreign key lives on the **related** table and the field type is a single struct. HasOne cannot be auto-detected — a non-slice struct field with no `db` tag is always treated as BelongsTo instead. An explicit `foreignKey:` tag is always required.
+
+#### Explicit Tag
 
 ```go
 type Author struct {
     sqlr.Entity[int64]
     Name    string  `db:"name"`
-    Profile Profile `db:"-,foreignKey:author_id"` // HasOne
-    Posts   []Post  `db:"-,foreignKey:author_id"` // HasMany
+    Profile Profile `db:"-,foreignKey:author_id"`
+}
+
+type Profile struct {
+    sqlr.Entity[int64]
+    AuthorID int64  `db:"author_id"`
+    Bio      string `db:"bio"`
 }
 ```
 
+<details>
+<summary>Table schema</summary>
+
+```sql
+CREATE TABLE authors (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE profiles (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    author_id  BIGINT NOT NULL,
+    bio        TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (author_id) REFERENCES authors(id)
+);
+```
+
+</details>
+
+### HasMany
+
+The foreign key lives on the **related** table and the field type is a slice.
+
+#### Auto-detected
+
+A public slice-of-struct field with no `db` tag is automatically treated as HasMany. The foreign key column name on the related table is derived as `SchemaNameTransformer(parentTypeName) + "_id"`.
+
+```go
+type Author struct {
+    sqlr.Entity[int64]
+    Name  string
+    Posts []Post // FK "author_id" derived on posts table
+}
+
+type Post struct {
+    sqlr.Entity[int64]
+    AuthorID int64
+    Title    string
+}
+```
+
+#### Explicit Tag
+
+```go
+type Author struct {
+    sqlr.Entity[int64]
+    Name  string `db:"name"`
+    Posts []Post `db:"-,foreignKey:author_id"`
+}
+
+type Post struct {
+    sqlr.Entity[int64]
+    AuthorID int64  `db:"author_id"`
+    Title    string `db:"title"`
+}
+```
+
+<details>
+<summary>Table schema</summary>
+
+```sql
+CREATE TABLE authors (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE posts (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    author_id  BIGINT NOT NULL,
+    title      VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (author_id) REFERENCES authors(id)
+);
+```
+
+</details>
+
 ### BelongsTo
 
-Use `belongsTo:column` when the foreign key lives on the **current** entity's table:
+The foreign key lives on the **current** entity's table.
+
+#### Auto-detected
+
+A public non-slice struct field with no `db` tag (whose type is not a known value type such as `time.Time`) is automatically treated as BelongsTo. The foreign key column name on the current table is derived as `SchemaNameTransformer(fieldName) + "_id"`.
+
+```go
+type Post struct {
+    sqlr.Entity[int64]
+    AuthorID int64
+    Title    string
+    Author   Author // FK "author_id" derived on this table
+}
+
+type Author struct {
+    sqlr.Entity[int64]
+    Name string
+}
+```
+
+#### Explicit Tag
 
 ```go
 type Post struct {
     sqlr.Entity[int64]
     AuthorID int64  `db:"author_id"`
-    Author   Author `db:"-,belongsTo:author_id"` // BelongsTo
+    Title    string `db:"title"`
+    Author   Author `db:"-,belongsTo:author_id"`
+}
+
+type Author struct {
+    sqlr.Entity[int64]
+    Name string `db:"name"`
 }
 ```
 
+<details>
+<summary>Table schema</summary>
+
+The database schema is the same as HasMany — BelongsTo is the inverse perspective of the same foreign key column:
+
+```sql
+CREATE TABLE authors (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE posts (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    author_id  BIGINT NOT NULL,
+    title      VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (author_id) REFERENCES authors(id)
+);
+```
+
+</details>
+
 ### ManyToMany
 
-Use `many2many:join_table` for many-to-many relationships through a join table:
+A join table is required and `many2many:` always needs an explicit `db` tag — ManyToMany relationships cannot be auto-detected.
+
+The join table must have columns referencing the primary key of each side. By default these column names are derived as `SchemaNameTransformer(EntityType) + "_id"`.
+
+#### Auto-derived Join Table Name
+
+Leave the `many2many:` value empty to have the join table name derived automatically from both entity table names, sorted alphabetically and joined with an underscore:
 
 ```go
 type Post struct {
     sqlr.Entity[int64]
-    Tags []Tag `db:"-,many2many:post_tags"` // ManyToMany
+    Title string
+    Tags  []Tag `db:"-,many2many:"` // join table "posts_tags" auto-derived
+}
+
+type Tag struct {
+    sqlr.Entity[int64]
+    Name string
 }
 ```
 
-The join table (`post_tags`) must have columns named after the primary key columns of both tables (e.g., `post_id` and `tag_id`).
+#### Explicit Tag
+
+```go
+type Post struct {
+    sqlr.Entity[int64]
+    Title string `db:"title"`
+    Tags  []Tag  `db:"-,many2many:posts_tags"`
+}
+
+type Tag struct {
+    sqlr.Entity[int64]
+    Name string `db:"name"`
+}
+```
+
+<details>
+<summary>Table schema</summary>
+
+Both the auto-derived and explicit variants map to the same schema. The join table column names are derived as `SchemaNameTransformer(EntityType) + "_id"`:
+
+```sql
+CREATE TABLE posts (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title      VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE tags (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE posts_tags (
+    post_id BIGINT NOT NULL,
+    tag_id  BIGINT NOT NULL,
+    PRIMARY KEY (post_id, tag_id),
+    FOREIGN KEY (post_id) REFERENCES posts(id),
+    FOREIGN KEY (tag_id)  REFERENCES tags(id)
+);
+```
+
+</details>
+
+#### Overriding Join Table Column Names
+
+Use `parentKey:` and `relatedKey:` to override the join table column names when they differ from the default convention:
+
+```go
+type Article struct {
+    sqlr.Entity[int64]
+    Title  string  `db:"title"`
+    Labels []Label `db:"-,many2many:article_labels,parentKey:art_id,relatedKey:lbl_id"`
+}
+
+type Label struct {
+    sqlr.Entity[int64]
+    Name string `db:"name"`
+}
+```
+
+<details>
+<summary>Table schema</summary>
+
+The corresponding join table uses abbreviated column names that differ from the default `SchemaNameTransformer` convention (`article_id` / `label_id`):
+
+```sql
+CREATE TABLE article_labels (
+    art_id BIGINT NOT NULL,
+    lbl_id BIGINT NOT NULL,
+    PRIMARY KEY (art_id, lbl_id),
+    FOREIGN KEY (art_id) REFERENCES articles(id),
+    FOREIGN KEY (lbl_id) REFERENCES labels(id)
+);
+```
+
+</details>
+
+| Option | Description |
+|--------|-------------|
+| `parentKey:col` | Join table column referencing the **parent** entity's primary key |
+| `relatedKey:col` | Join table column referencing the **related** entity's primary key |
+
+```go
+type Author struct {
+    sqlr.Entity[int64]
+    Name     string `db:"name"`
+    Internal string `db:"-"` // not mapped to any column
+}
+```
 
 ## Creating the Repository
 
 Create a repository using `sqlr.NewRepository[K, E]()` within a gosoline application. The type parameters specify the primary key type and the entity type:
 
-<CodeBlock title="main.go" language="go" snippet="create repository">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="create repository">{Auto}</CodeBlock>
 
 The last argument (`"default"` above) is the **sqlc client name**. It must match a key under the `sqlc` block in your configuration file — the repository uses that named client for all database operations. You can have multiple repositories pointing to different clients (e.g., `"default"`, `"analytics"`, `"readonly"`) by passing different names.
 
@@ -168,13 +445,13 @@ The `Repository` interface provides:
 
 Pass a pointer to an entity. Auto-increment IDs and timestamp fields are set automatically:
 
-<CodeBlock title="main.go" language="go" snippet="create">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="create">{Auto}</CodeBlock>
 
 ### Create with Associations
 
 Populate relationship fields on the entity before calling `Create()` and `sqlr` will automatically persist them in the correct order within a single transaction:
 
-<CodeBlock title="main.go" language="go" snippet="create with associations">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="create with associations">{Auto}</CodeBlock>
 
 The association save order is:
 
@@ -189,25 +466,25 @@ Entities with a non-zero primary key are treated as already-persisted: they are 
 
 Load a single entity by its primary key:
 
-<CodeBlock title="main.go" language="go" snippet="read">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="read">{Auto}</CodeBlock>
 
 ### Update
 
 Modify the entity and pass it to `Update()`. The `UpdatedAt` timestamp is refreshed automatically:
 
-<CodeBlock title="main.go" language="go" snippet="update">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="update">{Auto}</CodeBlock>
 
 ### Delete
 
 Remove an entity by its primary key. Returns `ErrNotFound` if the entity doesn't exist:
 
-<CodeBlock title="main.go" language="go" snippet="delete">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="delete">{Auto}</CodeBlock>
 
 ## Query Operations
 
 Use `Query()` with a `QueryBuilderSelect` to filter, sort, and paginate results:
 
-<CodeBlock title="main.go" language="go" snippet="query">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="query">{Auto}</CodeBlock>
 
 The `QueryBuilderSelect` supports:
 
@@ -232,7 +509,7 @@ qb.Where(sqlc.And(sqlc.Col("a").Eq(1), sqlc.Col("b").Eq(2)))
 
 Use `Preload()` to load related entities in separate queries. Preloads support all relationship types: HasOne, HasMany, BelongsTo, and ManyToMany.
 
-<CodeBlock title="main.go" language="go" snippet="query preload">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="query preload">{Auto}</CodeBlock>
 
 ### Nested Preloads
 
@@ -247,7 +524,15 @@ qb.Preload("Posts.Comments", sqlr.Condition("body != ?", ""))
 
 Add the `preload` tag option to a relationship to automatically load it on every Read and Query — without requiring an explicit `Preload()` call:
 
-<CodeBlock title="main.go" language="go" snippet="entity auto-preload">{Main}</CodeBlock>
+```go
+type PostWithPreloads struct {
+    sqlr.Entity[int64]
+    AuthorID int64  `db:"author_id"`
+    Title    string `db:"title"`
+    Author   Author `db:"-,belongsTo:author_id,preload"`
+    Tags     []Tag  `db:"-,many2many:posts_tags,preload"`
+}
+```
 
 Auto-preloads are recursively discovered across nested relationships and merged with any explicit preloads (explicit preloads take precedence when both are present).
 
@@ -255,7 +540,7 @@ Auto-preloads are recursively discovered across nested relationships and merged 
 
 Pass conditions to `Preload()` to filter which related entities are loaded:
 
-<CodeBlock title="main.go" language="go" snippet="query preload condition">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="query preload condition">{Auto}</CodeBlock>
 
 ## Eager Loading with Joins
 
@@ -263,19 +548,19 @@ Use `LeftJoin()`, `InnerJoin()`, `RightJoin()`, or `CrossJoin()` to load related
 
 ### Joins on Query
 
-<CodeBlock title="main.go" language="go" snippet="query join">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="query join">{Auto}</CodeBlock>
 
 ### Joins on Read
 
 Joins can also be used with `Read()` to load relations alongside a single entity lookup:
 
-<CodeBlock title="main.go" language="go" snippet="read with join">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="read with join">{Auto}</CodeBlock>
 
 ### Join Conditions
 
 Pass conditions to restrict the joined rows:
 
-<CodeBlock title="main.go" language="go" snippet="query join condition">{Main}</CodeBlock>
+<CodeBlock title="main.go" language="go" snippet="query join condition">{Auto}</CodeBlock>
 
 ## Error Handling
 

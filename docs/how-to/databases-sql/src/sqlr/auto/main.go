@@ -17,40 +17,27 @@ import (
 // snippet-start: entities
 type Author struct {
 	sqlr.Entity[int64]
-	Name  string `db:"name"`
-	Email string `db:"email"`
-	Posts []Post `db:"-,foreignKey:author_id"`
+	Name  string
+	Email string
+	Posts []Post // HasMany
 }
 
 type Post struct {
 	sqlr.Entity[int64]
-	AuthorID int64  `db:"author_id"`
-	Title    string `db:"title"`
-	Body     string `db:"body"`
-	Status   string `db:"status"`
-	Author   Author `db:"-,belongsTo:author_id"`
-	Tags     []Tag  `db:"-,many2many:post_tags"`
+	AuthorID int64
+	Title    string
+	Body     string
+	Status   string
+	Author   Author `db:"-,belongsTo:author_id"` // BelongsTo
+	Tags     []Tag  `db:"-,many2many:"`          // ManyToMany
 }
 
 type Tag struct {
 	sqlr.Entity[int64]
-	Name string `db:"name"`
+	Name string
 }
 
 // snippet-end: entities
-
-// snippet-start: entity auto-preload
-type PostWithPreloads struct {
-	sqlr.Entity[int64]
-	AuthorID int64  `db:"author_id"`
-	Title    string `db:"title"`
-	Body     string `db:"body"`
-	Status   string `db:"status"`
-	Author   Author `db:"-,belongsTo:author_id,preload"`
-	Tags     []Tag  `db:"-,many2many:post_tags,preload"`
-}
-
-// snippet-end: entity auto-preload
 
 //go:embed config.dist.yml
 var config []byte
@@ -83,7 +70,7 @@ func main() {
 
 			return func(ctx context.Context) error {
 				// Create entities
-				alice, err := service.createAuthor(ctx, "Alice", "alice-@mail.io")
+				alice, err := service.createAuthor(ctx, "Alice", "alice@mail.io")
 				if err != nil {
 					return fmt.Errorf("failed to create author: %w", err)
 				}
@@ -206,7 +193,7 @@ func (s *BlogService) createPost(ctx context.Context, authorId int64, title, bod
 	}
 
 	// When Tags is populated, sqlr automatically inserts the tag rows and
-	// the post_tags join table entries within a single transaction.
+	// the posts_tags join table entries within a single transaction.
 	if err := s.postRepo.Create(ctx, post); err != nil {
 		return nil, fmt.Errorf("failed to create post: %w", err)
 	}

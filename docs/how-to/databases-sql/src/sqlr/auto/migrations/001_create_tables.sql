@@ -25,7 +25,7 @@ CREATE TABLE tags (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-CREATE TABLE post_tags (
+CREATE TABLE posts_tags (
     post_id BIGINT NOT NULL,
     tag_id BIGINT NOT NULL,
     PRIMARY KEY (post_id, tag_id),
@@ -34,7 +34,7 @@ CREATE TABLE post_tags (
 );
 
 -- +goose Down
-DROP TABLE post_tags;
+DROP TABLE posts_tags;
 DROP TABLE tags;
 DROP TABLE posts;
 DROP TABLE authors;
