@@ -8,6 +8,7 @@ import CrudConfig from "!!raw-loader!./src/sqlh/crud/config.dist.yml";
 import CrudMain from "!!raw-loader!./src/sqlh/crud/main.go";
 import TxConfig from "!!raw-loader!./src/sqlh/tx/config.dist.yml";
 import TxMain from "!!raw-loader!./src/sqlh/tx/main.go";
+import ResultTransformerUserCrud from "!!raw-loader!./src/sqlh/result_transformer/user_crud.go";
 
 The `sqlh` package exposes database entities as REST API endpoints. Built on top of [`sqlr`](./sqlr.mdx) and [`sqlc`](./sqlc.mdx), it provides automatic CRUD handler generation, a transformer pattern for input/output mapping, and transaction middleware for wrapping HTTP requests in database transactions.
 
@@ -16,7 +17,7 @@ The `sqlh` package exposes database entities as REST API endpoints. Built on top
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlh@v0.1.0
+go get github.com/gosoline-project/sqlh@v0.2.1
 ```
 
 Then import the package in your Go code:
@@ -43,20 +44,19 @@ Entities use the same `sqlr.Entity` base struct described in the [sqlr documenta
 
 <CodeBlock title="main.go" language="go" snippet="entities">{CrudMain}</CodeBlock>
 
-### Input and Output Types
+### Input Types
 
-Define separate types for create input, update input, and API output. These decouple the HTTP API from the database entity:
+Define separate types for create and update input. These decouple the HTTP API from the database entity:
 
 <CodeBlock title="main.go" language="go" snippet="input output">{CrudMain}</CodeBlock>
 
-Using separate types lets you:
+Using separate input types lets you:
 - Validate input with `binding` tags (e.g., `binding:"required"`)
-- Exclude internal fields (like `Id` or `CreatedAt`) from create/update input
-- Shape the API response independently from the database schema
+- Exclude internal fields (like `Id` or `CreatedAt`) from create/update payloads
 
 ### Implementing the Transformer
 
-The `Transformer[K, E, IC, IU, O]` interface converts between input types and entity types. Implement `TransformCreate` and `TransformUpdate`:
+The `Transformer[K, E, IC, IU]` interface converts between input types and entity types, and controls how responses are rendered. Implement `TransformCreateInput`, `TransformUpdateInput`, `RenderEntityResponse`, and `RenderQueryResponse`:
 
 <CodeBlock title="main.go" language="go" snippet="transformer">{CrudMain}</CodeBlock>
 
@@ -68,33 +68,17 @@ The type parameters are:
 | `E` | Entity type (e.g., `Author`) |
 | `IC` | Create input type (e.g., `AuthorCreateInput`) |
 | `IU` | Update input type (e.g., `AuthorUpdateInput`) |
-| `O` | Output type (e.g., `AuthorOutput`) |
 
-#### TransformerOutput (Optional)
+The interface requires four methods:
 
-If the transformer also implements `TransformerOutput[K, E, O]`, the output is transformed before being returned as JSON. If not implemented, the raw entity is returned directly:
+| Method | Description |
+|--------|-------------|
+| `TransformCreateInput` | Converts a create input DTO into a new entity |
+| `TransformUpdateInput` | Merges an update input DTO into an existing entity |
+| `RenderEntityResponse` | Serialises a single entity into an `httpserver.Response` |
+| `RenderQueryResponse` | Serialises a slice of entities into an `httpserver.Response` |
 
-```go
-type TransformerOutput[K sqlr.KeyTypes, E sqlr.Entitier[K], O any] interface {
-    TransformOutput(ctx context.Context, entity *E) (*O, error)
-}
-```
-
-In the example above, `AuthorTransformer` implements both `Transformer` and `TransformerOutput`, so API responses use the `AuthorOutput` shape.
-
-#### SimpleTransformer Helper
-
-Use `sqlh.SimpleTransformer()` when your transformer has no dependencies and doesn't need access to `config` or `logger` during construction:
-
-```go
-sqlh.SimpleTransformer[K, E, IC, IU, O](&MyTransformer{})
-```
-
-For transformers that need dependencies, implement `TransformerFactory` directly:
-
-```go
-type TransformerFactory[K, E, IC, IU, O] func(ctx context.Context, config cfg.Config, logger log.Logger) (Transformer[K, E, IC, IU, O], error)
-```
+In the simple case above, `RenderEntityResponse` and `RenderQueryResponse` return the entity directly as JSON. See [Customizing Output Transformers](#customizing-output-transformers) for approaches when you need a separate output shape.
 
 ### Registering CRUD Handlers
 
@@ -119,7 +103,7 @@ The arguments are:
 | `POST` | `/v{n}/{entity}` | `HandleCreate` | Creates an entity from `IC` input |
 | `GET` | `/v{n}/{entity}/:id` | `HandleRead` | Reads a single entity by ID |
 | `PUT` | `/v{n}/{entity}/:id` | `HandleUpdate` | Updates an entity from `IU` input |
-| `DELETE` | `/v{n}/{entity}/:id` | `HandleDelete` | Deletes an entity by ID |
+| `DELETE` | `/v{n}/{entity}/:id` | `HandleDelete` | Deletes an entity by ID; returns `204 No Content` |
 | `POST` | `/v{n}/{entities}` | `HandleQuery` | Queries entities with a JSON filter |
 
 The query endpoint uses the **plural** form of the entity name (e.g., `"author"` becomes `"/v1/authors"`). Pluralization is handled automatically.
@@ -145,6 +129,38 @@ The filter is converted to an `sqlc.Expression` and applied as a WHERE condition
 Register handlers with the gosoline HTTP server using `router.HandleWith()`:
 
 <CodeBlock title="main.go" language="go" snippet="main">{CrudMain}</CodeBlock>
+
+## Customizing Output Transformers
+
+The `Transformer` interface is the primary extension point for controlling how entities are serialised in API responses. Because it is a plain Go interface, a single implementation can be written once and reused across multiple entities — or shared as an internal library across services. This makes it straightforward to enforce consistent response shapes, pagination envelopes, or field-level access control in one place.
+
+### JsonResultsTransformer
+
+`JsonResultsTransformer[K, E, IC, IU]` is a simplified variant of `Transformer` for the common case where you want to map entities to a dedicated output type and return them as JSON, without needing to construct `httpserver.Response` values manually. Implement three methods — `TransformCreateInput`, `TransformUpdateInput`, and a single `TransformOutput` that converts one entity to any JSON-serialisable value — and pass the implementation to `NewJSONResultsTransformer`. The wrapping of single and multi-entity responses into JSON is handled automatically:
+
+<CodeBlock title="user_crud.go" language="go" snippet="types">{ResultTransformerUserCrud}</CodeBlock>
+
+<CodeBlock title="user_crud.go" language="go" snippet="transformer">{ResultTransformerUserCrud}</CodeBlock>
+
+<CodeBlock title="user_crud.go" language="go" snippet="crud">{ResultTransformerUserCrud}</CodeBlock>
+
+Because `TransformOutput` receives a single entity, the same function is used for both single-entity and list responses — there is no duplication. Use the full `Transformer` interface directly when you need control over HTTP status codes, headers, or non-JSON response bodies.
+
+### Wiring Transformers
+
+Use `sqlh.SimpleTransformer()` to wrap an already-constructed transformer into a factory when it has no startup dependencies:
+
+```go
+sqlh.SimpleTransformer[K, E, IC, IU](&MyTransformer{})
+```
+
+For transformers that require configuration or other dependencies at startup, implement `TransformerFactory` directly:
+
+```go
+type TransformerFactory[K, E, IC, IU] func(ctx context.Context, config cfg.Config, logger log.Logger) (Transformer[K, E, IC, IU], error)
+```
+
+This follows the standard gosoline factory pattern and gives the transformer access to the application config and logger during initialisation.
 
 ## Transaction Middleware
 
