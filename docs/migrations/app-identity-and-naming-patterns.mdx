@@ -187,7 +187,8 @@ modelId := mdl.ModelId{
 
 // NEW
 modelId := mdl.ModelId{
-    Name: "my-model",
+    Name:        "my-model",
+    Application: "my-app",
     Tags: map[string]string{
         "project": "my-project",
         "family":  "my-family",
@@ -243,7 +244,7 @@ The configuration for stream inputs and outputs has been updated to use the new 
 
 ### General Change
 
-For most inputs (Redis) and outputs (Kafka, Kinesis, Redis, SNS, SQS), the flat fields `project`, `family`, `group`, and `application` have been replaced by an `identity` block.
+For most outputs (Kafka, Kinesis, SNS, SQS) and inputs (SQS, SNS, Kafka, Kinesis), the old flat fields `project`, `family`, `group`, and `application` have been replaced with flat `ResourceIdentifier` fields: `application`, `env`, and `tags`.
 
 **Old output config:**
 ```yaml
@@ -263,17 +264,17 @@ stream:
   output:
     my-output:
       type: sqs
-      identity:
-        tags:
-          project: my-project
-          family: my-family
-          group: my-group
+      application: my-app       # optional, defaults to app.name
+      tags:                     # optional, merged with app.tags
+        project: my-project
+        family: my-family
+        group: my-group
       queue_id: my-queue
 ```
 
 ### SQS Input
 
-For SQS inputs, the `target_*` fields for identity have been grouped into `target_identity`.
+For SQS inputs, the `target_identity` and `target_queue_id` fields have been replaced with flat `ResourceIdentifier` fields and `queue_id`.
 
 **Old:**
 ```yaml
@@ -292,11 +293,11 @@ stream:
   input:
     my-input:
       type: sqs
-      target_identity:
-        tags:
-          family: my-family
-          group: my-group
-      target_queue_id: my-queue
+      application: target-app   # optional, defaults to app.name
+      tags:                     # optional, merged with app.tags
+        family: my-family
+        group: my-group
+      queue_id: my-queue
 ```
 
 ### SNS Input
@@ -325,21 +326,20 @@ stream:
     my-sns-input:
       type: sns
       id: my-consumer
-      identity:
-        tags:
-          family: my-family
-          group: my-group
+      tags:                     # optional — identity of the SQS queue used for fan-out
+        family: my-family
+        group: my-group
       targets:
-        - identity:
-            tags:
-              family: target-family
-              group: target-group
+        - application: target-app   # optional — identity of the SNS topic to subscribe to
+          tags:
+            family: target-family
+            group: target-group
           topic_id: target-topic
 ```
 
 ### Kafka and Kinesis Inputs
 
-Kafka and Kinesis inputs now also use the `identity:` block pattern:
+Kafka and Kinesis inputs now also use flat `ResourceIdentifier` fields:
 
 **Old (Kafka input):**
 ```yaml
@@ -362,25 +362,23 @@ stream:
   input:
     my-kafka-input:
       type: kafka
-      identity:
-        env: production
-        name: my-app
-        tags:
-          project: my-project
-          family: my-family
-          group: my-group
+      application: my-app       # optional, defaults to app.name
+      tags:                     # optional, merged with app.tags
+        project: my-project
+        family: my-family
+        group: my-group
       topic_id: my-topic
 ```
 
 The same pattern applies to Kinesis inputs and outputs.
 
 :::note
-Redis list inputs and outputs do **not** use the `identity:` block. They only require `server_name`, `key`, and transport-specific settings. The Redis client's naming configuration handles key and address naming independently.
+Redis list inputs and outputs do **not** use `ResourceIdentifier`. They only require `server_name`, `key`, and transport-specific settings. The Redis client's naming configuration handles key and address naming independently.
 :::
 
 ### mdlsub Publisher Configuration
 
-The `PublisherSettings` struct has changed: `mdl.ModelId` is no longer an embedded (anonymous) field -- it is now a named field with the config tag `model_id`. All ModelId-related configuration keys must be nested under a `model_id` key.
+The `PublisherSettings` struct has changed: `mdl.ModelId` is now embedded directly (anonymous field) instead of being a named field with the config tag `model_id`. All ModelId-related configuration keys are now at the same level as the publisher key — no `model_id` nesting.
 
 **Old:**
 ```yaml
@@ -399,12 +397,11 @@ mdlsub:
 mdlsub:
   publishers:
     my-model:
-      model_id:
-        name: my-model          # optional: defaults to the publisher map key
-        tags:
-          project: my-project
-          family: my-family
-          group: my-group
+      name: my-model          # optional: defaults to the publisher map key
+      tags:
+        project: my-project
+        family: my-family
+        group: my-group
       output_type: sns
 ```
 
@@ -422,7 +419,8 @@ settings := &mdlsub.PublisherSettings{
 // NEW
 settings := &mdlsub.PublisherSettings{
     ModelId: mdl.ModelId{
-        Name: "my-model",
+        Name:        "my-model",
+        Application: "my-app",
         Tags: map[string]string{
             "project": "my-project",
         },
