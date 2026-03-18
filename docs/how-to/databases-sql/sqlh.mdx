@@ -17,7 +17,7 @@ The `sqlh` package exposes database entities as REST API endpoints. Built on top
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlh@v0.2.1
+go get github.com/gosoline-project/sqlh@v0.4.0
 ```
 
 Then import the package in your Go code:
@@ -124,6 +124,32 @@ The query endpoint accepts a JSON body with a `filter` field that maps to `sqlc.
 
 The filter is converted to an `sqlc.Expression` and applied as a WHERE condition on the query. See the [sqlc JSON filter documentation](./sqlc.mdx) for the full filter syntax.
 
+### Association Tags
+
+CRUD handlers can also configure association loading and syncing directly from entity relationship fields with the `sqlh` struct tag:
+
+```go
+type Author struct {
+    sqlr.Entity[int64]
+    ProfileID int64         `db:"profile_id"`
+    Profile   Profile       `db:"-,belongsTo:profile_id" sqlh:"preload:read,query,update"`
+    Tags      []Tag         `db:"-,many2many:author_tags" sqlh:"preload:read;sync:create,update"`
+}
+```
+
+Supported directives are:
+
+| Directive | Phases | Effect |
+|-----------|--------|--------|
+| `preload` | `read`, `query`, `update` | Calls `Preload()` for the association before the matching CRUD operation |
+| `sync` | `create`, `update` | Calls `SyncAssociation()` for the association while persisting the entity |
+
+`sqlh` tags are additive to the association behavior already defined by `sqlr`. The relationship itself must still be declared via the `db` tag or discovered through [`sqlr` auto-detected relationships](./sqlr.mdx#auto-detected-relationships); the `sqlh` tag only adds CRUD-specific preload and sync behavior on top. In particular, `sqlh` preload phases are merged with any preload behavior already configured in `sqlr`, rather than replacing it.
+
+Tags are only valid on association fields recognised by [`sqlr` relationships](./sqlr.mdx#relationships); using them on scalar fields causes startup to fail with an error. Tagged associations are traversed recursively, so nested paths such as `Child.Nested` are picked up automatically when the related entity also declares `sqlh` tags.
+
+For the underlying `sqlr` behavior behind these options, see [Read with Association Loading](./sqlr.mdx#read-with-association-loading), [Eager Loading with Preload](./sqlr.mdx#eager-loading-with-preload), [Create with Selective Association Persistence](./sqlr.mdx#create-with-selective-association-persistence), and [Update with Association Sync](./sqlr.mdx#update-with-association-sync).
+
 ### Wiring into the Application
 
 Register handlers with the gosoline HTTP server using `router.HandleWith()`:
@@ -136,7 +162,7 @@ The `Transformer` interface is the primary extension point for controlling how e
 
 ### JsonResultsTransformer
 
-`JsonResultsTransformer[K, E, IC, IU]` is a simplified variant of `Transformer` for the common case where you want to map entities to a dedicated output type and return them as JSON, without needing to construct `httpserver.Response` values manually. Implement three methods — `TransformCreateInput`, `TransformUpdateInput`, and a single `TransformOutput` that converts one entity to any JSON-serialisable value — and pass the implementation to `NewJSONResultsTransformer`. The wrapping of single and multi-entity responses into JSON is handled automatically:
+`JsonResultsTransformer[K, E, IC, IU]` is a simplified variant of `Transformer` for the common case where you want to map entities to a dedicated output type and return them as JSON, without needing to construct `httpserver.Response` values manually. Implement three methods — `TransformCreateInput`, `TransformUpdateInput`, and a single `TransformOutput` that converts one entity to any JSON-serialisable value — and pass the implementation to `NewJsonResultsTransformer`. The wrapping of single and multi-entity responses into JSON is handled automatically, and optional CRUD builder hooks implemented by the transformer are forwarded too:
 
 <CodeBlock title="user_crud.go" language="go" snippet="types">{ResultTransformerUserCrud}</CodeBlock>
 

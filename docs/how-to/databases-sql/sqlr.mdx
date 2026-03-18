@@ -6,6 +6,7 @@ title: sqlr - SQL Repository
 import { CodeBlock } from '../../components.jsx';
 import Config from "!!raw-loader!./src/sqlr/auto/config.dist.yml";
 import Auto from "!!raw-loader!./src/sqlr/auto/main.go";
+import Fixtures from "!!raw-loader!./src/sqlr/fixtures/integration_test.go";
 
 The `sqlr` package provides a generic, type-safe repository layer built on top of [`sqlc`](./sqlc.mdx). It offers CRUD operations, relationship management, eager loading via joins and preloads, and transaction support — all using Go generics for compile-time type safety.
 
@@ -14,7 +15,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlr@v0.2.0
+go get github.com/gosoline-project/sqlr@v0.5.0
 ```
 
 Then import the package in your Go code:
@@ -31,7 +32,7 @@ The `sqlr` package uses `sqlc` under the hood for database connections. Configur
 
 ## Defining Entities
 
-Entities are Go structs that map to database tables. Embed `sqlr.Entity[K]` to get a primary key (`Id`), and automatic timestamp fields (`CreatedAt`, `UpdatedAt`):
+Entities are Go structs that map to database tables. Embed `sqlr.Entity[K]` to get a primary key (`Id`), and timestamp fields (`CreatedAt`, `UpdatedAt`) that `sqlr` manages automatically by default:
 
 <CodeBlock title="main.go" language="go" snippet="entities">{Auto}</CodeBlock>
 
@@ -42,8 +43,8 @@ The `sqlr.Entity[K]` base struct provides:
 | Field | Tag | Description |
 |-------|-----|-------------|
 | `Id` | `db:"id,primaryKey"` | Primary key, auto-increment for integer types |
-| `CreatedAt` | `db:"created_at,autoCreateTime"` | Set automatically on insert |
-| `UpdatedAt` | `db:"updated_at,autoUpdateTime"` | Set automatically on insert and update |
+| `CreatedAt` | `db:"created_at,autoCreateTime"` | Set automatically on insert by default |
+| `UpdatedAt` | `db:"updated_at,autoUpdateTime"` | Set automatically on insert and update by default |
 
 All entities must implement the `Entitier[K]` interface (satisfied automatically by embedding `Entity[K]`):
 
@@ -57,14 +58,14 @@ type Entitier[K KeyTypes] interface {
 
 ### Struct Tags
 
-Column mappings and behavior are controlled via the `db` struct tag. The `db` tag is **optional** for public fields — when omitted, the field name is converted to a column name using [`SchemaNameTransformer`](#schemanametransformer) (default: snake_case). Public struct and slice-of-struct fields without a `db` tag are auto-detected as relationships (see [Auto-detected Relationships](#auto-detected-relationships)). To explicitly exclude a public field from all mapping, use `db:"-"` (without any options after the comma).
+Column mappings and behavior are controlled via the `db` struct tag. The `db` tag is **optional** for public fields — when omitted, the field name is converted to a column name using [`SchemaNameTransformer`](#schemanametransformer) (default: snake_case). Public struct and slice-of-struct fields without a `db` tag can also be auto-detected as relationships when `sqlr` finds matching entity and foreign-key evidence (see [Auto-detected Relationships](#auto-detected-relationships)). To explicitly exclude a public field from all mapping, use `db:"-"` (without any options after the comma).
 
 | Tag | Description |
 |-----|-------------|
 | `db:"column_name"` | Maps the field to a database column |
 | `db:"column_name,primaryKey"` | Marks the field as the primary key |
-| `db:"column_name,autoCreateTime"` | Auto-sets the field to `time.Now()` on insert |
-| `db:"column_name,autoUpdateTime"` | Auto-sets the field to `time.Now()` on insert and update |
+| `db:"column_name,autoCreateTime"` | Auto-sets the field to `time.Now()` on insert by default |
+| `db:"column_name,autoUpdateTime"` | Auto-sets the field to `time.Now()` on insert and update by default |
 | `db:"-,foreignKey:col"` | Defines a HasOne or HasMany relationship (see [Relationships](#relationships)) |
 | `db:"-,belongsTo:col"` | Defines a BelongsTo relationship |
 | `db:"-,many2many:table"` | Defines a ManyToMany relationship |
@@ -131,15 +132,26 @@ Primary keys can be any of these types (or their pointer variants):
 bool | string | int | int64 | uint | uint64 | float32 | float64
 ```
 
-Integer primary key types (`int`, `int64`, `uint`, `uint64`) are automatically treated as auto-increment — they are excluded from INSERT statements and their value is set from `LastInsertId()` after creation.
+Integer primary key types (`int`, `int64`, `uint`, `uint64`) are automatically treated as auto-increment by default — they are excluded from INSERT statements and their value is set from `LastInsertId()` after creation. If you disable auto updates for `Create()`, `sqlr` instead inserts the primary key value already present on the entity.
 
 ## Relationships
 
-Relationships can be declared in two ways: via **auto-detection** of untagged public fields (convention over configuration) or via **explicit `db` struct tags** (full control over every name).
+Relationships can be declared in two ways: via **auto-detection** of eligible untagged public fields (convention over configuration) or via **explicit `db` struct tags** (full control over every name).
+
+### Auto-detected Relationships
+
+When `sqlr` parses a public field without a `db` tag, it first checks whether the field qualifies for relationship auto-detection:
+
+- Only public struct fields and slices of structs are candidates.
+- The related type must declare a primary key (directly or through an embedded field).
+- A public non-slice struct field can auto-detect as `BelongsTo` only when the inferred FK column `SchemaNameTransformer(fieldName) + "_id"` exists on the parent entity.
+- A public slice-of-struct field can auto-detect as `HasMany` only when the inferred FK column `SchemaNameTransformer(parentTypeName) + "_id"` exists on the related entity.
+- If these checks fail, the field is treated like any other untagged field and mapped using `SchemaNameTransformer`.
+- `HasOne` and `ManyToMany` are never auto-detected and always require explicit tags.
 
 ### HasOne
 
-The foreign key lives on the **related** table and the field type is a single struct. HasOne cannot be auto-detected — a non-slice struct field with no `db` tag is always treated as BelongsTo instead. An explicit `foreignKey:` tag is always required.
+The foreign key lives on the **related** table and the field type is a single struct. HasOne cannot be auto-detected — untagged non-slice struct fields can only auto-detect as `BelongsTo`, never `HasOne`. An explicit `foreignKey:` tag is always required.
 
 #### Explicit Tag
 
@@ -186,7 +198,7 @@ The foreign key lives on the **related** table and the field type is a slice.
 
 #### Auto-detected
 
-A public slice-of-struct field with no `db` tag is automatically treated as HasMany. The foreign key column name on the related table is derived as `SchemaNameTransformer(parentTypeName) + "_id"`.
+A public slice-of-struct field with no `db` tag is automatically treated as `HasMany` only when the related type declares a primary key and the inferred foreign key column exists on the related table. The foreign key column name is derived as `SchemaNameTransformer(parentTypeName) + "_id"`.
 
 ```go
 type Author struct {
@@ -247,7 +259,7 @@ The foreign key lives on the **current** entity's table.
 
 #### Auto-detected
 
-A public non-slice struct field with no `db` tag (whose type is not a known value type such as `time.Time`) is automatically treated as BelongsTo. The foreign key column name on the current table is derived as `SchemaNameTransformer(fieldName) + "_id"`.
+A public non-slice struct field with no `db` tag is automatically treated as `BelongsTo` only when the related type declares a primary key and the inferred foreign key column exists on the current table. The foreign key column name is derived as `SchemaNameTransformer(fieldName) + "_id"`.
 
 ```go
 type Post struct {
@@ -432,10 +444,10 @@ The `Repository` interface provides:
 
 | Method | Description |
 |--------|-------------|
-| `Create(ctx, entity)` | Inserts the entity and any populated association fields; sets auto-increment IDs and timestamps |
-| `Read(ctx, id, opts...)` | Loads one entity by primary key, with optional joins/preloads |
+| `Create(ctx, entity, opts...)` | Inserts the entity and any eligible populated association fields; optional create builder methods can limit or omit association paths |
+| `Read(ctx, id, opts...)` | Loads one entity by primary key, with optional `QueryBuilderRead` relation loading |
 | `Query(ctx, opts...)` | Loads entities matching query conditions |
-| `Update(ctx, entity)` | Updates all fields of the entity |
+| `Update(ctx, entity, opts...)` | Updates only the base entity row by default; associations remain untouched unless explicitly synchronized |
 | `Delete(ctx, id)` | Deletes the entity by primary key |
 | `Close()` | Releases resources (prepared statements, etc.) |
 
@@ -443,13 +455,27 @@ The `Repository` interface provides:
 
 ### Create
 
-Pass a pointer to an entity. Auto-increment IDs and timestamp fields are set automatically:
+Pass a pointer to an entity. By default, auto-increment IDs and timestamp fields are set automatically:
 
 <CodeBlock title="main.go" language="go" snippet="create">{Auto}</CodeBlock>
 
+#### Preserve preset IDs and timestamps
+
+Use `DisableAutoUpdates()` when you want `Create()` to persist the primary key and timestamp values already present on the entity instead of letting `sqlr` generate them:
+
+```go
+err := repo.Create(ctx, &author, func(qb *sqlr.QueryBuilderCreate) {
+    qb.DisableAutoUpdates()
+})
+```
+
+- `Create()` includes the entity's current primary key and timestamp values in the `INSERT`.
+- This also applies across the selected association graph when creating related entities.
+- If a created entity has a zero primary key while auto updates are disabled, `Create()` returns `ErrAutoUpdatesRequirePresetPrimaryKey`.
+
 ### Create with Associations
 
-Populate relationship fields on the entity before calling `Create()` and `sqlr` will automatically persist them in the correct order within a single transaction:
+By default, populate relationship fields on the entity before calling `Create()` and `sqlr` will automatically persist them in the correct order within a single transaction:
 
 <CodeBlock title="main.go" language="go" snippet="create with associations">{Auto}</CodeBlock>
 
@@ -460,7 +486,28 @@ The association save order is:
 3. **HasOne / HasMany** — related entities are inserted with their FK pointing to the parent PK.
 4. **ManyToMany** — related entities with zero PKs are inserted, then join table rows are created for all of them.
 
-Entities with a non-zero primary key are treated as already-persisted: they are skipped for insertion but the FK or join table row is still created. `Update` and `Delete` only affect the base entity row and are not association-aware.
+Entities with a non-zero primary key are treated as already-persisted: they are skipped for insertion but the FK or join table row is still created. `Update` only affects the base entity row by default, but it can synchronize all or selected associations when explicitly enabled. `Delete` only removes the base entity row.
+
+When `DisableAutoUpdates()` is enabled for `Create()`, `sqlr` also preserves preset IDs and timestamps across associations. Foreign keys are reconciled against the associated primary key: empty FK fields are filled automatically, while conflicting preset FK values return an error instead of being overwritten.
+
+### Create with Selective Association Persistence
+
+Use `QueryBuilderCreate` to limit or omit association paths for a single `Create()` call:
+
+```go
+err := repo.Create(ctx, &author, func(qb *sqlr.QueryBuilderCreate) {
+    qb.SyncAssociation("Posts.Comments")
+    qb.OmitAssociation("Profile")
+})
+```
+
+- `SyncAssociation(paths...)` persists only the listed association paths.
+- `OmitAssociation(paths...)` skips the listed paths and all of their descendants.
+- `DisableAutoUpdates()` can be combined with these options when you want to preserve preset IDs and timestamps during the same `Create()` call.
+- Paths use dot notation for nested relations, such as `Posts.Comments`.
+- Selecting a nested path also traverses the required ancestors, so `Posts.Comments` persists both `Posts` and their `Comments`.
+- Invalid association paths return an error.
+- If no association remains eligible after applying the options, `Create()` behaves like a plain parent insert.
 
 ### Read
 
@@ -468,11 +515,96 @@ Load a single entity by its primary key:
 
 <CodeBlock title="main.go" language="go" snippet="read">{Auto}</CodeBlock>
 
+### Read with Association Loading
+
+Use `QueryBuilderRead` to control association loading for a single `Read()` call:
+
+```go
+author, err := repo.Read(ctx, id, func(qb *sqlr.QueryBuilderRead) {
+    qb.Preload("Posts.Comments")
+    qb.LeftJoin("Profile")
+})
+```
+
+- `Read()` always loads the base entity by primary key; `QueryBuilderRead` only controls eager loading for that call.
+- Use `Preload()` and join methods such as `LeftJoin()` and `InnerJoin()` to load related entities together with the base row.
+- Schema auto-preloads defined with the `preload` tag option are still applied and merged with any explicit preloads you add.
+- See [Eager Loading with Preload](#eager-loading-with-preload) and [Eager Loading with Joins](#eager-loading-with-joins) below for supported relation types, nested paths, conditions, and limitations.
+
 ### Update
 
-Modify the entity and pass it to `Update()`. The `UpdatedAt` timestamp is refreshed automatically:
+Modify the entity and pass it to `Update()`. By default, only the base row is updated and the `UpdatedAt` timestamp is refreshed automatically. Any populated association fields on the entity are ignored unless association sync is explicitly enabled for that call:
 
 <CodeBlock title="main.go" language="go" snippet="update">{Auto}</CodeBlock>
+
+#### Preserve preset timestamps during update
+
+Use `DisableAutoUpdates()` when you want `Update()` to persist the values already present on the entity instead of assigning fresh `autoUpdateTime` timestamps:
+
+```go
+updated, err := repo.Update(ctx, &author, func(qb *sqlr.QueryBuilderUpdate) {
+    qb.DisableAutoUpdates()
+})
+```
+
+- `Update()` writes the entity's current column values as-is, including preset timestamp fields.
+- When association sync is also enabled, the same behavior applies across the synchronized association graph.
+
+### Update with Association Sync
+
+If you want `Update()` to also insert, update, delete, or unlink related records, opt in per call with `QueryBuilderUpdate`:
+
+Enable full association synchronization with `SyncAllAssociations()`:
+
+```go
+updated, err := repo.Update(ctx, &author, func(qb *sqlr.QueryBuilderUpdate) {
+    qb.SyncAllAssociations()
+})
+```
+
+Sync only selected association paths with `SyncAssociation(paths...)`:
+
+```go
+updated, err := repo.Update(ctx, &author, func(qb *sqlr.QueryBuilderUpdate) {
+    qb.SyncAssociation("Profile", "Posts.Comments")
+})
+```
+
+Combine `SyncAllAssociations()` with `OmitAssociation(paths...)` to exclude specific paths from a full sync:
+
+```go
+updated, err := repo.Update(ctx, &author, func(qb *sqlr.QueryBuilderUpdate) {
+    qb.SyncAllAssociations()
+    qb.OmitAssociation("Posts.Tags")
+})
+```
+
+When association sync is enabled, `sqlr` synchronizes the selected association graph in a single transaction. With `SyncAllAssociations()`, that means the full entity graph:
+
+1. **BelongsTo** - related entities are inserted or updated first so the parent's FK column is current before the parent row is written.
+2. **Parent entity** - the base row is updated.
+3. **HasOne** - the related entity is inserted or updated with its FK pointing to the parent; previously stored replacement rows are deleted.
+4. **HasMany** - listed related entities are inserted or updated with their FK pointing to the parent; previously stored children missing from the slice are deleted.
+5. **ManyToMany** - listed related entities are inserted or updated as needed; missing join-table links are removed and new ones are inserted.
+
+If `DisableAutoUpdates()` is also enabled, `sqlr` preserves preset IDs and timestamps throughout the synchronized graph. Foreign keys are reconciled against the associated primary key: empty FK fields are filled automatically, while conflicting preset FK values return an error and roll back the transaction.
+
+#### Association Paths
+
+Use association paths to control which relations are synchronized during `Update()`. Paths can point to direct relations or nested relations within the entity graph you pass to `Update()`.
+
+- Paths use dot notation for nested relations, such as `Posts.Comments`.
+- Selecting a nested path also traverses the required ancestors, so `Posts.Comments` synchronizes both `Posts` and their `Comments`.
+- Omitting a parent path such as `Posts` also omits all nested descendants.
+- Invalid association paths return an error.
+
+Association sync only acts on relationships that are selected for synchronization and explicitly present on the entity passed to `Update()`:
+
+- A zero-value struct relation is treated as untouched.
+- A `nil` slice relation is treated as untouched.
+- An empty slice means "synchronize this relation to no rows" and removes existing HasMany or ManyToMany links.
+
+If the parent row does not exist, `Update()` with association synchronization enabled returns `ErrNotFound` and rolls back the transaction.
 
 ### Delete
 
@@ -544,7 +676,7 @@ Pass conditions to `Preload()` to filter which related entities are loaded:
 
 ## Eager Loading with Joins
 
-Use `LeftJoin()`, `InnerJoin()`, `RightJoin()`, or `CrossJoin()` to load related entities via SQL JOINs. Joins support HasOne, HasMany, and BelongsTo relationships (ManyToMany and nested paths require `Preload`).
+Use `LeftJoin()` or `InnerJoin()` to load related entities via SQL JOINs. Joins support direct HasOne, HasMany, and BelongsTo relationships (ManyToMany and nested paths require `Preload`).
 
 ### Joins on Query
 
@@ -572,3 +704,46 @@ if errors.Is(err, sqlr.ErrNotFound) {
     // entity does not exist
 }
 ```
+
+When `DisableAutoUpdates()` is used with `Create()`, `sqlr.ErrAutoUpdatesRequirePresetPrimaryKey` is returned if the entity being inserted does not already have a primary key value:
+
+```go
+err := repo.Create(ctx, &author, func(qb *sqlr.QueryBuilderCreate) {
+    qb.DisableAutoUpdates()
+})
+if errors.Is(err, sqlr.ErrAutoUpdatesRequirePresetPrimaryKey) {
+    // provide a primary key before creating the entity
+}
+```
+
+## Fixtures and Test Data
+
+You can also use `sqlr` to load typed database fixtures through the gosoline `fixtures` package instead of maintaining raw SQL seed migrations.
+
+Use `FixtureEntity()` when you want fixture values with explicit primary keys and timestamps:
+
+<CodeBlock title="integration_test.go" language="go" snippet="fixture entities">{Fixtures}</CodeBlock>
+
+<CodeBlock title="integration_test.go" language="go" snippet="named fixtures">{Fixtures}</CodeBlock>
+
+Use `FixtureSetFactory()` to turn named fixtures into a gosoline fixture set factory backed by an `sqlr` repository:
+
+<CodeBlock title="integration_test.go" language="go" snippet="fixture set factory">{Fixtures}</CodeBlock>
+
+Register that fixture set factory in your test suite or application setup:
+
+<CodeBlock title="integration_test.go" language="go" snippet="integration suite">{Fixtures}</CodeBlock>
+
+Then read the seeded entity in your test and assert that the preset IDs, timestamps, and associations were written as expected:
+
+<CodeBlock title="integration_test.go" language="go" snippet="fixture assertion">{Fixtures}</CodeBlock>
+
+Fixture writes preserve the explicit IDs and timestamps already present on your entities. Internally, `sqlr` creates fixtures with auto updates disabled, so seeded values are inserted as-is instead of being regenerated.
+
+Associations follow the normal `Create()` behavior described above. If your fixtures embed related entities, `sqlr` persists them in the usual association order. If you provide conflicting preset foreign keys, fixture loading fails with the same validation errors as a regular `Create()` call.
+
+`FixtureSetFactory()` is the recommended high-level API. For advanced scenarios, `NewFixtureWriter()` and `NewFixtureWriterWithInterfaces()` are also available when you want to wire the writer manually.
+
+The built-in `sqlr` fixture writer uses the `default` sqlc client name. If you define multiple fixture sets without embedding them as associations, make sure their factory order still respects your foreign-key dependencies.
+
+For more details about gosoline fixture loading, grouping, purge behavior, and named fixture references, see the [fixtures package reference](../../reference/package-fixtures.mdx).

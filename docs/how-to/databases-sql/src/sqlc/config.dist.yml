@@ -1,9 +1,11 @@
-env: dev
-
-app_project: gosoline
-app_family: docs
-app_group: database-sql
-app_name: sqlc
+app:
+  env: dev
+  name: sqlc
+  namespace: "{app.tags.project}.{app.env}.{app.tags.family}.{app.tags.group}"
+  tags:
+    project: gosoline
+    family: docs
+    group: database-sql
 
 log:
   handlers:

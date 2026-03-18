@@ -1,22 +1,11 @@
 app:
   env: dev
-  name: sqlh-tx
+  name: sqlr-fixtures
   namespace: "{app.tags.project}.{app.env}.{app.tags.family}.{app.tags.group}"
   tags:
     project: gosoline
     family: docs
     group: database-sql
-
-log:
-  handlers:
-    main:
-      level: debug
-
-# snippet-start: config
-httpserver:
-  default:
-    port: 8080
-    mode: release
 
 sqlc:
   default:
@@ -29,6 +18,4 @@ sqlc:
       database: blog
     migrations:
       enabled: true
-      reset: true
       path: migrations
-# snippet-end: config
