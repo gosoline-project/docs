@@ -71,11 +71,20 @@ Column mappings and behavior are controlled via the `db` struct tag. The `db` ta
 | `db:"-,many2many:table"` | Defines a ManyToMany relationship |
 | `db:"-,many2many:table,parentKey:col"` | Overrides the join table column that references the parent entity's PK |
 | `db:"-,many2many:table,relatedKey:col"` | Overrides the join table column that references the related entity's PK |
+| `db:"-,...,preload"` | Automatically preloads the relationship on every `Read()` and `Query()` call |
 | `db:"-"` | Explicitly excludes a public field from column and relationship mapping |
 
 ### Excluding Fields
 
 To exclude a public field from all mapping (no column, no relationship), use `db:"-"`:
+
+```go
+type Author struct {
+    sqlr.Entity[int64]
+    Name     string `db:"name"`
+    Internal string `db:"-"` // excluded from column and relationship mapping
+}
+```
 
 ### Table Name Derivation
 
@@ -424,14 +433,6 @@ CREATE TABLE article_labels (
 | `parentKey:col` | Join table column referencing the **parent** entity's primary key |
 | `relatedKey:col` | Join table column referencing the **related** entity's primary key |
 
-```go
-type Author struct {
-    sqlr.Entity[int64]
-    Name     string `db:"name"`
-    Internal string `db:"-"` // not mapped to any column
-}
-```
-
 ## Creating the Repository
 
 Create a repository using `sqlr.NewRepository[K, E]()` within a gosoline application. The type parameters specify the primary key type and the entity type:
@@ -486,7 +487,7 @@ The association save order is:
 3. **HasOne / HasMany** — related entities are inserted with their FK pointing to the parent PK.
 4. **ManyToMany** — related entities with zero PKs are inserted, then join table rows are created for all of them.
 
-Entities with a non-zero primary key are treated as already-persisted: they are skipped for insertion but the FK or join table row is still created. `Update` only affects the base entity row by default, but it can synchronize all or selected associations when explicitly enabled. `Delete` only removes the base entity row.
+Entities with a non-zero primary key are treated as already-persisted: they are skipped for insertion, but the FK or join table row is still created.
 
 When `DisableAutoUpdates()` is enabled for `Create()`, `sqlr` also preserves preset IDs and timestamps across associations. Foreign keys are reconciled against the associated primary key: empty FK fields are filled automatically, while conflicting preset FK values return an error instead of being overwritten.
 
@@ -610,6 +611,8 @@ If the parent row does not exist, `Update()` with association synchronization en
 
 Remove an entity by its primary key. Returns `ErrNotFound` if the entity doesn't exist:
 
+`Delete()` removes only the base entity row.
+
 <CodeBlock title="main.go" language="go" snippet="delete">{Auto}</CodeBlock>
 
 ## Query Operations
@@ -696,7 +699,7 @@ Pass conditions to restrict the joined rows:
 
 ## Error Handling
 
-The `sqlr.ErrNotFound` sentinel error is returned when `Read()` or `Delete()` cannot find the requested entity:
+The `sqlr.ErrNotFound` sentinel error is returned when `Read()` or `Delete()` cannot find the requested entity, and when `Update()` with association synchronization enabled cannot find the parent row:
 
 ```go
 author, err := repo.Read(ctx, id)
