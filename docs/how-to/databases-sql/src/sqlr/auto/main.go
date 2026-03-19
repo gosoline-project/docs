@@ -28,8 +28,8 @@ type Post struct {
 	Title    string
 	Body     string
 	Status   string
-	Author   Author `db:"-,belongsTo:author_id"` // BelongsTo
-	Tags     []Tag  `db:"-,many2many:"`          // ManyToMany
+	Author   Author `sqlr:"belongsTo:author_id"` // BelongsTo
+	Tags     []Tag  `sqlr:"many2many:"`          // ManyToMany
 }
 
 type Tag struct {

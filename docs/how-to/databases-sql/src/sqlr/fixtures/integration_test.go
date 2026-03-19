@@ -23,7 +23,7 @@ type Post struct {
 	sqlr.Entity[int64]
 	AuthorID int64  `db:"author_id"`
 	Title    string `db:"title"`
-	Author   Author `db:"-,belongsTo:author_id"`
+	Author   Author `sqlr:"belongsTo:author_id"`
 }
 
 // snippet-end: fixture entities

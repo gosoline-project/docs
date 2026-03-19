@@ -42,9 +42,9 @@ The `sqlr.Entity[K]` base struct provides:
 
 | Field | Tag | Description |
 |-------|-----|-------------|
-| `Id` | `db:"id,primaryKey"` | Primary key, auto-increment for integer types |
-| `CreatedAt` | `db:"created_at,autoCreateTime"` | Set automatically on insert by default |
-| `UpdatedAt` | `db:"updated_at,autoUpdateTime"` | Set automatically on insert and update by default |
+| `Id` | `db:"id" sqlr:"primaryKey"` | Primary key, auto-increment for integer types |
+| `CreatedAt` | `db:"created_at" sqlr:"autoCreateTime"` | Set automatically on insert by default |
+| `UpdatedAt` | `db:"updated_at" sqlr:"autoUpdateTime"` | Set automatically on insert and update by default |
 
 All entities must implement the `Entitier[K]` interface (satisfied automatically by embedding `Entity[K]`):
 
@@ -58,21 +58,27 @@ type Entitier[K KeyTypes] interface {
 
 ### Struct Tags
 
-Column mappings and behavior are controlled via the `db` struct tag. The `db` tag is **optional** for public fields — when omitted, the field name is converted to a column name using [`SchemaNameTransformer`](#schemanametransformer) (default: snake_case). Public struct and slice-of-struct fields without a `db` tag can also be auto-detected as relationships when `sqlr` finds matching entity and foreign-key evidence (see [Auto-detected Relationships](#auto-detected-relationships)). To explicitly exclude a public field from all mapping, use `db:"-"` (without any options after the comma).
+Column names are controlled via the `db` struct tag, while `sqlr`-specific metadata is controlled via the `sqlr` struct tag. The `db` tag is **optional** for public fields — when omitted, the field name is converted to a column name using [`SchemaNameTransformer`](#schemanametransformer) (default: snake_case). Public struct and slice-of-struct fields without a `db` or `sqlr` tag can also be auto-detected as relationships when `sqlr` finds matching entity and foreign-key evidence (see [Auto-detected Relationships](#auto-detected-relationships)). To explicitly exclude a public field from all mapping, use `db:"-"` by itself.
+
+Within the `sqlr` tag, options are separated with semicolons. The only comma-separated form is the grouped sync option `sync:create,update`.
 
 | Tag | Description |
 |-----|-------------|
 | `db:"column_name"` | Maps the field to a database column |
-| `db:"column_name,primaryKey"` | Marks the field as the primary key |
-| `db:"column_name,autoCreateTime"` | Auto-sets the field to `time.Now()` on insert by default |
-| `db:"column_name,autoUpdateTime"` | Auto-sets the field to `time.Now()` on insert and update by default |
-| `db:"-,foreignKey:col"` | Defines a HasOne or HasMany relationship (see [Relationships](#relationships)) |
-| `db:"-,belongsTo:col"` | Defines a BelongsTo relationship |
-| `db:"-,many2many:table"` | Defines a ManyToMany relationship |
-| `db:"-,many2many:table,parentKey:col"` | Overrides the join table column that references the parent entity's PK |
-| `db:"-,many2many:table,relatedKey:col"` | Overrides the join table column that references the related entity's PK |
-| `db:"-,...,preload"` | Automatically preloads the relationship on every `Read()` and `Query()` call |
 | `db:"-"` | Explicitly excludes a public field from column and relationship mapping |
+| `sqlr:"primaryKey"` | Marks the field as the primary key |
+| `sqlr:"autoCreateTime"` | Auto-sets the field to `time.Now()` on insert by default |
+| `sqlr:"autoUpdateTime"` | Auto-sets the field to `time.Now()` on insert and update by default |
+| `sqlr:"foreignKey:col"` | Defines a HasOne or HasMany relationship (see [Relationships](#relationships)) |
+| `sqlr:"belongsTo:col"` | Defines a BelongsTo relationship |
+| `sqlr:"many2many:table"` | Defines a ManyToMany relationship |
+| `sqlr:"many2many:table;parentKey:col"` | Overrides the join table column that references the parent entity's PK |
+| `sqlr:"many2many:table;relatedKey:col"` | Overrides the join table column that references the related entity's PK |
+| `sqlr:"...;preload"` | Automatically preloads the relationship on every `Read()` and `Query()` call |
+| `sqlr:"...;sync:create"` | Synchronizes the relationship by default during `Create()` |
+| `sqlr:"...;sync:update"` | Synchronizes the relationship by default during `Update()` |
+| `sqlr:"...;sync:create,update"` | Synchronizes the relationship by default during both `Create()` and `Update()` |
+| `sqlr:"many2many:table;sync:update;syncMode:many2many"` | Enables full related-row synchronization by default for a many-to-many relation during `Update()` |
 
 ### Excluding Fields
 
@@ -145,7 +151,7 @@ Integer primary key types (`int`, `int64`, `uint`, `uint64`) are automatically t
 
 ## Relationships
 
-Relationships can be declared in two ways: via **auto-detection** of eligible untagged public fields (convention over configuration) or via **explicit `db` struct tags** (full control over every name).
+Relationships can be declared in two ways: via **auto-detection** of eligible untagged public fields (convention over configuration) or via **explicit `sqlr` struct tags** (full control over every name). Relationship fields may optionally also use `db:"-"`, but `db:"-"` is not required when relationship metadata is already present in `sqlr`.
 
 ### Auto-detected Relationships
 
@@ -168,7 +174,7 @@ The foreign key lives on the **related** table and the field type is a single st
 type Author struct {
     sqlr.Entity[int64]
     Name    string  `db:"name"`
-    Profile Profile `db:"-,foreignKey:author_id"`
+    Profile Profile `sqlr:"foreignKey:author_id"`
 }
 
 type Profile struct {
@@ -229,7 +235,7 @@ type Post struct {
 type Author struct {
     sqlr.Entity[int64]
     Name  string `db:"name"`
-    Posts []Post `db:"-,foreignKey:author_id"`
+    Posts []Post `sqlr:"foreignKey:author_id"`
 }
 
 type Post struct {
@@ -291,7 +297,7 @@ type Post struct {
     sqlr.Entity[int64]
     AuthorID int64  `db:"author_id"`
     Title    string `db:"title"`
-    Author   Author `db:"-,belongsTo:author_id"`
+    Author   Author `sqlr:"belongsTo:author_id"`
 }
 
 type Author struct {
@@ -327,7 +333,7 @@ CREATE TABLE posts (
 
 ### ManyToMany
 
-A join table is required and `many2many:` always needs an explicit `db` tag — ManyToMany relationships cannot be auto-detected.
+A join table is required and `many2many:` always needs an explicit `sqlr` tag — ManyToMany relationships cannot be auto-detected.
 
 The join table must have columns referencing the primary key of each side. By default these column names are derived as `SchemaNameTransformer(EntityType) + "_id"`.
 
@@ -339,7 +345,7 @@ Leave the `many2many:` value empty to have the join table name derived automatic
 type Post struct {
     sqlr.Entity[int64]
     Title string
-    Tags  []Tag `db:"-,many2many:"` // join table "posts_tags" auto-derived
+    Tags  []Tag `sqlr:"many2many:"` // join table "posts_tags" auto-derived
 }
 
 type Tag struct {
@@ -354,7 +360,7 @@ type Tag struct {
 type Post struct {
     sqlr.Entity[int64]
     Title string `db:"title"`
-    Tags  []Tag  `db:"-,many2many:posts_tags"`
+    Tags  []Tag  `sqlr:"many2many:posts_tags"`
 }
 
 type Tag struct {
@@ -402,7 +408,7 @@ Use `parentKey:` and `relatedKey:` to override the join table column names when 
 type Article struct {
     sqlr.Entity[int64]
     Title  string  `db:"title"`
-    Labels []Label `db:"-,many2many:article_labels,parentKey:art_id,relatedKey:lbl_id"`
+    Labels []Label `sqlr:"many2many:article_labels;parentKey:art_id;relatedKey:lbl_id"`
 }
 
 type Label struct {
@@ -448,7 +454,7 @@ The `Repository` interface provides:
 | `Create(ctx, entity, opts...)` | Inserts the entity and any eligible populated association fields; optional create builder methods can limit or omit association paths |
 | `Read(ctx, id, opts...)` | Loads one entity by primary key, with optional `QueryBuilderRead` relation loading |
 | `Query(ctx, opts...)` | Loads entities matching query conditions |
-| `Update(ctx, entity, opts...)` | Updates only the base entity row by default; associations remain untouched unless explicitly synchronized, and many-to-many updates stay link-only unless `SyncManyToManyEntities()` is used |
+| `Update(ctx, entity, opts...)` | Updates only the base entity row by default; associations remain untouched unless explicitly synchronized per call or via `sync:update` tags, and many-to-many updates stay link-only unless `SyncMany2many()` is used |
 | `Delete(ctx, id)` | Deletes the entity by primary key |
 | `Close()` | Releases resources (prepared statements, etc.) |
 
@@ -490,6 +496,8 @@ The association save order is:
 Entities with a non-zero primary key are treated as already-persisted: they are skipped for insertion, but the FK or join table row is still created.
 
 When `DisableAutoUpdates()` is enabled for `Create()`, `sqlr` also preserves preset IDs and timestamps across associations. Foreign keys are reconciled against the associated primary key: empty FK fields are filled automatically, while conflicting preset FK values return an error instead of being overwritten.
+
+If no relationship path in the schema is tagged with `sync:create`, `Create()` persists all eligible populated relationships by default. As soon as at least one path is tagged with `sync:create`, the default behavior narrows to the tagged paths; `SyncAssociation()` and `OmitAssociation()` still let you refine that selection per call.
 
 ### Create with Selective Association Persistence
 
@@ -534,7 +542,7 @@ author, err := repo.Read(ctx, id, func(qb *sqlr.QueryBuilderRead) {
 
 ### Update
 
-Modify the entity and pass it to `Update()`. By default, only the base row is updated and the `UpdatedAt` timestamp is refreshed automatically. Any populated association fields on the entity are ignored unless association sync is explicitly enabled for that call:
+Modify the entity and pass it to `Update()`. By default, only the base row is updated and the `UpdatedAt` timestamp is refreshed automatically. Any populated association fields on the entity are ignored unless association sync is explicitly enabled for that call or activated by `sync:update` tags on relationship fields:
 
 <CodeBlock title="main.go" language="go" snippet="update">{Auto}</CodeBlock>
 
@@ -553,7 +561,26 @@ updated, err := repo.Update(ctx, &author, func(qb *sqlr.QueryBuilderUpdate) {
 
 ### Update with Association Sync
 
-If you want `Update()` to also insert, update, delete, or unlink related records, opt in per call with `QueryBuilderUpdate`. Existing many-to-many related rows are a special case: by default, `Update()` only reconciles join-table membership for them and does not update their columns unless you explicitly opt that path into full entity synchronization.
+If you want `Update()` to also insert, update, delete, or unlink related records, opt in per call with `QueryBuilderUpdate` or declare schema-level defaults with `sync:update` tags. Existing many-to-many related rows are a special case: by default, `Update()` only reconciles join-table membership for them and does not update their columns unless you explicitly opt that path into full entity synchronization.
+
+Use relationship tags when you want synchronization to happen by default without repeating query-builder calls:
+
+```go
+type Author struct {
+    sqlr.Entity[int64]
+    Name  string `db:"name"`
+    Posts []Post `sqlr:"foreignKey:author_id;sync:create,update"`
+}
+
+type Article struct {
+    sqlr.Entity[int64]
+    Title string `db:"title"`
+    Tags  []Tag  `sqlr:"many2many:article_tags;sync:update;syncMode:many2many"`
+}
+```
+
+- `sync:update` enables default association sync for the tagged path during `Update()`.
+- `syncMode:many2many` is only valid on many-to-many relations and must be combined with `sync:update`.
 
 Enable full association synchronization with `SyncAllAssociations()`:
 
@@ -571,12 +598,12 @@ updated, err := repo.Update(ctx, &author, func(qb *sqlr.QueryBuilderUpdate) {
 })
 ```
 
-Opt selected many-to-many paths into full related-row synchronization with `SyncManyToManyEntities(paths...)`:
+Opt selected many-to-many paths into full related-row synchronization with `SyncMany2many(paths...)`:
 
 ```go
 updated, err := repo.Update(ctx, &article, func(qb *sqlr.QueryBuilderUpdate) {
     qb.SyncAllAssociations()
-    qb.SyncManyToManyEntities("Tags")
+    qb.SyncMany2many("Tags")
 })
 ```
 
@@ -595,7 +622,7 @@ When association sync is enabled, `sqlr` synchronizes the selected association g
 2. **Parent entity** - the base row is updated.
 3. **HasOne** - the related entity is inserted or updated with its FK pointing to the parent; previously stored replacement rows are deleted.
 4. **HasMany** - listed related entities are inserted or updated with their FK pointing to the parent; previously stored children missing from the slice are deleted.
-5. **ManyToMany** - related entities with zero PKs are inserted; existing related rows are link-synchronized by default, so missing join-table links are removed and new ones are inserted without updating the related rows themselves unless that path was opted into `SyncManyToManyEntities()`.
+5. **ManyToMany** - related entities with zero PKs are inserted; existing related rows are link-synchronized by default, so missing join-table links are removed and new ones are inserted without updating the related rows themselves unless that path was opted into `SyncMany2many()`.
 
 If `DisableAutoUpdates()` is also enabled, `sqlr` preserves preset IDs and timestamps throughout the synchronized graph. Foreign keys are reconciled against the associated primary key: empty FK fields are filled automatically, while conflicting preset FK values return an error and roll back the transaction.
 
@@ -605,7 +632,7 @@ Use association paths to control which relations are synchronized during `Update
 
 - Paths use dot notation for nested relations, such as `Posts.Comments`.
 - Selecting a nested path also traverses the required ancestors, so `Posts.Comments` synchronizes both `Posts` and their `Comments`.
-- `SyncManyToManyEntities(paths...)` only accepts paths that resolve to many-to-many relations and enables full recursive synchronization for those paths.
+- `SyncMany2many(paths...)` only accepts paths that resolve to many-to-many relations and enables full recursive synchronization for those paths.
 - Omitting a parent path such as `Posts` also omits all nested descendants.
 - Invalid association paths return an error.
 
@@ -674,8 +701,8 @@ type PostWithPreloads struct {
     sqlr.Entity[int64]
     AuthorID int64  `db:"author_id"`
     Title    string `db:"title"`
-    Author   Author `db:"-,belongsTo:author_id,preload"`
-    Tags     []Tag  `db:"-,many2many:posts_tags,preload"`
+    Author   Author `sqlr:"belongsTo:author_id;preload"`
+    Tags     []Tag  `sqlr:"many2many:posts_tags;preload"`
 }
 ```
 
