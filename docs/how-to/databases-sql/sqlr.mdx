@@ -448,7 +448,7 @@ The `Repository` interface provides:
 | `Create(ctx, entity, opts...)` | Inserts the entity and any eligible populated association fields; optional create builder methods can limit or omit association paths |
 | `Read(ctx, id, opts...)` | Loads one entity by primary key, with optional `QueryBuilderRead` relation loading |
 | `Query(ctx, opts...)` | Loads entities matching query conditions |
-| `Update(ctx, entity, opts...)` | Updates only the base entity row by default; associations remain untouched unless explicitly synchronized |
+| `Update(ctx, entity, opts...)` | Updates only the base entity row by default; associations remain untouched unless explicitly synchronized, and many-to-many updates stay link-only unless `SyncManyToManyEntities()` is used |
 | `Delete(ctx, id)` | Deletes the entity by primary key |
 | `Close()` | Releases resources (prepared statements, etc.) |
 
@@ -553,7 +553,7 @@ updated, err := repo.Update(ctx, &author, func(qb *sqlr.QueryBuilderUpdate) {
 
 ### Update with Association Sync
 
-If you want `Update()` to also insert, update, delete, or unlink related records, opt in per call with `QueryBuilderUpdate`:
+If you want `Update()` to also insert, update, delete, or unlink related records, opt in per call with `QueryBuilderUpdate`. Existing many-to-many related rows are a special case: by default, `Update()` only reconciles join-table membership for them and does not update their columns unless you explicitly opt that path into full entity synchronization.
 
 Enable full association synchronization with `SyncAllAssociations()`:
 
@@ -568,6 +568,15 @@ Sync only selected association paths with `SyncAssociation(paths...)`:
 ```go
 updated, err := repo.Update(ctx, &author, func(qb *sqlr.QueryBuilderUpdate) {
     qb.SyncAssociation("Profile", "Posts.Comments")
+})
+```
+
+Opt selected many-to-many paths into full related-row synchronization with `SyncManyToManyEntities(paths...)`:
+
+```go
+updated, err := repo.Update(ctx, &article, func(qb *sqlr.QueryBuilderUpdate) {
+    qb.SyncAllAssociations()
+    qb.SyncManyToManyEntities("Tags")
 })
 ```
 
@@ -586,7 +595,7 @@ When association sync is enabled, `sqlr` synchronizes the selected association g
 2. **Parent entity** - the base row is updated.
 3. **HasOne** - the related entity is inserted or updated with its FK pointing to the parent; previously stored replacement rows are deleted.
 4. **HasMany** - listed related entities are inserted or updated with their FK pointing to the parent; previously stored children missing from the slice are deleted.
-5. **ManyToMany** - listed related entities are inserted or updated as needed; missing join-table links are removed and new ones are inserted.
+5. **ManyToMany** - related entities with zero PKs are inserted; existing related rows are link-synchronized by default, so missing join-table links are removed and new ones are inserted without updating the related rows themselves unless that path was opted into `SyncManyToManyEntities()`.
 
 If `DisableAutoUpdates()` is also enabled, `sqlr` preserves preset IDs and timestamps throughout the synchronized graph. Foreign keys are reconciled against the associated primary key: empty FK fields are filled automatically, while conflicting preset FK values return an error and roll back the transaction.
 
@@ -596,6 +605,7 @@ Use association paths to control which relations are synchronized during `Update
 
 - Paths use dot notation for nested relations, such as `Posts.Comments`.
 - Selecting a nested path also traverses the required ancestors, so `Posts.Comments` synchronizes both `Posts` and their `Comments`.
+- `SyncManyToManyEntities(paths...)` only accepts paths that resolve to many-to-many relations and enables full recursive synchronization for those paths.
 - Omitting a parent path such as `Posts` also omits all nested descendants.
 - Invalid association paths return an error.
 
@@ -605,7 +615,7 @@ Association sync only acts on relationships that are selected for synchronizatio
 - A `nil` slice relation is treated as untouched.
 - An empty slice means "synchronize this relation to no rows" and removes existing HasMany or ManyToMany links.
 
-If the parent row does not exist, `Update()` with association synchronization enabled returns `ErrNotFound` and rolls back the transaction.
+If the parent row does not exist, `Update()` with association synchronization enabled returns `ErrNotFound` and rolls back the transaction. `ErrNotFound` is also returned when default many-to-many synchronization tries to link an existing related row by primary key but that related row does not exist.
 
 ### Delete
 
@@ -699,7 +709,7 @@ Pass conditions to restrict the joined rows:
 
 ## Error Handling
 
-The `sqlr.ErrNotFound` sentinel error is returned when `Read()` or `Delete()` cannot find the requested entity, and when `Update()` with association synchronization enabled cannot find the parent row:
+The `sqlr.ErrNotFound` sentinel error is returned when `Read()` or `Delete()` cannot find the requested entity, when `Update()` with association synchronization enabled cannot find the parent row, and when default many-to-many synchronization references a related entity by primary key that does not exist:
 
 ```go
 author, err := repo.Read(ctx, id)
