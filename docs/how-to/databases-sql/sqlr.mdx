@@ -60,7 +60,7 @@ type Entitier[K KeyTypes] interface {
 
 Column names are controlled via the `db` struct tag, while `sqlr`-specific metadata is controlled via the `sqlr` struct tag. The `db` tag is **optional** for public fields — when omitted, the field name is converted to a column name using [`SchemaNameTransformer`](#schemanametransformer) (default: snake_case). Public struct and slice-of-struct fields without a `db` or `sqlr` tag can also be auto-detected as relationships when `sqlr` finds matching entity and foreign-key evidence (see [Auto-detected Relationships](#auto-detected-relationships)). To explicitly exclude a public field from all mapping, use `db:"-"` by itself.
 
-Within the `sqlr` tag, options are separated with semicolons. The only comma-separated form is the grouped sync option `sync:create,update`.
+Within the `sqlr` tag, options are separated with semicolons. Grouped sync options may combine any of `create`, `update`, and `delete`, for example `sync:create,update` or `sync:update,delete`.
 
 | Tag | Description |
 |-----|-------------|
@@ -77,7 +77,8 @@ Within the `sqlr` tag, options are separated with semicolons. The only comma-sep
 | `sqlr:"...;preload"` | Automatically preloads the relationship on every `Read()` and `Query()` call |
 | `sqlr:"...;sync:create"` | Synchronizes the relationship by default during `Create()` |
 | `sqlr:"...;sync:update"` | Synchronizes the relationship by default during `Update()` |
-| `sqlr:"...;sync:create,update"` | Synchronizes the relationship by default during both `Create()` and `Update()` |
+| `sqlr:"...;sync:delete"` | Cleans up the relationship by default during `Delete()` |
+| `sqlr:"...;sync:create,update,delete"` | Applies the relationship by default during any listed operations |
 | `sqlr:"many2many:table;sync:update;syncMode:many2many"` | Enables full related-row synchronization by default for a many-to-many relation during `Update()` |
 
 ### Excluding Fields
@@ -148,6 +149,25 @@ bool | string | int | int64 | uint | uint64 | float32 | float64
 ```
 
 Integer primary key types (`int`, `int64`, `uint`, `uint64`) are automatically treated as auto-increment by default — they are excluded from INSERT statements and their value is set from `LastInsertId()` after creation. If you disable auto updates for `Create()`, `sqlr` instead inserts the primary key value already present on the entity.
+
+## Creating the Repository
+
+Create a repository using `sqlr.NewRepository[K, E]()` within a gosoline application. The type parameters specify the primary key type and the entity type:
+
+<CodeBlock title="main.go" language="go" snippet="create repository">{Auto}</CodeBlock>
+
+The last argument (`"default"` above) is the **sqlc client name**. It must match a key under the `sqlc` block in your configuration file — the repository uses that named client for all database operations. You can have multiple repositories pointing to different clients (e.g., `"default"`, `"analytics"`, `"readonly"`) by passing different names.
+
+The `Repository` interface provides:
+
+| Method | Description |
+|--------|-------------|
+| `Create(ctx, entity, opts...)` | Inserts the entity and any eligible populated association fields; optional create builder methods can limit, omit, or disable association persistence for a call |
+| `Read(ctx, id, opts...)` | Loads one entity by primary key, with optional `QueryBuilderRead` relation loading |
+| `Query(ctx, opts...)` | Loads entities matching query conditions |
+| `Update(ctx, entity, opts...)` | Updates only the base entity row by default; associations remain untouched unless explicitly synchronized per call or via `sync:update` tags, and many-to-many updates stay link-only unless `SyncMany2many()` is used |
+| `Delete(ctx, id, opts...)` | Deletes the entity by primary key; by default also cleans up owned associations, and delete builder methods can narrow or disable that cleanup |
+| `Close()` | Releases resources (prepared statements, etc.) |
 
 ## Relationships
 
@@ -439,24 +459,32 @@ CREATE TABLE article_labels (
 | `parentKey:col` | Join table column referencing the **parent** entity's primary key |
 | `relatedKey:col` | Join table column referencing the **related** entity's primary key |
 
-## Creating the Repository
+## Association Path Semantics
 
-Create a repository using `sqlr.NewRepository[K, E]()` within a gosoline application. The type parameters specify the primary key type and the entity type:
+`sqlr` uses dot-separated association paths such as `Posts.Comments` anywhere an API needs to identify relationships on an entity graph. That includes association persistence on `Create()`, association synchronization on `Update()`, association cleanup on `Delete()`, and relation loading through `Preload()` on `Read()` and `Query()`.
 
-<CodeBlock title="main.go" language="go" snippet="create repository">{Auto}</CodeBlock>
+Paths are based on the entity schema's Go struct relationship field names, not on table names, column names, foreign-key column names, or `db` tag values.
 
-The last argument (`"default"` above) is the **sqlc client name**. It must match a key under the `sqlc` block in your configuration file — the repository uses that named client for all database operations. You can have multiple repositories pointing to different clients (e.g., `"default"`, `"analytics"`, `"readonly"`) by passing different names.
+- Use `Posts`, `Profile`, `Author`, or `Tags` when those are the relationship field names on your structs.
+- Use `Posts.Comments` to follow the `Posts` field on the root entity and then the `Comments` field on `Post`.
+- Do not use names such as `posts`, `author_id`, or database table names in relation paths.
 
-The `Repository` interface provides:
+```go
+qb.Preload("Posts.Comments")
+qb.LeftJoin("Profile")
+qb.SyncAssociation("Posts.Comments")
+qb.OmitAssociation("Profile")
+```
 
-| Method | Description |
-|--------|-------------|
-| `Create(ctx, entity, opts...)` | Inserts the entity and any eligible populated association fields; optional create builder methods can limit or omit association paths |
-| `Read(ctx, id, opts...)` | Loads one entity by primary key, with optional `QueryBuilderRead` relation loading |
-| `Query(ctx, opts...)` | Loads entities matching query conditions |
-| `Update(ctx, entity, opts...)` | Updates only the base entity row by default; associations remain untouched unless explicitly synchronized per call or via `sync:update` tags, and many-to-many updates stay link-only unless `SyncMany2many()` is used |
-| `Delete(ctx, id)` | Deletes the entity by primary key |
-| `Close()` | Releases resources (prepared statements, etc.) |
+- Paths use dot notation for nested relations, such as `Posts.Comments`.
+- `Preload()` on `Read()` and `Query()` accepts direct and nested relation paths.
+- Join methods such as `LeftJoin()` and `InnerJoin()` accept direct relation field names only; nested paths and many-to-many loading use `Preload()`.
+- For `Create()` and `Update()`, selecting a nested path implicitly traverses the required ancestors, so `Posts.Comments` includes both `Posts` and `Comments`.
+- Schema-level defaults from `sync:create`, `sync:update`, and `sync:delete` follow the same path resolution and can target nested paths even when an intermediate parent relation is itself untagged.
+- Omitting a parent path such as `Posts` also omits all of its descendants.
+- `Delete()` uses the selected path to reach the owned branch and then recursively cleans up that selected branch according to delete semantics.
+- `SyncMany2many(paths...)` only accepts paths whose terminal relation is many-to-many.
+- Invalid association paths return an error.
 
 ## CRUD Operations
 
@@ -497,7 +525,7 @@ Entities with a non-zero primary key are treated as already-persisted: they are 
 
 When `DisableAutoUpdates()` is enabled for `Create()`, `sqlr` also preserves preset IDs and timestamps across associations. Foreign keys are reconciled against the associated primary key: empty FK fields are filled automatically, while conflicting preset FK values return an error instead of being overwritten.
 
-If no relationship path in the schema is tagged with `sync:create`, `Create()` persists all eligible populated relationships by default. As soon as at least one path is tagged with `sync:create`, the default behavior narrows to the tagged paths; `SyncAssociation()` and `OmitAssociation()` still let you refine that selection per call.
+If no relationship path in the schema is tagged with `sync:create`, `Create()` persists all eligible populated relationships by default. As soon as at least one path is tagged with `sync:create`, the default behavior narrows to the tagged paths; nested tagged paths are still honored even when an intermediate parent relation is untagged, and `SyncAssociation()` / `OmitAssociation()` still let you refine that selection per call. `OmitAllAssociations()` disables association persistence for the call entirely, even if explicit sync paths or schema-level `sync:create` defaults would otherwise select relations.
 
 ### Create with Selective Association Persistence
 
@@ -512,9 +540,8 @@ err := repo.Create(ctx, &author, func(qb *sqlr.QueryBuilderCreate) {
 
 - `SyncAssociation(paths...)` persists only the listed association paths.
 - `OmitAssociation(paths...)` skips the listed paths and all of their descendants.
+- `OmitAllAssociations()` skips all association persistence and inserts only the root row.
 - `DisableAutoUpdates()` can be combined with these options when you want to preserve preset IDs and timestamps during the same `Create()` call.
-- Paths use dot notation for nested relations, such as `Posts.Comments`.
-- Selecting a nested path also traverses the required ancestors, so `Posts.Comments` persists both `Posts` and their `Comments`.
 - Invalid association paths return an error.
 - If no association remains eligible after applying the options, `Create()` behaves like a plain parent insert.
 
@@ -580,6 +607,7 @@ type Article struct {
 ```
 
 - `sync:update` enables default association sync for the tagged path during `Update()`.
+- Nested `sync:update` paths behave like explicit path selection: `sqlr` still traverses required ancestors even when an intermediate parent relation is untagged.
 - `syncMode:many2many` is only valid on many-to-many relations and must be combined with `sync:update`.
 
 Enable full association synchronization with `SyncAllAssociations()`:
@@ -626,15 +654,7 @@ When association sync is enabled, `sqlr` synchronizes the selected association g
 
 If `DisableAutoUpdates()` is also enabled, `sqlr` preserves preset IDs and timestamps throughout the synchronized graph. Foreign keys are reconciled against the associated primary key: empty FK fields are filled automatically, while conflicting preset FK values return an error and roll back the transaction.
 
-#### Association Paths
-
-Use association paths to control which relations are synchronized during `Update()`. Paths can point to direct relations or nested relations within the entity graph you pass to `Update()`.
-
-- Paths use dot notation for nested relations, such as `Posts.Comments`.
-- Selecting a nested path also traverses the required ancestors, so `Posts.Comments` synchronizes both `Posts` and their `Comments`.
-- `SyncMany2many(paths...)` only accepts paths that resolve to many-to-many relations and enables full recursive synchronization for those paths.
-- Omitting a parent path such as `Posts` also omits all nested descendants.
-- Invalid association paths return an error.
+See [Association Path Semantics](#association-path-semantics) for the shared path syntax, naming rules, and traversal behavior used by `Update()`.
 
 Association sync only acts on relationships that are selected for synchronization and explicitly present on the entity passed to `Update()`:
 
@@ -646,11 +666,34 @@ If the parent row does not exist, `Update()` with association synchronization en
 
 ### Delete
 
-Remove an entity by its primary key. Returns `ErrNotFound` if the entity doesn't exist:
-
-`Delete()` removes only the base entity row.
+Remove an entity by its primary key:
 
 <CodeBlock title="main.go" language="go" snippet="delete">{Auto}</CodeBlock>
+
+### Delete with Association Cleanup
+
+By default, `Delete()` cleans up owned associations before deleting the root row:
+
+- `HasOne` and `HasMany` relations are recursively deleted.
+- `ManyToMany` relations remove join-table rows only.
+- `BelongsTo` relations are left untouched.
+
+If no relationship path in the schema is tagged with `sync:delete`, `Delete()` cascades all owned relations by default. As soon as at least one path is tagged with `sync:delete`, the default cleanup narrows to the tagged paths. Nested tagged paths are still honored even when an intermediate parent relation is untagged; `Delete()` traverses the required ancestor branch to reach the selected owned subtree and then recursively cleans up that subtree.
+
+Use `QueryBuilderDelete` to refine association cleanup for a single `Delete()` call:
+
+```go
+err := repo.Delete(ctx, id, func(qb *sqlr.QueryBuilderDelete) {
+    qb.SyncAssociation("Posts.Comments")
+    qb.OmitAssociation("Profile")
+})
+```
+
+- `SyncAssociation(paths...)` restricts cleanup to the listed owned association paths.
+- `OmitAssociation(paths...)` skips the listed paths and all of their descendants.
+- `OmitAllAssociations()` disables owned-association cleanup entirely and deletes only the root row.
+- For `Delete()`, a nested selected path such as `Posts.Comments` traverses `Posts` to reach `Comments`, then recursively cleans up the selected owned branch.
+- Invalid association paths return an error.
 
 ## Query Operations
 
@@ -736,7 +779,7 @@ Pass conditions to restrict the joined rows:
 
 ## Error Handling
 
-The `sqlr.ErrNotFound` sentinel error is returned when `Read()` or `Delete()` cannot find the requested entity, when `Update()` with association synchronization enabled cannot find the parent row, and when default many-to-many synchronization references a related entity by primary key that does not exist:
+The `sqlr.ErrNotFound` sentinel error is returned when `Read()` cannot find the requested entity, when plain `Delete()` cannot delete the requested row, when association-aware `Delete()` cannot load the root entity selected for cleanup, when `Update()` with association synchronization enabled cannot find the parent row, and when default many-to-many synchronization references a related entity by primary key that does not exist:
 
 ```go
 author, err := repo.Read(ctx, id)
