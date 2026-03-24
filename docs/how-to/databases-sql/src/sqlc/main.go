@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	_ "embed"
 	"fmt"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/gosoline-project/sqlc"
 	"github.com/justtrackio/gosoline/pkg/application"
 	"github.com/justtrackio/gosoline/pkg/cfg"
+	"github.com/justtrackio/gosoline/pkg/exec"
 	"github.com/justtrackio/gosoline/pkg/kernel"
 	gosolineLog "github.com/justtrackio/gosoline/pkg/log"
 )
@@ -54,6 +56,12 @@ type PostWithAuthor struct {
 	Post
 	AuthorName  string `db:"author_name"`
 	AuthorEmail string `db:"author_email"`
+}
+
+type AuditLog struct {
+	EntityId   int64  `db:"entity_id"`
+	ActorEmail string `db:"actor_email"`
+	Action     string `db:"action"`
 }
 
 //go:embed config.dist.yml
@@ -139,6 +147,31 @@ type BlogService struct {
 
 // snippet-end: service
 
+func configureSession(ctx context.Context, config cfg.Config, logger gosolineLog.Logger) error {
+	// snippet-start: db handle
+	db, err := sqlc.NewDB(ctx, config, logger, "default")
+	if err != nil {
+		return fmt.Errorf("failed to create db handle: %w", err)
+	}
+	defer db.Close()
+
+	if _, err = db.SQLDB().ExecContext(ctx, "SET SESSION sql_mode = 'STRICT_ALL_TABLES'"); err != nil {
+		return fmt.Errorf("failed to configure sql session: %w", err)
+	}
+	// snippet-end: db handle
+
+	return nil
+}
+
+func newClientFromExistingDB(existing *sql.DB, logger gosolineLog.Logger) sqlc.Client {
+	// snippet-start: wrap db
+	db := sqlc.WrapDB(existing, "mysql")
+	client := sqlc.NewClientWithDB(logger, db, exec.NewDefaultExecutor(), sqlc.DefaultConfig())
+	// snippet-end: wrap db
+
+	return client
+}
+
 // snippet-start: create author
 func (s *BlogService) createAuthor(ctx context.Context, name, email string) (*Author, error) {
 	author := &Author{
@@ -205,10 +238,8 @@ func (s *BlogService) queryPostsWithJoins(ctx context.Context) ([]PostWithAuthor
 	err := sqlc.From("posts").As("p").
 		Columns("p.id", "p.author_id", "p.title", "p.body", "p.status", "p.created_at", "p.updated_at").
 		LeftJoin("authors").As("a").On("p.author_id = a.id").
-		Columns(
-			sqlc.Col("a.name").As("author_name"),
-			sqlc.Col("a.email").As("author_email"),
-		).
+		Column(sqlc.Col("a.name").As("author_name")).
+		Column(sqlc.Col("a.email").As("author_email")).
 		Where(sqlc.Col("p.status").Eq("published")).
 		OrderBy("p.created_at DESC").
 		WithClient(s.client).
@@ -221,6 +252,32 @@ func (s *BlogService) queryPostsWithJoins(ctx context.Context) ([]PostWithAuthor
 }
 
 // snippet-end: query joins
+
+func (s *BlogService) streamPublishedPosts(ctx context.Context) ([]Post, error) {
+	rows, err := s.client.Query(ctx, "SELECT id, author_id, title, body, status, created_at, updated_at FROM posts WHERE status = ?", "published")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query posts: %w", err)
+	}
+	defer rows.Close()
+
+	// snippet-start: query rows
+	posts := make([]Post, 0)
+	for rows.Next() {
+		var post Post
+		if err := rows.StructScan(&post); err != nil {
+			return nil, fmt.Errorf("failed to scan post: %w", err)
+		}
+
+		posts = append(posts, post)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration failed: %w", err)
+	}
+	// snippet-end: query rows
+
+	return posts, nil
+}
 
 // snippet-start: update
 func (s *BlogService) updatePostStatus(ctx context.Context, postId int64, status string) (*Post, error) {
@@ -255,6 +312,48 @@ func (s *BlogService) updatePostStatus(ctx context.Context, postId int64, status
 }
 
 // snippet-end: update
+
+func (s *BlogService) createAuditLog(ctx context.Context, author *Author) error {
+	entry := AuditLog{
+		EntityId:   author.Id,
+		ActorEmail: author.Email,
+		Action:     "author.created",
+	}
+
+	// snippet-start: named exec
+	_, err := s.client.NamedExec(ctx,
+		"INSERT INTO audit_logs (entity_id, actor_email, action) VALUES (:entity_id, :actor_email, :action)",
+		entry,
+	)
+	// snippet-end: named exec
+	if err != nil {
+		return fmt.Errorf("failed to insert audit log: %w", err)
+	}
+
+	return nil
+}
+
+func (s *BlogService) publishPostsPrepared(ctx context.Context, postIds []int64) error {
+	stmt, err := s.client.Prepare(ctx, "UPDATE posts SET status = ? WHERE id = ?")
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	// snippet-start: prepared statements
+	return s.client.WithTx(ctx, func(tx sqlc.Tx) error {
+		txStmt := stmt.WithTx(ctx, tx.SQLTx())
+
+		for _, postId := range postIds {
+			if _, err := txStmt.ExecContext(ctx, "published", postId); err != nil {
+				return fmt.Errorf("failed to publish post %d: %w", postId, err)
+			}
+		}
+
+		return nil
+	})
+	// snippet-end: prepared statements
+}
 
 // snippet-start: transaction
 func (s *BlogService) createAuthorWithPost(ctx context.Context, authorName, authorEmail, postTitle, postBody string) (*Author, *Post, error) {

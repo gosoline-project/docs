@@ -1,0 +1,28 @@
+# snippet-start: config
+httpserver:
+  default:
+    port: 8080
+    mode: release
+
+sqlc:
+  default:
+    driver: mysql
+    uri:
+      host: 127.0.0.1
+      port: 3306
+      user: root
+      password: gosoline
+      database: blog
+    migrations:
+      enabled: true
+      reset: true
+      path: migrations
+  reporting:
+    driver: mysql
+    uri:
+      host: 127.0.0.1
+      port: 3306
+      user: root
+      password: gosoline
+      database: blog
+# snippet-end: config

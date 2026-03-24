@@ -16,13 +16,21 @@ log:
 sqlc:
   default:
     driver: mysql
+    collation: utf8mb4_general_ci
+    parse_time: true
+    multi_statements: true
     uri:
       host: 127.0.0.1
       port: 3306
       user: root
       password: gosoline
       database: blog
+    max_open_connections: 25
+    max_idle_connections: 5
+    connection_max_lifetime: 5m
+    connection_max_idletime: 2m
     migrations:
       enabled: true
+      application: "{app.name}"
       path: migrations
 # snippet-end: config

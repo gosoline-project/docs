@@ -4,11 +4,13 @@ go 1.25.7
 
 require (
 	github.com/gosoline-project/httpserver v0.2.0
-	github.com/gosoline-project/sqlc v0.2.0
-	github.com/gosoline-project/sqlh v0.2.1
-	github.com/gosoline-project/sqlr v0.2.0
+	github.com/gosoline-project/sqlc v0.3.0
+	github.com/gosoline-project/sqlh v0.5.0
+	github.com/gosoline-project/sqlr v0.6.0
 	github.com/justtrackio/gosoline v0.57.2
 )
+
+replace github.com/gosoline-project/sqlh => ../sqlh
 
 replace github.com/gosoline-project/sqlr => ../sqlr
 

@@ -14,7 +14,7 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlc@v0.1.0
+go get github.com/gosoline-project/sqlc@v0.3.0
 ```
 
 Then import the package in your Go code:
@@ -25,7 +25,7 @@ import "github.com/gosoline-project/sqlc"
 
 ## Configuration
 
-A gosoline application can have **multiple `sqlc` clients**, each identified by a unique name (e.g., `default`, `analytics`, `readonly`). Every client you intend to use **must be configured before use** — attempting to create a client without a matching configuration entry will result in an error at startup.
+A gosoline application can have **multiple `sqlc` clients**, each identified by a unique name (e.g., `default`, `analytics`, `readonly`). Every client you intend to use **must be configured before use** - attempting to create a client or DB handle without a matching configuration entry returns an error when `sqlc.NewClient()`, `sqlc.ProvideClient()`, or `sqlc.NewDB()` is called.
 
 Configure database connections under the `sqlc` key in your configuration file, with each connection name as a sub-key:
 
@@ -47,15 +47,25 @@ Each connection requires driver and connection details as shown below:
 |---------|-------------|---------|
 | `driver` | Database driver (`mysql` or `postgres`) | Required |
 | `uri.host` | Database host | `localhost` |
-| `uri.port` | Database port | `3306` (MySQL) / `5432` (PostgreSQL) |
+| `uri.port` | Database port. Set `5432` explicitly for PostgreSQL. | `3306` |
 | `uri.user` | Database user | Required |
 | `uri.password` | Database password | Required |
 | `uri.database` | Database name | Required |
-| `charset` | Character set | `utf8mb4` |
+| `charset` | MySQL driver character set | `utf8mb4` |
+| `collation` | MySQL driver collation | `utf8mb4_general_ci` |
+| `parse_time` | MySQL driver option to parse date/time columns into Go time values | `true` |
+| `multi_statements` | MySQL driver option to allow multiple SQL statements per query | `true` |
+| `parameters` | Additional driver-specific DSN parameters | None |
 | `max_open_connections` | Maximum open connections | `0` (unlimited) |
 | `max_idle_connections` | Maximum idle connections | `2` |
 | `connection_max_lifetime` | Maximum connection lifetime | `120s` |
 | `connection_max_idletime` | Maximum idle time | `120s` |
+| `retry.enabled` | Retry failed database operations | `false` |
+| `timeouts.readTimeout` | MySQL driver I/O read timeout | `0` |
+| `timeouts.writeTimeout` | MySQL driver I/O write timeout | `0` |
+| `timeouts.timeout` | MySQL driver connection timeout. For PostgreSQL, use `parameters.connect_timeout`. | `0` |
+
+Use `parameters` for driver-specific settings such as PostgreSQL `sslmode` or `connect_timeout`. PostgreSQL connections use `uri.*` and `parameters`; the MySQL-specific settings above are ignored by the PostgreSQL driver.
 
 ## Migrations
 
@@ -78,10 +88,11 @@ sqlc:
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `enabled` | Run migrations automatically | `false` |
-| `path` | Path to migration files | Required if enabled |
+| `application` | Reserved for migration providers that support application-specific table prefixes. The built-in goose runner does not currently use it. | `{app.name}` |
+| `path` | Path to migration files. Set this when `enabled` is `true`; if empty, migrations are skipped. | None |
 | `provider` | Migration provider | `goose` |
-| `reset` | Drop and recreate database before migrations | `false` |
-| `prefixed_tables` | Prefix tables with application name | `false` |
+| `reset` | Reset the database before migrations. The built-in implementation issues MySQL `DROP DATABASE`, `CREATE DATABASE`, and `USE` statements. | `false` |
+| `prefixed_tables` | Reserved for migration providers that support table prefixing. The built-in goose runner does not currently use it. | `false` |
 
 ### Migration Files
 
@@ -101,7 +112,7 @@ CREATE TABLE authors (
 DROP TABLE authors;
 ```
 
-The `reset: true` option is useful for development - it drops and recreates the database before running migrations, ensuring a clean state.
+The `reset: true` option is useful for local MySQL development - it drops and recreates the database before running migrations, ensuring a clean state.
 
 ## Creating the Client
 
@@ -114,11 +125,11 @@ The client provides:
 **Query Methods (from Querier interface):**
 - `Get(ctx, dest, query, args...)` - Executes a query returning at most one row, scans into dest
 - `Select(ctx, dest, query, args...)` - Executes a query and scans all rows into a slice
-- `Query(ctx, query, args...)` - Executes a query returning rows for iteration
+- `Query(ctx, query, args...)` - Executes a query returning `*sqlc.Rows` for iteration
 - `QueryRow(ctx, query, args...)` - Executes a query returning at most one row
 - `Exec(ctx, query, args...)` - Executes a query without returning rows (INSERT, UPDATE, DELETE)
 - `NamedExec(ctx, query, arg)` - Executes a named query using `:name` syntax from struct/map
-- `Prepare(ctx, query)` - Creates a prepared statement for later execution
+- `Prepare(ctx, query)` - Creates a `*sqlc.Stmt` for later execution
 
 **Transaction Methods:**
 - `WithTx(ctx, fn, opts...)` - Executes a function within a transaction (auto commit/rollback)
@@ -162,11 +173,17 @@ Use `From()` to create a SELECT builder. Chain methods like `Where()`, `OrderBy(
 
 ### Queries with JOINs
 
-Build joins using `LeftJoin()`, `InnerJoin()`, `RightJoin()`, etc. Each join returns a `JoinBuilder` that must be finalized with `On()`:
+Build conditional joins using `LeftJoin()`, `InnerJoin()`, `RightJoin()`, and `FullOuterJoin()`. These methods return a `JoinBuilder` that must be finalized with `On()`. `CrossJoin()` and `Natural*Join()` return the select builder directly and do not take `On()`:
 
 <CodeBlock title="main.go" language="go" snippet="query joins">{Main}</CodeBlock>
 
-Use `As()` for table aliases and column aliases. Call `Columns()` before and after joins to specify which columns to select.
+Use `As()` for table aliases and column aliases. `Columns()` replaces the current projection list, while `Column()` appends one more projected column.
+
+### Streaming Rows
+
+Use `Query()` when you want to iterate row-by-row. The returned `*sqlc.Rows` supports both primitive `Scan()` calls and `StructScan()` for structs:
+
+<CodeBlock title="main.go" language="go" snippet="query rows">{Main}</CodeBlock>
 
 ## UPDATE Operations
 
@@ -182,6 +199,22 @@ sqlc.Update("posts").
     Set("status", "published")
 ```
 
+## Named Parameters
+
+Use `NamedExec()` when you prefer named placeholders instead of positional arguments:
+
+<CodeBlock title="main.go" language="go" snippet="named exec">{Main}</CodeBlock>
+
+`NamedExec()` accepts structs using `db` tags, `map[string]any`, repeated placeholders, and batch inserts from slices.
+
+## Prepared Statements
+
+Use `Prepare()` when you want to reuse the same SQL statement multiple times. Prepared statements expose `ExecContext()`, `GetContext()`, `QueryContext()`, `SelectContext()`, and `Close()`. `QueryxContext()` also exists as a deprecated compatibility alias for `QueryContext()`.
+
+Prepared statements can also be rebound to a transaction using `Stmt.WithTx()` together with `tx.SQLTx()`. When you do this, prepare the statement from the same underlying client or connection source that created the transaction:
+
+<CodeBlock title="main.go" language="go" snippet="prepared statements">{Main}</CodeBlock>
+
 ## DELETE Operations
 
 Use `Delete()` to create a DELETE builder with `Where()` conditions:
@@ -195,3 +228,27 @@ Use `WithTx()` to execute multiple operations atomically. The transaction automa
 <CodeBlock title="main.go" language="go" snippet="transaction">{Main}</CodeBlock>
 
 Inside the transaction callback, use `tx.Q()` instead of `client.Q()` to execute queries within the transaction scope. If the callback returns an error, all changes are rolled back; if it returns `nil`, changes are committed.
+
+`tx.Q()` uses the default query builder configuration. If you rely on a custom `QueryBuilderConfig` - for example PostgreSQL `$1` placeholders and `"` identifier quotes - apply the matching config explicitly on the builders you create inside the transaction.
+
+For interoperability with libraries that require `database/sql`, `sqlc.Tx` also exposes `SQLTx()` to return the underlying `*sql.Tx`.
+
+## Working with DB Handles
+
+Besides `sqlc.Client`, the package also provides a sqlc-owned `DB` wrapper for direct `database/sql` interop while preserving sqlc's query, scan, and named parameter behavior.
+
+Create a database handle directly when you need access to the underlying `*sql.DB`:
+
+<CodeBlock title="main.go" language="go" snippet="db handle">{Main}</CodeBlock>
+
+If you already have an existing `*sql.DB`, wrap it and create a client from it:
+
+<CodeBlock title="main.go" language="go" snippet="wrap db">{Main}</CodeBlock>
+
+When creating a client from a wrapped handle, make sure the `QueryBuilderConfig` matches your driver. `sqlc.DefaultConfig()` uses MySQL-style placeholders (`?`) and identifier quotes (`` ` ``).
+
+## Integration Notes
+
+- `sqlr.RepositoryTx` can reuse prepared statements inside transactions, but the repository client must come from the same connection source that opens the transaction.
+- `sqlh.WithTx()` currently opens request-scoped transactions from the `default` sqlc client. If your handlers or repositories use another named client, use matching middleware or a custom transaction setup.
+- In `sqlh`, the request-scoped transaction created by `WithTx()` is consumed by the `BindTx*` helpers. Generated CRUD handlers use repositories directly and do not automatically switch to that request transaction.
