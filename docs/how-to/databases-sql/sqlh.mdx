@@ -19,7 +19,7 @@ The `sqlh` package exposes database entities as REST API endpoints. Built on top
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlh@v0.5.0
+go get github.com/gosoline-project/sqlh@v0.6.0
 ```
 
 Then import the package in your Go code:
@@ -116,6 +116,20 @@ By default, CRUD handlers create an `sqlr.Repository` against the `default` SQL 
 
 The query endpoint uses the **plural** form of the entity name (e.g., `"author"` becomes `"/v1/authors"`). Pluralization is handled automatically.
 
+### Handler Behavior
+
+All generated CRUD handlers follow the same high-level pattern: bind input, delegate persistence to `sqlr.Repository`, and render the result through the configured transformer.
+
+| Handler | Flow |
+|---------|------|
+| `HandleCreate` | Binds `IC`, calls `TransformCreateInput`, persists via `repo.Create()`, then renders the created entity |
+| `HandleRead` | Loads a single entity via `repo.Read()` and renders it |
+| `HandleQuery` | Converts the JSON filter into an `sqlc.Expression`, calls `repo.Query()`, then renders the result list |
+| `HandleUpdate` | Loads the existing entity via `repo.Read()`, applies `TransformUpdateInput`, persists via `repo.Update()`, then renders the entity returned by `Update()` |
+| `HandleDelete` | Deletes the entity via `repo.Delete()` and returns `204 No Content` |
+
+The update flow is slightly different from the others: `HandleUpdate` renders the rehydrated entity returned by `sqlr.Update()` rather than issuing a separate follow-up `Read()` call. That means post-update preloads configured on the update builder are reflected directly in the HTTP response. See [`sqlr` Update with Post-Update Preloading](./sqlr.mdx#update-with-post-update-preloading) for the underlying repository behavior.
+
 ### Query with JSON Filter
 
 The query endpoint accepts a JSON body with a `filter` field that maps to `sqlc.JsonFilter`:
@@ -149,10 +163,12 @@ Supported directives are:
 
 | Directive | Phases | Effect |
 |-----------|--------|--------|
-| `preload` | `read`, `query`, `update` | Calls `Preload()` for the association before the matching CRUD operation |
+| `preload` | `read`, `query`, `update` | Adds `Preload()` to the matching CRUD builder; on `update`, it configures the post-update reload used for the returned entity |
 | `sync` | `create`, `update`, `delete` | Calls `SyncAssociation()` for the association while persisting or cleaning up the entity |
 
 `sqlh` tags are additive to the association behavior already defined by `sqlr`. The relationship itself must still be declared via an explicit `sqlr` relationship tag or discovered through [`sqlr` auto-detected relationships](./sqlr.mdx#auto-detected-relationships); the `sqlh` tag only adds CRUD-specific preload and sync behavior on top. `db:"-"` remains optional for relationship fields. In particular, `sqlh` preload phases are merged with any preload behavior already configured in `sqlr`, rather than replacing it.
+
+For updates, `sqlh:"preload:update"` is applied to the underlying `sqlr.Update()` builder, so the entity returned by the update handler is reloaded with those relations already hydrated. This follows the same post-update preload behavior described in [`sqlr` Update with Post-Update Preloading](./sqlr.mdx#update-with-post-update-preloading).
 
 For delete operations, `sync:delete` configures the association cleanup passed to the underlying `sqlr.Delete()` call, following the same cleanup semantics described in [`sqlr` Delete with Association Cleanup](./sqlr.mdx#delete-with-association-cleanup).
 
@@ -172,7 +188,7 @@ The `Transformer` interface is the primary extension point for controlling how e
 
 ### JsonResultsTransformer
 
-`JsonResultsTransformer[K, E, IC, IU]` is a simplified variant of `Transformer` for the common case where you want to map entities to a dedicated output type and return them as JSON, without needing to construct `httpserver.Response` values manually. Implement three methods — `TransformCreateInput`, `TransformUpdateInput`, and a single `TransformOutput` that converts one entity to any JSON-serialisable value — and pass the implementation to `NewJsonResultsTransformer`. The wrapping of single and multi-entity responses into JSON is handled automatically, and optional CRUD builder hooks implemented by the transformer, including delete hooks, are forwarded too:
+`JsonResultsTransformer[K, E, IC, IU]` is a simplified variant of `Transformer` for the common case where you want to map entities to a dedicated output type and return them as JSON, without needing to construct `httpserver.Response` values manually. Implement three methods — `TransformCreateInput`, `TransformUpdateInput`, and a single `TransformOutput` that converts one entity to any JSON-serialisable value — and pass the implementation to `NewJsonResultsTransformer`. The wrapping of single and multi-entity responses into JSON is handled automatically, and optional CRUD builder hooks implemented by the transformer — including delete hooks and the split update read/write hooks — are forwarded too:
 
 <CodeBlock title="user_crud.go" language="go" snippet="types">{ResultTransformerUserCrud}</CodeBlock>
 
@@ -197,6 +213,22 @@ type TransformerFactory[K, E, IC, IU] func(ctx context.Context, config cfg.Confi
 ```
 
 This follows the standard gosoline factory pattern and gives the transformer access to the application config and logger during initialisation.
+
+## CRUD Builder Hooks
+
+Both `Transformer` and `JsonResultsTransformer` implementations can optionally customize generated CRUD queries by implementing one or more builder-aware interfaces:
+
+| Interface | Builder | Used for |
+|-----------|---------|----------|
+| `BuilderCreateAware` | `sqlr.QueryBuilderCreate` | Customize create persistence |
+| `BuilderReadAware` | `sqlr.QueryBuilderRead` | Customize single-entity reads |
+| `BuilderQueryAware` | `sqlr.QueryBuilderSelect` | Customize list/query requests |
+| `BuilderDeleteAware` | `sqlr.QueryBuilderDelete` | Customize delete cleanup |
+| `BuilderUpdateReadAware` | `sqlr.QueryBuilderRead` | Customize the read of the existing entity before `TransformUpdateInput` runs |
+| `BuilderUpdateWriteAware` | `sqlr.QueryBuilderUpdate` | Customize the `Update()` call itself, including association sync and post-update preloads used for the returned entity |
+
+The update flow is intentionally split across two hooks. Use `BuilderUpdateReadAware` when the transformer needs additional relations loaded before it merges the incoming update DTO into the existing entity. Use `BuilderUpdateWriteAware` when you need to change how `sqlr.Update()` executes, including which relations are synchronized and which associations are preloaded onto the rehydrated entity returned in the HTTP response.
+
 
 ## Custom Repository Implementations
 

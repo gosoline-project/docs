@@ -15,7 +15,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlr@v0.6.0
+go get github.com/gosoline-project/sqlr@v0.7.0
 ```
 
 Then import the package in your Go code:
@@ -74,7 +74,7 @@ Within the `sqlr` tag, options are separated with semicolons. Grouped sync optio
 | `sqlr:"many2many:table"` | Defines a ManyToMany relationship |
 | `sqlr:"many2many:table;parentKey:col"` | Overrides the join table column that references the parent entity's PK |
 | `sqlr:"many2many:table;relatedKey:col"` | Overrides the join table column that references the related entity's PK |
-| `sqlr:"...;preload"` | Automatically preloads the relationship on every `Read()` and `Query()` call |
+| `sqlr:"...;preload"` | Automatically preloads the relationship on every `Read()` and `Query()` call, and on `Update()` whenever `sqlr` reloads the entity after persistence |
 | `sqlr:"...;sync:create"` | Synchronizes the relationship by default during `Create()` |
 | `sqlr:"...;sync:update"` | Synchronizes the relationship by default during `Update()` |
 | `sqlr:"...;sync:delete"` | Cleans up the relationship by default during `Delete()` |
@@ -165,7 +165,7 @@ The `Repository` interface provides:
 | `Create(ctx, entity, opts...)` | Inserts the entity and any eligible populated association fields; optional create builder methods can limit, omit, or disable association persistence for a call |
 | `Read(ctx, id, opts...)` | Loads one entity by primary key, with optional `QueryBuilderRead` relation loading |
 | `Query(ctx, opts...)` | Loads entities matching query conditions |
-| `Update(ctx, entity, opts...)` | Updates only the base entity row by default; associations remain untouched unless explicitly synchronized per call or via `sync:update` tags, and many-to-many updates stay link-only unless `SyncMany2many()` is used |
+| `Update(ctx, entity, opts...)` | Updates only the base entity row by default; associations remain untouched unless explicitly synchronized per call or via `sync:update` tags, many-to-many updates stay link-only unless `SyncMany2many()` is used, and `Preload()` can request a post-update reload of relations |
 | `Delete(ctx, id, opts...)` | Deletes the entity by primary key; by default also cleans up owned associations, and delete builder methods can narrow or disable that cleanup |
 | `Close()` | Releases resources (prepared statements, etc.) |
 
@@ -461,7 +461,7 @@ CREATE TABLE article_labels (
 
 ## Association Path Semantics
 
-`sqlr` uses dot-separated association paths such as `Posts.Comments` anywhere an API needs to identify relationships on an entity graph. That includes association persistence on `Create()`, association synchronization on `Update()`, association cleanup on `Delete()`, and relation loading through `Preload()` on `Read()` and `Query()`.
+`sqlr` uses dot-separated association paths such as `Posts.Comments` anywhere an API needs to identify relationships on an entity graph. That includes association persistence on `Create()`, association synchronization on `Update()`, association cleanup on `Delete()`, and relation loading through `Preload()` on `Read()`, `Query()`, and post-update reloads on `Update()`.
 
 Paths are based on the entity schema's Go struct relationship field names, not on table names, column names, foreign-key column names, or `db` tag values.
 
@@ -477,7 +477,7 @@ qb.OmitAssociation("Profile")
 ```
 
 - Paths use dot notation for nested relations, such as `Posts.Comments`.
-- `Preload()` on `Read()` and `Query()` accepts direct and nested relation paths.
+- `Preload()` on `Read()`, `Query()`, and `Update()` post-reloads accepts direct and nested relation paths.
 - Join methods such as `LeftJoin()` and `InnerJoin()` accept direct relation field names only; nested paths and many-to-many loading use `Preload()`.
 - For `Create()` and `Update()`, selecting a nested path implicitly traverses the required ancestors, so `Posts.Comments` includes both `Posts` and `Comments`.
 - Schema-level defaults from `sync:create`, `sync:update`, and `sync:delete` follow the same path resolution and can target nested paths even when an intermediate parent relation is itself untagged.
@@ -527,7 +527,7 @@ When `DisableAutoUpdates()` is enabled for `Create()`, `sqlr` also preserves pre
 
 If no relationship path in the schema is tagged with `sync:create`, `Create()` persists all eligible populated relationships by default. As soon as at least one path is tagged with `sync:create`, the default behavior narrows to the tagged paths; nested tagged paths are still honored even when an intermediate parent relation is untagged, and `SyncAssociation()` / `OmitAssociation()` still let you refine that selection per call. `OmitAllAssociations()` disables association persistence for the call entirely, even if explicit sync paths or schema-level `sync:create` defaults would otherwise select relations.
 
-### Create with Selective Association Persistence
+#### Create with Selective Association Persistence
 
 Use `QueryBuilderCreate` to limit or omit association paths for a single `Create()` call:
 
@@ -588,7 +588,7 @@ updated, err := repo.Update(ctx, &author, func(qb *sqlr.QueryBuilderUpdate) {
 
 ### Update with Association Sync
 
-If you want `Update()` to also insert, update, delete, or unlink related records, opt in per call with `QueryBuilderUpdate` or declare schema-level defaults with `sync:update` tags. Existing many-to-many related rows are a special case: by default, `Update()` only reconciles join-table membership for them and does not update their columns unless you explicitly opt that path into full entity synchronization.
+If you want `Update()` to also insert, update, delete, or unlink related records, opt in per call with `QueryBuilderUpdate` or declare schema-level defaults with `sync:update` tags. Existing many-to-many related rows are a special case: by default, `Update()` only reconciles join-table membership for them and does not update their columns unless you explicitly opt that path into full entity synchronization. When association sync is enabled and the schema defines `preload` tags, `sqlr` reloads the updated entity before returning so those auto-preloaded relations are hydrated.
 
 Use relationship tags when you want synchronization to happen by default without repeating query-builder calls:
 
@@ -664,6 +664,18 @@ Association sync only acts on relationships that are selected for synchronizatio
 
 If the parent row does not exist, `Update()` with association synchronization enabled returns `ErrNotFound` and rolls back the transaction. `ErrNotFound` is also returned when default many-to-many synchronization tries to link an existing related row by primary key but that related row does not exist.
 
+#### Update with Post-Update Preloading
+
+Use `QueryBuilderUpdate` when you want `Update()` to reload the entity by primary key after persistence and hydrate relations before returning:
+
+<CodeBlock title="main.go" language="go" snippet="update preload">{Auto}</CodeBlock>
+
+- `Preload()` on `Update()` uses the same association-path syntax as `Read()` and `Query()`.
+- Conditions and nested paths are supported.
+- `sqlr` performs the update first, then reloads the entity and applies the requested preloads.
+- Invalid preload paths return an error.
+- When explicit update preloads overlap with schema auto-preloads, the explicit update preloads take precedence.
+
 ### Delete
 
 Remove an entity by its primary key:
@@ -722,7 +734,7 @@ qb.Where(sqlc.And(sqlc.Col("a").Eq(1), sqlc.Col("b").Eq(2)))
 
 ## Eager Loading with Preload
 
-Use `Preload()` to load related entities in separate queries. Preloads support all relationship types: HasOne, HasMany, BelongsTo, and ManyToMany.
+Use `Preload()` to load related entities in separate queries. On `Read()` and `Query()`, preloads run as part of the lookup; on `Update()`, preloads run in a follow-up reload after the update succeeds. Preloads support all relationship types: HasOne, HasMany, BelongsTo, and ManyToMany.
 
 <CodeBlock title="main.go" language="go" snippet="query preload">{Auto}</CodeBlock>
 
@@ -737,7 +749,7 @@ qb.Preload("Posts.Comments", sqlr.Condition("body != ?", ""))
 
 ### Auto-Preload
 
-Add the `preload` tag option to a relationship to automatically load it on every Read and Query — without requiring an explicit `Preload()` call:
+Add the `preload` tag option to a relationship to automatically load it on every `Read()` and `Query()` call, and on `Update()` whenever `sqlr` performs a post-update reload — without requiring an explicit `Preload()` call:
 
 ```go
 type PostWithPreloads struct {
@@ -749,7 +761,7 @@ type PostWithPreloads struct {
 }
 ```
 
-Auto-preloads are recursively discovered across nested relationships and merged with any explicit preloads (explicit preloads take precedence when both are present).
+Auto-preloads are recursively discovered across nested relationships and merged with any explicit preloads, including `QueryBuilderUpdate.Preload()` requests (explicit preloads take precedence when both are present).
 
 ### Preload Conditions
 

@@ -257,6 +257,25 @@ func (s *BlogService) updatePostStatus(ctx context.Context, post *Post, status s
 
 // snippet-end: update
 
+// snippet-start: update preload
+func (s *BlogService) updatePostStatusWithRelations(ctx context.Context, post *Post, status string) (*Post, error) {
+	post.Status = status
+
+	updated, err := s.postRepo.Update(ctx, post, func(qb *sqlr.QueryBuilderUpdate) {
+		qb.Preload("Author")
+		qb.Preload("Tags", sqlr.Condition(sqlc.Col("name").NotEq("")))
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update post with relations: %w", err)
+	}
+
+	// updated.Author and updated.Tags are hydrated by the post-update reload.
+
+	return updated, nil
+}
+
+// snippet-end: update preload
+
 // snippet-start: delete
 func (s *BlogService) deleteTag(ctx context.Context, id int64) error {
 	if err := s.tagRepo.Delete(ctx, id); err != nil {
