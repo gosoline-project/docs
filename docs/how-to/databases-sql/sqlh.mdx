@@ -19,7 +19,7 @@ The `sqlh` package exposes database entities as REST API endpoints. Built on top
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlh@v0.6.0
+go get github.com/gosoline-project/sqlh@v0.7.0
 ```
 
 Then import the package in your Go code:
@@ -122,7 +122,7 @@ All generated CRUD handlers follow the same high-level pattern: bind input, dele
 
 | Handler | Flow |
 |---------|------|
-| `HandleCreate` | Binds `IC`, calls `TransformCreateInput`, persists via `repo.Create()`, then renders the created entity |
+| `HandleCreate` | Binds `IC`, calls `TransformCreateInput`, persists via `repo.Create()`, then renders the created entity (including any post-create preloads configured on the create builder) |
 | `HandleRead` | Loads a single entity via `repo.Read()` and renders it |
 | `HandleQuery` | Converts the JSON filter into an `sqlc.Expression`, calls `repo.Query()`, then renders the result list |
 | `HandleUpdate` | Loads the existing entity via `repo.Read()`, applies `TransformUpdateInput`, persists via `repo.Update()`, then renders the entity returned by `Update()` |
@@ -154,8 +154,8 @@ CRUD handlers can also configure association loading and syncing directly from e
 type Author struct {
     sqlr.Entity[int64]
     ProfileID int64         `db:"profile_id"`
-    Profile   Profile       `db:"-" sqlr:"belongsTo:profile_id" sqlh:"preload:read,query,update"`
-    Tags      []Tag         `db:"-" sqlr:"many2many:author_tags" sqlh:"preload:read;sync:create,update,delete"`
+    Profile   Profile       `db:"-" sqlr:"belongsTo:profile_id" sqlh:"preload:create,read,query,update"`
+    Tags      []Tag         `db:"-" sqlr:"many2many:author_tags" sqlh:"preload:create,read;sync:create,update,delete"`
 }
 ```
 
@@ -163,10 +163,12 @@ Supported directives are:
 
 | Directive | Phases | Effect |
 |-----------|--------|--------|
-| `preload` | `read`, `query`, `update` | Adds `Preload()` to the matching CRUD builder; on `update`, it configures the post-update reload used for the returned entity |
+| `preload` | `create`, `read`, `query`, `update` | Adds `Preload()` to the matching CRUD builder; on `create` and `update`, it configures the post-write reload used for the returned entity |
 | `sync` | `create`, `update`, `delete` | Calls `SyncAssociation()` for the association while persisting or cleaning up the entity |
 
 `sqlh` tags are additive to the association behavior already defined by `sqlr`. The relationship itself must still be declared via an explicit `sqlr` relationship tag or discovered through [`sqlr` auto-detected relationships](./sqlr.mdx#auto-detected-relationships); the `sqlh` tag only adds CRUD-specific preload and sync behavior on top. `db:"-"` remains optional for relationship fields. In particular, `sqlh` preload phases are merged with any preload behavior already configured in `sqlr`, rather than replacing it.
+
+For creates, `sqlh:"preload:create"` is applied to the underlying `sqlr.Create()` builder, so the entity returned by the create handler is reloaded with those relations already hydrated. This follows the same post-create preload behavior described in [`sqlr` Create with Post-Create Preloading](./sqlr.mdx#create-with-post-create-preloading).
 
 For updates, `sqlh:"preload:update"` is applied to the underlying `sqlr.Update()` builder, so the entity returned by the update handler is reloaded with those relations already hydrated. This follows the same post-update preload behavior described in [`sqlr` Update with Post-Update Preloading](./sqlr.mdx#update-with-post-update-preloading).
 
@@ -174,7 +176,7 @@ For delete operations, `sync:delete` configures the association cleanup passed t
 
 Tags are only valid on association fields recognised by [`sqlr` relationships](./sqlr.mdx#relationships); using them on scalar fields causes startup to fail with an error. Tagged associations are traversed recursively, so nested paths such as `Child.Nested` are picked up automatically when the related entity also declares `sqlh` tags.
 
-For the underlying `sqlr` behavior behind these options, see [Read with Association Loading](./sqlr.mdx#read-with-association-loading), [Eager Loading with Preload](./sqlr.mdx#eager-loading-with-preload), [Create with Selective Association Persistence](./sqlr.mdx#create-with-selective-association-persistence), [Update with Association Sync](./sqlr.mdx#update-with-association-sync), and [Delete with Association Cleanup](./sqlr.mdx#delete-with-association-cleanup).
+For the underlying `sqlr` behavior behind these options, see [Read with Association Loading](./sqlr.mdx#read-with-association-loading), [Eager Loading with Preload](./sqlr.mdx#eager-loading-with-preload), [Create with Selective Association Persistence](./sqlr.mdx#create-with-selective-association-persistence), [Create with Post-Create Preloading](./sqlr.mdx#create-with-post-create-preloading), [Update with Association Sync](./sqlr.mdx#update-with-association-sync), and [Delete with Association Cleanup](./sqlr.mdx#delete-with-association-cleanup).
 
 ### Wiring into the Application
 
@@ -188,7 +190,7 @@ The `Transformer` interface is the primary extension point for controlling how e
 
 ### JsonResultsTransformer
 
-`JsonResultsTransformer[K, E, IC, IU]` is a simplified variant of `Transformer` for the common case where you want to map entities to a dedicated output type and return them as JSON, without needing to construct `httpserver.Response` values manually. Implement three methods — `TransformCreateInput`, `TransformUpdateInput`, and a single `TransformOutput` that converts one entity to any JSON-serialisable value — and pass the implementation to `NewJsonResultsTransformer`. The wrapping of single and multi-entity responses into JSON is handled automatically, and optional CRUD builder hooks implemented by the transformer — including delete hooks and the split update read/write hooks — are forwarded too:
+`JsonResultsTransformer[K, E, IC, IU]` is a simplified variant of `Transformer` for the common case where you want to map entities to a dedicated output type and return them as JSON, without needing to construct `httpserver.Response` values manually. Implement three methods — `TransformCreateInput`, `TransformUpdateInput`, and a single `TransformOutput` that converts one entity to any JSON-serialisable value — and pass the implementation to `NewJsonResultsTransformer`. The wrapping of single and multi-entity responses into JSON is handled automatically, and optional CRUD builder hooks implemented by the transformer — including create hooks, delete hooks, and the split update read/write hooks — are forwarded too:
 
 <CodeBlock title="user_crud.go" language="go" snippet="types">{ResultTransformerUserCrud}</CodeBlock>
 
