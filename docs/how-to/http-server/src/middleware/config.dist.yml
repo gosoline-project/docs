@@ -1,9 +1,6 @@
-env: dev
-
-app_project: gosoline
-app_family: httpserver
-app_group: docs
-app_name: middleware
+app:
+  env: dev
+  name: middleware
 
 httpserver:
   default:

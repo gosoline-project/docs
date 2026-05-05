@@ -1,9 +1,6 @@
-env: dev
-
-app_project: gosoline
-app_family: httpserver
-app_group: docs
-app_name: build-service
+app:
+  env: dev
+  name: build-service
 
 httpserver:
   default:
