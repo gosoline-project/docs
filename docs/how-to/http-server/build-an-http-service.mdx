@@ -1,0 +1,349 @@
+---
+sidebar_position: 1
+title: Build an HTTP service
+---
+
+In this guide, you'll build a complete HTTP service from scratch. You'll start with the basics of defining routes, then level up to type-safe handlers with dependency injection, request binding, and structured responses.
+
+## What is httpserver?
+
+The httpserver package is built on top of [Gin](https://gin-gonic.com/), one of the most popular HTTP frameworks for Go. It inherits all of Gin's routing, middleware, and parameter handling — so you can always fall back to raw `*gin.Context` handlers when you need to.
+
+On top of that foundation, httpserver adds a structured, type-safe way to build HTTP services. The **`With` pattern** gives you clean dependency injection: each handler group gets its own constructor that receives `ctx`, `config`, and `logger`, so your dependencies are initialized in one place and shared across related routes. The **`Bind` function** replaces manual request parsing with struct-tag-driven binding and validation — declare an input struct with `json`, `uri`, or `form` tags, and the request data is populated and validated before your handler even runs. Your handlers return a typed `Response` instead of writing directly to the response writer, making them easy to test and compose.
+
+Together with built-in middleware for logging, metrics, compression, and graceful shutdown — all configured through YAML — httpserver lets you focus on your application logic rather than HTTP plumbing.
+
+## Getting started
+
+Install the package:
+
+```bash
+go get github.com/gosoline-project/httpserver@v0.2.1
+```
+
+The entry point for any HTTP server is a `RouterFactory` — a function that receives a `*Router` and registers routes on it:
+
+```go
+httpserver.RunDefaultServer(func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    router.GET("/hello", func(ginCtx *gin.Context) {
+        ginCtx.String(200, "Hello, World!")
+    })
+    return nil
+})
+```
+
+`RunDefaultServer` creates a server named `"default"` reading from the `httpserver.default` config key. All you need is a `config.dist.yml`:
+
+```yaml
+httpserver:
+  default:
+    port: 8088
+```
+
+You can use standard [Gin](https://gin-gonic.com/) handlers directly. The `Router` supports all HTTP methods:
+
+```go
+router.GET("/users", listUsers)
+router.POST("/users", createUser)
+router.PUT("/users/:id", updateUser)
+router.DELETE("/users/:id", deleteUser)
+```
+
+Group related routes with `router.Group()`:
+
+```go
+api := router.Group("/api")
+api.GET("/ping", func(ginCtx *gin.Context) {
+    ginCtx.JSON(200, gin.H{"message": "pong"})
+})
+```
+
+Raw Gin handlers work fine for simple cases. For type safety and cleaner code, read on.
+
+## The With pattern
+
+`httpserver.With` is the recommended way to define routes. It's a generic function that:
+
+1. Calls a **handler factory** to create a handler instance (with access to `ctx`, `config`, and `logger`)
+2. Calls a **registration function** that wires handler methods to routes
+
+```go
+router.Group("/api/users").HandleWith(httpserver.With(NewHandler, func(r *httpserver.Router, h *Handler) {
+    r.GET("", httpserver.Bind(h.ListUsers))
+    r.POST("", httpserver.Bind(h.CreateUser))
+    r.GET("/:id", httpserver.Bind(h.GetUser))
+    r.DELETE("/:id", httpserver.Bind(h.DeleteUser))
+}))
+```
+
+### Handler factory
+
+The handler factory must have this signature:
+
+```go
+func NewHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*Handler, error)
+```
+
+Use it to initialize dependencies — database clients, external services, caches:
+
+```go
+type Handler struct {
+    db *sql.DB
+}
+
+func NewHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*Handler, error) {
+    db, err := sql.Open("postgres", config.GetString("db_url"))
+    if err != nil {
+        return nil, err
+    }
+    return &Handler{db: db}, nil
+}
+```
+
+### Bind vs BindN
+
+- **`Bind[I]`** — for handlers that accept an input struct: `(ctx, *Input) (Response, error)`
+- **`BindN`** — for handlers with no input: `(ctx) (Response, error)`
+
+```go
+// With input
+func (h *Handler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+    // input is populated from the request
+}
+
+// Without input
+func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+    // no request data needed
+}
+```
+
+You can register multiple handler groups on the same router, each with its own constructor:
+
+```go
+router.Group("/api/users").HandleWith(httpserver.With(NewUserHandler, func(r *httpserver.Router, h *UserHandler) {
+    r.GET("", httpserver.Bind(h.ListUsers))
+    r.POST("", httpserver.Bind(h.CreateUser))
+}))
+
+router.Group("/api/orders").HandleWith(httpserver.With(NewOrderHandler, func(r *httpserver.Router, h *OrderHandler) {
+    r.GET("", httpserver.Bind(h.ListOrders))
+}))
+```
+
+## Binding request data
+
+`Bind` automatically populates input structs from the incoming request using struct tags.
+
+### URI parameters
+
+Use the `uri` tag to bind path parameters. Define them in your route with `:name` syntax:
+
+```go
+type UserIdInput struct {
+    Id int `uri:"id" binding:"required"`
+}
+
+router.GET("/users/:id", httpserver.Bind(h.GetUser))
+```
+
+### Query string and form parameters
+
+Use the `form` tag for query string parameters (GET) or form-encoded bodies (POST):
+
+```go
+type ListUsersInput struct {
+    Role   string `form:"role"`
+    Limit  int    `form:"limit"`
+    Offset int    `form:"offset"`
+}
+```
+
+### JSON request body
+
+Use the `json` tag to bind from a JSON body. The content type `application/json` is auto-detected:
+
+```go
+type CreateUserInput struct {
+    Name  string `json:"name" binding:"required"`
+    Email string `json:"email" binding:"required,email"`
+    Role  string `json:"role" binding:"omitempty,oneof=admin user guest"`
+}
+```
+
+### Combining multiple sources
+
+Combine tags to pull from multiple sources in a single input struct:
+
+```go
+type ListFilesInput struct {
+    Database   string            `uri:"database"`
+    Table      string            `uri:"table"`
+    Partitions map[string]string `json:"partitions" form:"partitions"`
+}
+```
+
+URI parameters are always bound. Body/query binding depends on the request's Content-Type header.
+
+### Auto-detection logic
+
+`Bind` examines the input type's struct tags and the request Content-Type to determine how to bind:
+
+| Content-Type | Tag used |
+|---|---|
+| `application/json` | `json` |
+| `application/xml` | `xml` |
+| `application/x-yaml` | `yaml` |
+| `application/x-protobuf` | `protobuf` |
+| `application/x-msgpack` | `msgpack` |
+| `application/x-www-form-urlencoded` | `form` |
+| `multipart/form-data` | `form` |
+| `text/plain` | `plain` |
+
+### Validation
+
+The `binding` tag uses [go-playground/validator](https://pkg.go.dev/github.com/go-playground/validator/v10). If validation fails, the request is rejected with a descriptive error:
+
+| Tag | Description |
+|---|---|
+| `required` | Field must be present and non-zero |
+| `email` | Must be a valid email |
+| `oneof=a b c` | Must be one of the listed values |
+| `gte=0` | Must be greater than or equal to 0 |
+| `omitempty` | Skip validation if field is empty |
+
+### BindR — access the raw request
+
+If you need the raw `*http.Request` alongside your input struct:
+
+```go
+func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (httpserver.Response, error) {
+    contentType := req.Header.Get("Content-Type")
+    // ...
+}
+```
+
+## Sending responses
+
+All handler methods return an `httpserver.Response` interface.
+
+### JSON responses
+
+`NewJsonResponse` serializes any value as JSON:
+
+```go
+return httpserver.NewJsonResponse(user), nil
+```
+
+### Text responses
+
+```go
+return httpserver.NewTextResponse("Hello, plain text!"), nil
+```
+
+### Status-only responses
+
+`NewStatusResponse` returns a response with only a status code — useful for `DELETE`, `PUT`, `PATCH`:
+
+```go
+return httpserver.NewStatusResponse(204), nil
+```
+
+### Custom status codes and headers
+
+Use functional options to customize any response:
+
+```go
+return httpserver.NewJsonResponse(
+    user,
+    httpserver.WithStatusCode(http.StatusCreated),
+    httpserver.WithHeader("X-Custom-Header", "my-value"),
+), nil
+```
+
+| Option | Description |
+|---|---|
+| `WithStatusCode(code int)` | Set the HTTP status code (default: 200) |
+| `WithHeader(key, value string)` | Add a single header |
+| `WithHeaders(headers http.Header)` | Merge multiple headers |
+| `WithBody(body []byte)` | Set the raw response body |
+
+### Error handling
+
+Return `nil, error` for unexpected errors. The error middleware returns a `500 Internal Server Error` with `{"err": "<message>"}`:
+
+```go
+func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+    if len(h.users) > 10000 {
+        return nil, fmt.Errorf("too many users")
+    }
+    return httpserver.NewJsonResponse(map[string]string{"status": "ok"}), nil
+}
+```
+
+For client errors with a specific status code, use `GetErrorHandler()` — this returns a `Response` with `nil` error (a handled error):
+
+```go
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+    user, ok := h.users[input.Id]
+    if !ok {
+        return httpserver.GetErrorHandler()(http.StatusNotFound, errors.New("user not found")), nil
+    }
+    return httpserver.NewJsonResponse(user), nil
+}
+```
+
+The key pattern: return a `Response` with `nil` error for **handled** errors, and `nil, error` for **unexpected** errors.
+
+## Complete example
+
+import CodeBlock from '@theme/CodeBlock';
+import Main from "!!raw-loader!./src/build-service/main.go";
+import Config from "!!raw-loader!./src/build-service/config.dist.yml";
+
+<details>
+<summary>main.go</summary>
+<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+</details>
+
+<details>
+<summary>config.dist.yml</summary>
+<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{Config}</CodeBlock>
+</details>
+
+Test it:
+
+```bash
+# Create a user
+curl -X POST http://localhost:8088/api/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice","email":"alice@example.com","role":"admin"}'
+# {"id":1,"name":"Alice","email":"alice@example.com","role":"admin"}
+
+# List users
+curl http://localhost:8088/api/users
+# [{"id":1,"name":"Alice","email":"alice@example.com","role":"admin"}]
+
+# Get a user by ID
+curl http://localhost:8088/api/users/1
+# {"id":1,"name":"Alice","email":"alice@example.com","role":"admin"}
+
+# Get a missing user
+curl http://localhost:8088/api/users/99
+# {"err":"user not found"}
+
+# Delete a user
+curl -X DELETE http://localhost:8088/api/users/1 -v
+# HTTP/1.1 204 No Content
+
+# Health check
+curl http://localhost:8088/api/users/health
+# {"status":"ok"}
+```
+
+## What's next?
+
+- [Stream with Server-Sent Events](./stream-with-sse) — push real-time updates to clients
+- [Serve a frontend](./serve-a-frontend) — embed and serve a SPA from your Go binary
+- [Configure your server](./configure-your-server) — timeouts, compression, multiple servers
+- [Add middleware](./add-middleware) — custom middleware, CORS
+- [Real-world example](./real-world-example) — patterns from production applications

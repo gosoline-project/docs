@@ -1,0 +1,10 @@
+env: dev
+
+app_project: gosoline
+app_family: httpserver
+app_group: docs
+app_name: build-service
+
+httpserver:
+  default:
+    port: 8088

@@ -1,0 +1,112 @@
+---
+sidebar_position: 2
+title: Stream with Server-Sent Events
+---
+
+Server-Sent Events (SSE) let you push real-time updates from the server to the client over a long-lived HTTP connection. The httpserver package has built-in support for SSE through the `SseWriter` type.
+
+## Basic SSE handler
+
+Use `BindSseN` to create an SSE handler with no request input. The handler receives a `*SseWriter` instead of returning a `Response`:
+
+```go
+r.GET("/events", httpserver.BindSseN(h.StreamEvents))
+```
+
+```go
+func (h *Handler) StreamEvents(ctx context.Context, writer *httpserver.SseWriter) error {
+    ticker := time.NewTicker(time.Second)
+    defer ticker.Stop()
+
+    for i := 0; i < 5; i++ {
+        select {
+        case <-ctx.Done():
+            return nil
+        case <-ticker.C:
+            err := writer.SendEvent(httpserver.SseEvent{
+                Event: "update",
+                Data:  fmt.Sprintf("event %d", i+1),
+                Id:    fmt.Sprintf("%d", i+1),
+            })
+            if err != nil {
+                return err
+            }
+        }
+    }
+    return nil
+}
+```
+
+## Sending events
+
+`SseEvent` has three fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `Data` | string | The event payload. Multi-line strings get split into multiple `data:` lines per the SSE spec. |
+| `Event` | string | Optional event type name. Clients can listen for specific types using `addEventListener`. |
+| `Id` | string | Optional event ID for reconnection support via `Last-Event-ID`. |
+| `Retry` | int | Optional reconnection hint in milliseconds. |
+
+Use `writer.Send(data)` as a shortcut for `SendEvent(SseEvent{Data: data})`.
+
+## SSE binding variants
+
+| Function | Signature | Use case |
+|---|---|---|
+| `BindSse[I]` | `(ctx, *I, *SseWriter) error` | SSE with request input binding |
+| `BindSseR[I]` | `(ctx, *http.Request, *I, *SseWriter) error` | SSE with input + raw request |
+| `BindSseN` | `(ctx, *SseWriter) error` | SSE with no input |
+| `BindSseNR` | `(ctx, *http.Request, *SseWriter) error` | SSE with raw request, no input |
+
+## Exclude SSE paths from compression
+
+SSE requires streaming, so you must exclude SSE endpoints from gzip compression:
+
+```yaml
+httpserver:
+  default:
+    port: 8088
+    compression:
+      exclude:
+        path:
+          - /api/events
+```
+
+Without this exclusion, gzip buffering will break the real-time stream.
+
+## How it works
+
+- The `SseWriter` sets the correct headers: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`
+- A heartbeat (`: heartbeat`) is sent every 5 seconds to keep connections alive
+- When the client disconnects, `SendEvent` returns `ErrClientDisconnected`
+- Errors in SSE handlers are sent as `event: error` SSE events, not as JSON error responses (which would corrupt the stream)
+
+## Complete example
+
+import CodeBlock from '@theme/CodeBlock';
+import Main from "!!raw-loader!./src/sse/main.go";
+import Config from "!!raw-loader!./src/sse/config.dist.yml";
+
+<details>
+<summary>main.go</summary>
+<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+</details>
+
+<details>
+<summary>config.dist.yml</summary>
+<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{Config}</CodeBlock>
+</details>
+
+Test with `curl` or any SSE client:
+
+```bash
+curl -N http://localhost:8088/api/events
+# event: update
+# data: {"message":"event 1","time":"2026-05-05T10:00:00Z"}
+# id: 1
+#
+# event: update
+# data: {"message":"event 2","time":"2026-05-05T10:00:01Z"}
+# id: 2
+```

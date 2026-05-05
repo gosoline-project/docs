@@ -4,113 +4,343 @@ title: Package httpserver
 
 # httpserver package
 
-Package httpserver provides a convenient way to create HTTP servers.
+Package `httpserver` provides a modular HTTP server built on [Gin](https://gin-gonic.com/) and the gosoline kernel. It offers structured request binding, typed responses, middleware, SSE streaming, and dependency-injected handler registration.
 
-## Methods
+```go
+import "github.com/gosoline-project/httpserver"
+```
 
-### [New()](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/server.go#L75)
+## Application helpers
+
+### [RunDefaultServer()](https://github.com/gosoline-project/httpserver/blob/main/application_run.go)
 
 #### Usage
 
 ```go
-httpserver.New(definer.MyCustomDefiner)
+httpserver.RunDefaultServer(func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    router.GET("/ping", handler)
+    return nil
+})
 ```
 
 #### Description
 
-Creates a new [`ModuleFactory`](https://github.com/justtrackio/gosoline/blob/main/pkg/kernel/module.go#L26).
+Runs a single HTTP server named `"default"`, reading configuration from `httpserver.default`. This is the simplest way to start a server.
 
-### [Definer()](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/definition.go#L14)
+### [RunServers()](https://github.com/gosoline-project/httpserver/blob/main/application_run.go)
 
 #### Usage
 
 ```go
-func ApiDefiner(ctx context.Context, config cfg.Config, logger log.Logger) (*httpserver.Definitions, error) {
-	definitions := &httpserver.Definitions{}
-	definitions.GET("/hello-world", httpserver.CreateHandler(helloWorldHandler))
-	return definitions, nil
-}
-
-application.WithModuleFactory("api", httpserver.New(definer.ApiDefiner))
+httpserver.RunServers(map[string]httpserver.RouterFactory{
+    "public": publicDefiner,
+    "admin":  adminDefiner,
+})
 ```
 
 #### Description
 
-This method returns a `Definitions` pointer. 
+Runs multiple named HTTP servers. Each server reads its configuration from `httpserver.<name>`.
 
-The idiomatic way to create an httpserver is to:
+## Server construction
 
-1. Instantiate a new `Definitions` object
-2. Use its many methods to add functionality to it,
-3. Declare a `Definer()`, which returns this object
-4. Call [`New()`](#new).
-
-### [Handle()](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/definition.go#L69)
+### [NewServer()](https://github.com/gosoline-project/httpserver/blob/main/server_module.go)
 
 #### Usage
 
 ```go
-def := &httpserver.Definitions{}
-def.Handle(http.PostRequest, relativePath, handlers...)
+application.WithModuleFactory("http", httpserver.NewServer("default", myRouterFactory))
 ```
 
 #### Description
 
-With this method, you can define functionality to be run whenever your server receives an HTTP call to a given path.
+Creates a `kernel.ModuleFactory` for an HTTP server. The server is registered as a kernel module and runs at the Service stage. The `name` parameter determines both the config key (`httpserver.<name>`) and the module name (`httpserver-<name>`).
 
-#### Related methods
+## Router
 
-- [`POST()`](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/definition.go#L80)
-- [`GET()`](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/definition.go#L84)
-- [`DELETE()`](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/definition.go#L88)
-- [`PUT()`](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/definition.go#L92)
-- [`OPTIONS()`](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/definition.go#L96)
+### [RouterFactory](https://github.com/gosoline-project/httpserver/blob/main/router.go)
+
+```go
+type RouterFactory func(ctx context.Context, config cfg.Config, logger log.Logger, router *Router) error
+```
+
+Implement this function to define your routes. Return an error to prevent the server from starting.
+
+### Router methods
+
+#### [Handle()](https://github.com/gosoline-project/httpserver/blob/main/router.go)
+
+```go
+router.Handle(httpMethod, relativePath, handlers...)
+```
+
+Registers a route for the given HTTP method and path.
+
+#### [GET() / POST() / PUT() / DELETE() / PATCH() / OPTIONS()](https://github.com/gosoline-project/httpserver/blob/main/router.go)
+
+```go
+router.GET("/users", handler)
+router.POST("/users", handler)
+```
+
+Convenience methods for registering routes with specific HTTP methods.
+
+#### [Group()](https://github.com/gosoline-project/httpserver/blob/main/router.go)
+
+```go
+api := router.Group("/api")
+api.GET("/users", handler)
+```
+
+Creates a route group with a common path prefix. Groups can be nested.
+
+#### [Use()](https://github.com/gosoline-project/httpserver/blob/main/router.go)
+
+```go
+router.Use(middlewareFunc)
+```
+
+Adds middleware to the router or group.
+
+#### [UseFactory()](https://github.com/gosoline-project/httpserver/blob/main/router.go)
+
+```go
+router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger) (gin.HandlerFunc, error) {
+    // create middleware with access to config/logger
+})
+```
+
+Adds a middleware factory that is resolved lazily when the router is built.
+
+#### [HandleWith()](https://github.com/gosoline-project/httpserver/blob/main/router.go)
+
+```go
+router.Group("/api").HandleWith(httpserver.With(NewHandler, func(r *httpserver.Router, h *Handler) {
+    r.GET("/items", httpserver.Bind(h.ListItems))
+}))
+```
+
+Registers routes using a `RegisterFactoryFunc` (typically created with `With()`).
+
+## Handler registration
+
+### [With\[H\]()](https://github.com/gosoline-project/httpserver/blob/main/with.go)
+
+#### Usage
+
+```go
+router.HandleWith(httpserver.With(NewMyHandler, func(r *httpserver.Router, h *MyHandler) {
+    r.GET("/items", httpserver.Bind(h.ListItems))
+    r.POST("/items", httpserver.Bind(h.CreateItem))
+}))
+```
+
+#### Description
+
+Generic function that creates a handler instance via the factory function, then calls the registration function with both a sub-router and the handler. This is the primary pattern for dependency-injected route registration.
+
+The handler factory must have this signature:
+
+```go
+func NewMyHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*MyHandler, error)
+```
+
+## Request binding
+
+### Bind functions
+
+| Function | Handler signature | Use case |
+|---|---|---|
+| `Bind[I]` | `(ctx, *I) (Response, error)` | Bind request to input struct |
+| `BindR[I]` | `(ctx, *http.Request, *I) (Response, error)` | Bind with raw request access |
+| `BindN` | `(ctx) (Response, error)` | No input binding |
+| `BindNR` | `(ctx, *http.Request) (Response, error)` | No input, with raw request |
+| `BindSse[I]` | `(ctx, *I, *SseWriter) error` | SSE with input binding |
+| `BindSseR[I]` | `(ctx, *http.Request, *I, *SseWriter) error` | SSE with input + raw request |
+| `BindSseN` | `(ctx, *SseWriter) error` | SSE with no input |
+| `BindSseNR` | `(ctx, *http.Request, *SseWriter) error` | SSE with raw request, no input |
+
+### Binding tags
+
+Input structs use standard tags to specify the data source:
+
+| Tag | Source | Example |
+|---|---|---|
+| `uri` | Path parameters | `uri:"id"` |
+| `json` | JSON body | `json:"name"` |
+| `form` | Query string or form body | `form:"limit"` |
+| `xml` | XML body | `xml:"item"` |
+| `yaml` | YAML body | `yaml:"config"` |
+| `header` | HTTP headers | `header:"X-Request-Id"` |
+| `binding` | Validation rules | `binding:"required,email"` |
+
+## Responses
+
+### Response constructors
+
+| Constructor | Description |
+|---|---|
+| `NewJsonResponse[T](body T, opts ...ResponseOption) *jsonResponse[T]` | JSON response with `Content-Type: application/json` |
+| `NewTextResponse(text string, opts ...ResponseOption) *response` | Plain text response |
+| `NewStatusResponse(statusCode int, opts ...ResponseOption) *response` | Status-only response (no body) |
+| `NewResponse(opts ...ResponseOption) *response` | Base response constructor |
+
+### Response options
+
+| Option | Description |
+|---|---|
+| `WithStatusCode(code int)` | Set the HTTP status code |
+| `WithHeader(key, value string)` | Add a single header |
+| `WithHeaders(headers http.Header)` | Merge multiple headers |
+| `WithBody(body []byte)` | Set raw response body |
+
+## SSE
+
+### [SseWriter](https://github.com/gosoline-project/httpserver/blob/main/sse_writer.go)
+
+#### Methods
+
+| Method | Description |
+|---|---|
+| `Send(data string) error` | Send a simple SSE data event |
+| `SendEvent(event SseEvent) error` | Send a structured SSE event |
+| `Close()` | Close the writer and stop heartbeat |
+
+### SseEvent
+
+| Field | Type | Description |
+|---|---|---|
+| `Event` | string | Event type name |
+| `Data` | string | Event payload |
+| `Id` | string | Event ID for reconnection |
+| `Retry` | int | Reconnection hint (ms) |
+
+## Error handling
+
+### [WithErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)
+
+```go
+httpserver.WithErrorHandler(func(statusCode int, err error) httpserver.Response {
+    return httpserver.NewJsonResponse(
+        map[string]any{"error": err.Error()},
+        httpserver.WithStatusCode(statusCode),
+    )
+})
+```
+
+Sets a custom global error handler. The default returns `{"err": "<message>"}` with the given status code.
+
+### [GetErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)
+
+```go
+return httpserver.GetErrorHandler()(http.StatusBadRequest, err), nil
+```
+
+Returns the current error handler, useful for returning client errors with specific status codes.
+
+## Middleware
+
+### [Cors()](https://github.com/gosoline-project/httpserver/blob/main/cors.go)
+
+```go
+corsMiddleware, err := httpserver.Cors(config)
+```
+
+Creates a CORS middleware from config keys: `api_cors_allowed_origin_pattern`, `api_cors_allowed_headers`, `api_cors_allowed_methods`.
+
+### [CreateEmbeddedStaticServe()](https://github.com/gosoline-project/httpserver/blob/main/middleware_embedded_static_serve.go)
+
+```go
+router.UseFactory(httpserver.CreateEmbeddedStaticServe(fs, "public", "/api"))
+```
+
+Creates a middleware that serves embedded static files with SPA fallback.
+
+### Built-in middleware
+
+The following middleware is automatically applied to every server:
+
+| Middleware | Purpose |
+|---|---|
+| Sampling | Apply sampling decisions |
+| Metric | Record request metrics |
+| Logging | Log requests (fingers-crossed) |
+| Compression | Gzip compression |
+| Error | Catch and format errors |
+| Recovery | Panic recovery |
+| Connection lifecycle | Manage connection age |
+
+## Validation
+
+### [AddCustomValidators()](https://github.com/gosoline-project/httpserver/blob/main/custom_validators.go)
+
+```go
+httpserver.AddCustomValidators([]httpserver.CustomValidator{
+    {Name: "phone", Validator: validatePhone},
+})
+```
+
+Register custom field validators for use in `binding` tags.
+
+### Related functions
+
+- `AddStructValidators([]StructValidator)` — Register whole-struct validators
+- `AddCustomTypeFuncs([]CustomTypeFunc)` — Register custom type functions
+- `AddValidateAlias([]ValidateAlias)` — Register validation tag aliases
 
 ## Configuration
 
-:::info Further Reading
+### Settings
 
-Check out our guide on [configuring and running your server](/how-to/configure-your-httpserver).
+Config key: `httpserver.<name>`
 
-:::
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `port` | string | `"8080"` | Listening port. Use `"0"` for random port. |
+| `mode` | string | `"release"` | Gin mode: `debug`, `release`, `test`. |
+| `compression` | CompressionSettings | - | Gzip configuration. |
+| `timeout` | TimeoutSettings | - | IO timeouts. |
+| `logging` | LoggingSettings | - | Request logging configuration. |
+| `router` | RouterSettings | - | Router configuration. |
 
-### [Settings](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/server.go#L37)
+### TimeoutSettings
 
-Configures an HTTP server.
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `read` | duration | `60s` | Max duration for reading entire request. Min 1s. |
+| `write` | duration | `60s` | Max duration for writing response. Min 1s. |
+| `idle` | duration | `60s` | Max idle time for keep-alive. Min 1s. |
+| `drain` | duration | `0s` | Wait time before graceful shutdown. |
+| `shutdown` | duration | `60s` | Max time for graceful shutdown. Min 1s. |
 
-| Field       | Type                | Default | Description                          |
-| ----------- | ------------------- | ------- | ------------------------------------ |
-| Port        | string              | 8080    | Port the server listens to.          |
-| Mode        | string              | release | Mode is either debug, release, test. |
-| Compression | CompressionSettings | -       | Compression settings.                |
-| Timeout     | TimeoutSettings     | -       | Timeout settings.                    |
+### CompressionSettings
 
-### [Timeout settings](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/server.go#L51)
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `level` | string | `"default"` | `"none"`, `"default"`, `"fast"`, `"best"`, `"0"`-`"9"`. |
+| `decompression` | bool | `true` | Decompress gzip request bodies. |
+| `exclude` | CompressionExcludeSettings | - | Paths/extensions to exclude. |
 
-Configures IO timeouts.
+### CompressionExcludeSettings
 
-| Field | Type          | Default | Description                                                                                          |
-| ----- | ------------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| Read  | time.Duration | 60s     | Read timeout is the maximum duration for reading the entire request, including the body.             |
-| Write | time.Duration | 60s     | Write timeout is the maximum duration before timing out writes of the response.                      |
-| Idle  | time.Duration | 60s     | Idle timeout is the maximum amount of time to wait for the next request when keep-alives are enabled |
+| Field | Type | Description |
+|---|---|---|
+| `extension` | string array | File extensions to exclude. |
+| `path` | string array | Exact paths to exclude. |
+| `pathRegex` | string array | Regex patterns to exclude. |
 
-### [Compression settings](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/compression.go#L13)
+### LoggingSettings
 
-Controls gzip support for requests and responses. By default, compressed requests are accepted and compressed responses are returned (if accepted by the client).
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `request_body` | bool | `false` | Log request bodies. |
+| `request_body_base64` | bool | `false` | Base64-encode request body in logs. |
+| `request_headers` | bool | `false` | Log request headers. |
 
-| Field         | Type                       | Default | Description                                                                                                                                            |
-| ------------- | -------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Level         | string                     | default | -                                                                                                                                                      |
-| Decompression | bool                       | true    | -                                                                                                                                                      |
-| Exclude       | CompressionExcludeSettings | -       | Exclude files by path, extension, or regular expression from being considered for compression. Useful if you are serving a format unknown to Gosoline. |
+### ConnectionLifeCycleAdvisorSettings
 
-### [CompressionExcludeSettings](https://github.com/justtrackio/gosoline/blob/main/pkg/httpserver/compression.go#L21) 
-
-Allows you to enable gzip support.
-
-| Field     | Type             | Default | Description |
-| --------- | ---------------- | ------- | ----------- |
-| Extension | array of strings | -       | -           |
-| Path      | array of strings | -       | -           |
-| PathRegex | array of strings | -       | -           |
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Enable connection lifecycle management. |
+| `max_connection_age` | duration | `1m` | Max connection age before close. |
+| `max_connection_request_count` | int | `0` | Max requests per connection (0 = disabled). |

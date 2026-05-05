@@ -1,0 +1,120 @@
+---
+sidebar_position: 5
+title: Add middleware
+---
+
+The httpserver includes a built-in middleware chain and supports custom middleware at both the router and route-group level.
+
+## Built-in middleware
+
+Every httpserver automatically includes these middleware, applied in order:
+
+1. **Sampling** — Applies sampling decisions based on HTTP headers
+2. **Metric** — Records request count, response time, and status code metrics
+3. **Logging** — Logs request details using fingers-crossed scope (only logs on errors)
+4. **Compression** — Handles gzip compression/decompression
+5. **Error** — Catches errors attached to the Gin context and returns JSON error responses
+6. **Recovery** — Catches panics and returns 500 errors
+7. **Location** — Extracts location information
+8. **Connection lifecycle** — Manages connection age and request count limits
+
+You don't need to configure these — they are enabled by default.
+
+## Custom middleware
+
+Use `router.Use()` to add middleware to the entire server or a route group:
+
+```go
+router.Use(func(ginCtx *gin.Context) {
+    start := time.Now()
+    ginCtx.Next()
+    elapsed := time.Since(start)
+    logger.Info(ctx, "request completed in %s", elapsed)
+})
+```
+
+Apply middleware to a specific group:
+
+```go
+api := router.Group("/api")
+api.Use(authMiddleware)
+api.GET("/users", listUsers)
+```
+
+## Factory-based middleware
+
+Use `router.UseFactory()` for middleware that needs access to config or logger. The factory is called lazily when the router is built:
+
+```go
+router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger) (gin.HandlerFunc, error) {
+    apiKey := config.GetString("api_key")
+    return func(ginCtx *gin.Context) {
+        if ginCtx.GetHeader("X-API-Key") != apiKey {
+            ginCtx.AbortWithStatus(401)
+            return
+        }
+        ginCtx.Next()
+    }, nil
+})
+```
+
+## CORS
+
+The package provides a CORS middleware that reads configuration from the gosoline config:
+
+```yaml
+api_cors_allowed_origin_pattern: ".*"
+api_cors_allowed_headers:
+  - Content-Type
+  - Authorization
+api_cors_allowed_methods:
+  - GET
+  - POST
+  - PUT
+  - DELETE
+```
+
+```go
+import "github.com/gosoline-project/httpserver"
+
+// In your RouterFactory:
+corsMiddleware, err := httpserver.Cors(config)
+if err != nil {
+    return err
+}
+router.Use(corsMiddleware)
+```
+
+Or use the default Gin CORS middleware directly:
+
+```go
+import "github.com/gin-contrib/cors"
+
+router.Use(cors.Default())
+```
+
+## Embedded static file serving
+
+`CreateEmbeddedStaticServe` is itself a middleware factory:
+
+```go
+router.UseFactory(httpserver.CreateEmbeddedStaticServe(publicFs, "public", "/api"))
+```
+
+See [Serve a frontend](./serve-a-frontend) for full details.
+
+## Complete example
+
+import CodeBlock from '@theme/CodeBlock';
+import Main from "!!raw-loader!./src/middleware/main.go";
+import Config from "!!raw-loader!./src/middleware/config.dist.yml";
+
+<details>
+<summary>main.go</summary>
+<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+</details>
+
+<details>
+<summary>config.dist.yml</summary>
+<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{Config}</CodeBlock>
+</details>

@@ -1,0 +1,183 @@
+---
+sidebar_position: 4
+title: Configure your server
+---
+
+The httpserver package provides flexible configuration options through YAML config files. All settings live under `httpserver.<name>` where `<name>` is the server name you pass to `NewServer`.
+
+## Default server
+
+The simplest configuration is a single server named `"default"`:
+
+```yaml
+httpserver:
+  default:
+    port: 8080
+```
+
+```go
+httpserver.RunDefaultServer(func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    router.GET("/ping", handler)
+    return nil
+})
+```
+
+## Multiple named servers
+
+You can run multiple HTTP servers in one application, each with its own configuration:
+
+```yaml
+httpserver:
+  public:
+    port: 8080
+  admin:
+    port: 8090
+    mode: release
+```
+
+```go
+httpserver.RunServers(map[string]httpserver.RouterFactory{
+    "public": publicDefiner,
+    "admin":  adminDefiner,
+})
+```
+
+Or register them individually as module factories:
+
+```go
+application.WithModuleFactory("http-public", httpserver.NewServer("public", publicDefiner))
+application.WithModuleFactory("http-admin", httpserver.NewServer("admin", adminDefiner))
+```
+
+## Full configuration reference
+
+### Settings
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `port` | string | `"8080"` | Port the server listens on. Use `"0"` for a random port (useful in tests). |
+| `mode` | string | `"release"` | Gin mode: `debug`, `release`, or `test`. |
+| `compression` | CompressionSettings | - | Gzip compression settings. |
+| `timeout` | TimeoutSettings | - | IO timeout settings. |
+| `logging` | LoggingSettings | - | Request logging settings. |
+| `router` | RouterSettings | - | Gin router settings. |
+
+### Timeout settings
+
+```yaml
+httpserver:
+  default:
+    timeout:
+      read: 60s
+      write: 60s
+      idle: 60s
+      drain: 0s
+      shutdown: 60s
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `read` | duration | `60s` | Maximum duration for reading the entire request, including the body. Minimum 1s. |
+| `write` | duration | `60s` | Maximum duration before timing out writes of the response. Minimum 1s. |
+| `idle` | duration | `60s` | Maximum time to wait for the next request when keep-alives are enabled. Minimum 1s. |
+| `drain` | duration | `0s` | Time to wait after receiving a shutdown signal before starting graceful shutdown. Useful for load balancer deregistration. |
+| `shutdown` | duration | `60s` | Maximum time for graceful shutdown. Minimum 1s. |
+
+For long-running operations, increase the timeouts:
+
+```yaml
+httpserver:
+  default:
+    port: 8081
+    timeout:
+      read: 10m
+      write: 10m
+```
+
+### Compression settings
+
+```yaml
+httpserver:
+  default:
+    compression:
+      level: default
+      decompression: true
+      exclude:
+        path:
+          - /api/events
+        extension:
+          - .png
+        pathRegex:
+          - \.json$
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `level` | string | `"default"` | Compression level: `"none"`, `"default"`, `"fast"`, `"best"`, or `"0"`–`"9"`. |
+| `decompression` | bool | `true` | Whether to decompress gzip-encoded request bodies. |
+| `exclude` | CompressionExcludeSettings | - | Paths/extensions/regexes to exclude from compression. |
+
+### Compression exclude settings
+
+| Field | Type | Description |
+|---|---|---|
+| `path` | string array | Exact paths to exclude (e.g., `/api/events`). |
+| `extension` | string array | File extensions to exclude (e.g., `.png`). |
+| `pathRegex` | string array | Regex patterns to exclude (e.g., `\.json$`). |
+
+:::caution
+Always exclude SSE endpoints from compression. Gzip buffering will break real-time streaming. See [Stream with SSE](./stream-with-sse) for details.
+:::
+
+## Health check server
+
+The health check server runs on a separate port and is useful for load balancer health checks:
+
+```yaml
+httpserver:
+  default:
+    port: 8080
+```
+
+The main server automatically registers a `/health` endpoint. For a separate health check server, the health check module is available separately. See [Write health checks](../write-health-checks) for details.
+
+## Profiling
+
+Enable Go's built-in profiling endpoints (pprof) on a separate port:
+
+```yaml
+profiling:
+  enabled: true
+  api:
+    port: 8091
+```
+
+When enabled, profiling endpoints are available at `/debug/profiling/*`.
+
+## Graceful shutdown
+
+The httpserver supports graceful shutdown:
+
+1. When the application context is cancelled, the server sets its healthy flag to `false`
+2. It waits for the `drain` duration (useful for load balancer deregistration)
+3. It calls `server.Shutdown` with the `shutdown` timeout
+4. In-flight requests are given time to complete
+
+## Connection lifecycle
+
+In Kubernetes environments where load balancing only happens on new connections, you can configure the connection lifecycle advisor to periodically close connections:
+
+```yaml
+httpserver:
+  default:
+    connection_lifecycle:
+      enabled: true
+      max_connection_age: 1m
+      max_connection_request_count: 0
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Enable/disable the connection lifecycle advisor. |
+| `max_connection_age` | duration | `1m` | Maximum age of a connection before it is closed. |
+| `max_connection_request_count` | int | `0` | Maximum number of requests per connection. `0` means disabled. |
