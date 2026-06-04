@@ -1,0 +1,310 @@
+---
+sidebar_position: 6
+title: Authenticate requests
+---
+
+The `github.com/gosoline-project/httpserver/auth` package provides Gin-compatible middleware for common HTTP authentication patterns. You can attach auth middleware to the whole server, to a route group, or to selected routes.
+
+Authentication settings are scoped to the HTTP server name. A server created with `httpserver.RunDefaultServer` reads from `httpserver.default.auth`. A server created with `httpserver.NewServer("admin", ...)` reads from `httpserver.admin.auth`.
+
+## Basic setup
+
+Create an auth middleware in your `RouterFactory` and register it like any other Gin middleware:
+
+```go
+import (
+    "context"
+
+    "github.com/gosoline-project/httpserver"
+    "github.com/gosoline-project/httpserver/auth"
+    "github.com/justtrackio/gosoline/pkg/cfg"
+    "github.com/justtrackio/gosoline/pkg/log"
+)
+
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    apiKeyAuth, err := auth.NewConfigKeyHandler(config, logger, "default", auth.ProvideValueFromHeader(auth.HeaderApiKey))
+    if err != nil {
+        return err
+    }
+
+    api := router.Group("/api")
+    api.Use(apiKeyAuth)
+    api.GET("/ping", httpserver.BindN(ping))
+
+    return nil
+}
+```
+
+Configure the `default` server's auth settings:
+
+```yaml
+httpserver:
+  default:
+    port: 8080
+    auth:
+      keys:
+        - ${env:API_KEY}
+```
+
+Requests must include the configured key:
+
+```bash
+curl -H 'X-API-KEY: secret' http://localhost:8080/api/ping
+```
+
+## The subject
+
+Successful authenticators attach an `auth.Subject` to the request context. Handlers registered through `Bind`, `BindN`, `BindR`, `BindNR`, and SSE helpers receive that context.
+
+```go
+func me(ctx context.Context) (httpserver.Response, error) {
+    subject := auth.GetSubject(ctx)
+
+    return httpserver.NewJsonResponse(map[string]any{
+        "name":             subject.Name,
+        "anonymous":        subject.Anonymous,
+        "authenticatedBy":  subject.AuthenticatedBy,
+        "attributes":       subject.Attributes,
+    }), nil
+}
+```
+
+`auth.GetSubject` panics when no subject is present. Only call it in handlers protected by auth middleware, or add your own fallback middleware that sets a subject with `auth.RequestWithSubject`.
+
+## API key authentication
+
+Use `NewConfigKeyHandler` when the allowed keys are configured in gosoline config.
+
+```yaml
+httpserver:
+  default:
+    auth:
+      keys:
+        - ${env:API_KEY}
+        - ${env:SECONDARY_API_KEY}
+```
+
+```go
+apiKeyAuth, err := auth.NewConfigKeyHandler(config, logger, "default", auth.ProvideValueFromHeader(auth.HeaderApiKey))
+if err != nil {
+    return err
+}
+
+router.Group("/api").Use(apiKeyAuth)
+```
+
+The provider decides where the key is read from:
+
+| Provider | Reads from |
+|---|---|
+| `auth.ProvideValueFromHeader(header)` | HTTP header |
+| `auth.ProvideValueFromQueryParam(param)` | Query string |
+| `auth.ProvideValueFromUriPath(param)` | Gin path parameter |
+
+By default, `auth.HeaderApiKey` is `X-API-KEY`.
+
+On success, the subject is anonymous and contains the provided key in `subject.Attributes[auth.AttributeApiKey]`.
+
+## Unchecked API key authentication
+
+Use `NewUncheckedKeyHandler` when another trusted component already validates the key, but your handler still needs the key value in the auth subject.
+
+```go
+uncheckedAuth := auth.NewUncheckedKeyHandler(config, logger, auth.ProvideValueFromHeader(auth.HeaderApiKey))
+router.Group("/api").Use(uncheckedAuth)
+```
+
+This authenticator accepts any non-empty key. It does not read auth settings and does not compare the key against configured values.
+
+## Basic authentication
+
+Use `NewBasicAuthHandler` for HTTP Basic Auth.
+
+```yaml
+httpserver:
+  default:
+    auth:
+      basic:
+        users:
+          - admin:${env:BASIC_AUTH_ADMIN_PASSWORD}
+          - support:${env:BASIC_AUTH_SUPPORT_PASSWORD}
+```
+
+```go
+basicAuth, err := auth.NewBasicAuthHandler(config, logger, "default")
+if err != nil {
+    return err
+}
+
+router.Group("/admin").Use(basicAuth)
+```
+
+Each user entry is formatted as `username:password`. On success, the subject is anonymous and contains the username in `subject.Attributes[auth.AttributeUser]`.
+
+## Token bearer authentication
+
+Token bearer auth reads a bearer id and a token from configurable headers. Your provider loads the bearer object for the id. The middleware then compares the request token with `bearer.GetToken()` using constant-time comparison.
+
+```yaml
+httpserver:
+  default:
+    auth:
+      bearer:
+        id_header: X-BEARER-ID
+        token_header: X-BEARER-TOKEN
+```
+
+```go
+type ClientToken struct {
+    Token string
+}
+
+func (t *ClientToken) GetToken() string {
+    return t.Token
+}
+
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    provider := func(ctx context.Context, key string, token string) (auth.TokenBearer, error) {
+        clientToken, err := loadClientToken(ctx, key)
+        if err != nil {
+            return nil, err
+        }
+
+        return clientToken, nil
+    }
+
+    bearerAuth, err := auth.NewTokenBearerHandler(config, logger, "default", provider)
+    if err != nil {
+        return err
+    }
+
+    router.Group("/api").Use(bearerAuth)
+
+    return nil
+}
+```
+
+On success, the subject is anonymous and includes these attributes:
+
+| Attribute | Value |
+|---|---|
+| `auth.AttributeToken` | Request token |
+| `auth.AttributeTokenBearerId` | Bearer id |
+| `auth.AttributeTokenBearer` | Bearer object returned by the provider |
+
+If your bearer data already lives behind a getter-style store, `auth.ProvideTokenBearerFromGetter` adapts it into a `TokenBearerProvider`.
+
+## JWT authentication
+
+Use `NewJwtAuthHandler` to validate `Authorization: Bearer <token>` headers. Tokens are validated with HS256, the configured signing secret, and the configured issuer. The default JWT subject requires an `email` claim.
+
+```yaml
+httpserver:
+  default:
+    auth:
+      jwt:
+        signingSecret: ${env:JWT_SIGNING_SECRET}
+        issuer: my-service
+        expireDuration: 15m
+```
+
+```go
+jwtAuth, err := auth.NewJwtAuthHandler(config, "default")
+if err != nil {
+    return err
+}
+
+router.Group("/api").Use(jwtAuth)
+```
+
+The signing secret must be at least 32 characters. `expireDuration` defaults to `15m` and must be at least one minute.
+
+Use `NewJwtTokenHandler` to sign tokens with the same settings:
+
+```go
+tokenHandler, err := auth.NewJwtTokenHandler(config, "default")
+if err != nil {
+    return nil, err
+}
+
+token, err := tokenHandler.Sign(auth.SignUserInput{
+    Name:  "Alice",
+    Email: "alice@example.com",
+    Image: "https://example.com/alice.png",
+})
+```
+
+On success, the subject is not anonymous, `subject.Name` is the token's `email` claim, and `subject.AuthenticatedBy` is `auth.ByJWT`.
+
+## Chaining authenticators
+
+Use `NewChainHandler` when a route should accept more than one authentication method. The first valid authenticator wins. If none match, the response is `401 Unauthorized` with one error per authenticator.
+
+```go
+apiKeyAuth, err := auth.NewConfigKeyAuthenticator(config, logger, "default", auth.ProvideValueFromHeader(auth.HeaderApiKey))
+if err != nil {
+    return err
+}
+
+jwtAuth, err := auth.NewJWTAuthAuthenticator(config, "default")
+if err != nil {
+    return err
+}
+
+authenticators := map[string]auth.Authenticator{
+    auth.ByApiKey: apiKeyAuth,
+    auth.ByJWT:    jwtAuth,
+}
+
+authenticators, err = auth.OnlyConfiguredAuthenticators(config, "default", authenticators)
+if err != nil {
+    return err
+}
+
+router.Group("/api").Use(auth.NewChainHandler(authenticators))
+```
+
+Optionally restrict the enabled authenticators through config:
+
+```yaml
+httpserver:
+  default:
+    auth:
+      allowedAuthenticators:
+        - apiKey
+        - jwtAuth
+```
+
+If `allowedAuthenticators` is empty or omitted, all authenticators in the map are allowed.
+
+## Configuration reference
+
+All config keys below are relative to `httpserver.<name>.auth`.
+
+| Key | Type | Description |
+|---|---|---|
+| `allowedAuthenticators` | string array | Optional allow-list used by `OnlyConfiguredAuthenticators`. |
+| `keys` | string array | Allowed API keys for `NewConfigKeyHandler` and `NewConfigKeyAuthenticator`. |
+| `basic.users` | string array | Basic Auth users in `username:password` format. |
+| `bearer.id_header` | string | Header containing the bearer id. |
+| `bearer.token_header` | string | Header containing the bearer token. |
+| `jwt.signingSecret` | string | HS256 signing secret, at least 32 characters. |
+| `jwt.issuer` | string | Required JWT issuer. |
+| `jwt.expireDuration` | duration | Token lifetime for signed tokens, default `15m`, minimum `1m`. |
+
+For multiple HTTP servers, repeat the auth config below each server name:
+
+```yaml
+httpserver:
+  public:
+    port: 8080
+    auth:
+      keys:
+        - ${env:PUBLIC_API_KEY}
+  admin:
+    port: 8090
+    auth:
+      jwt:
+        signingSecret: ${env:ADMIN_JWT_SIGNING_SECRET}
+        issuer: admin-api
+```

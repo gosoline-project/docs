@@ -23,12 +23,13 @@ Migration order:
 2. Migrate server startup and router factories.
 3. Migrate route definitions from returned Definitions to mutating *Router.
 4. Migrate middleware registration.
-5. Migrate handlers route group by route group.
-6. Consolidate old route-specific handlers into domain or route-group handlers where they share dependencies.
-7. Migrate request binding and raw request access.
-8. Migrate responses and handled errors.
-9. Migrate tests.
-10. Run formatting and tests.
+5. Migrate auth middleware and auth configuration.
+6. Migrate handlers route group by route group.
+7. Consolidate old route-specific handlers into domain or route-group handlers where they share dependencies.
+8. Migrate request binding and raw request access.
+9. Migrate responses and handled errors.
+10. Migrate tests.
+11. Run formatting and tests.
 
 Keep each step small enough that the codebase remains understandable after every edit.
 
@@ -95,12 +96,25 @@ Response migration rules:
 
 Auth migration rules:
 
-- The old github.com/justtrackio/gosoline/pkg/httpserver/auth subpackage has no direct equivalent in github.com/gosoline-project/httpserver.
-- If the application imports the old auth subpackage, do not replace it with the new httpserver import.
-- Move auth logic into application-owned Gin middleware or an application-owned auth package.
+- Replace old auth imports from github.com/justtrackio/gosoline/pkg/httpserver/auth with github.com/gosoline-project/httpserver/auth when the old usage maps to a standalone auth helper.
+- Import the standalone auth package separately from github.com/gosoline-project/httpserver.
+- Auth config is scoped to the HTTP server name under httpserver.<name>.auth. RunDefaultServer uses the name default. NewServer("admin", ...) uses the name admin.
+- Pass the same server name to auth constructors that read config, for example auth.NewConfigKeyHandler(config, logger, "default", provider), auth.NewBasicAuthHandler(config, logger, "default"), auth.NewTokenBearerHandler(config, logger, "default", provider), and auth.NewJwtAuthHandler(config, "default").
+- Migrate old api_auth_keys to httpserver.<name>.auth.keys.
+- Migrate old api_auth_basic_users to httpserver.<name>.auth.basic.users.
+- Migrate old api_auth_bearer_id_header to httpserver.<name>.auth.bearer.id_header.
+- Migrate old api_auth_bearer_token_header to httpserver.<name>.auth.bearer.token_header.
+- Keep JWT settings under httpserver.<name>.auth.jwt, and ensure signingSecret, issuer, and expireDuration match the application behavior.
+- If the application used an early standalone auth version with httpserver.auth.* keys, move those keys below the named server, for example httpserver.auth.keys becomes httpserver.default.auth.keys.
+- Migrate configured API-key auth to auth.NewConfigKeyHandler or auth.NewConfigKeyAuthenticator with an appropriate provider: ProvideValueFromHeader, ProvideValueFromQueryParam, or ProvideValueFromUriPath.
+- Migrate Basic Auth to auth.NewBasicAuthHandler or auth.NewBasicAuthAuthenticator.
+- Migrate bearer-token auth to auth.NewTokenBearerHandler or auth.NewTokenBearerAuthenticator and preserve the provider's token lookup behavior.
+- Migrate JWT auth to auth.NewJwtAuthHandler or auth.NewJWTAuthAuthenticator. The standalone JWT authenticator validates Authorization: Bearer <token> and requires an email claim for the auth subject.
+- Use auth.NewChainHandler for routes that accept multiple auth methods. Use auth.OnlyConfiguredAuthenticators with httpserver.<name>.auth.allowedAuthenticators if the enabled methods are configurable.
+- Successful standalone authenticators attach an auth.Subject to the request context. If handlers read old auth data from context.Context, update them to use auth.GetSubject(ctx), or preserve the old context values in application-owned middleware if downstream code requires them.
 - Preserve accepted credentials, rejection status codes, response bodies, and context values used by downstream handlers.
-- If handlers read auth data from context.Context, ensure the new middleware writes the same values to ginCtx.Request.Context().
-- Stop and ask for guidance if the old auth logic depends on package internals that are not obvious from the application code.
+- The old Google auth helper was not ported to the standalone module. If the application uses NewConfigGoogleHandler or NewConfigGoogleAuthenticator, keep that logic in application-owned Gin middleware or an application-owned auth package.
+- Stop and ask for guidance if the old auth logic depends on package internals that are not obvious from the application code or if Google auth behavior cannot be preserved safely.
 
 Test migration rules:
 
@@ -113,7 +127,7 @@ Test migration rules:
 Validation checklist:
 
 - No application code still imports github.com/justtrackio/gosoline/pkg/httpserver, unless intentionally left for a separate migration step.
-- No application code imports github.com/justtrackio/gosoline/pkg/httpserver/auth, unless the auth migration was explicitly deferred.
+- No application code imports github.com/justtrackio/gosoline/pkg/httpserver/auth, unless Google auth or custom auth behavior was explicitly deferred.
 - No route definer returns *httpserver.Definitions.
 - No &httpserver.Definitions{} allocations remain.
 - No old Create*Handler calls remain.
@@ -121,6 +135,7 @@ Validation checklist:
 - No code reads old httpserver.Response fields directly.
 - All routes from the old router are present in the new router with the same HTTP method and path.
 - All middleware is registered in the same effective order.
+- Auth config has been moved below httpserver.<name>.auth and auth constructors receive the matching server name.
 - All request binding tags still match the route parameters, query parameters, and body fields expected by clients.
 - All handled client errors still return the intended HTTP status code.
 - Tests compile and cover at least one route using URI binding, one route using JSON binding, and one middleware-protected route if applicable.
@@ -136,7 +151,7 @@ Commands to run:
 Stop conditions:
 
 - Stop and ask for human guidance if route behavior is ambiguous and there are no tests or callers to confirm it.
-- Stop and ask for human guidance if old auth code depends on shared package internals that cannot be reproduced safely.
+- Stop and ask for human guidance if old auth code depends on shared package internals, including Google auth behavior, that cannot be reproduced safely.
 - Stop and ask for human guidance if multiple old route-specific handlers have conflicting initialization logic and it is unclear whether they should be consolidated.
 - Stop and ask for human guidance if a route depends on request.ClientIp or Gin-specific behavior and there is no clear equivalent without changing behavior.
 - Stop and ask for human guidance if the migration would require unrelated application refactoring.

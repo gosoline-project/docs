@@ -536,9 +536,34 @@ router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger
 
 ### Authentication
 
-The old `github.com/justtrackio/gosoline/pkg/httpserver/auth` helpers are not part of the standalone `github.com/gosoline-project/httpserver` module. If you used that subpackage, migrate authentication into application-owned Gin middleware or a small application-owned auth package.
+The standalone module now includes auth helpers in `github.com/gosoline-project/httpserver/auth`. If you migrated before auth support was added, you can replace application-owned auth middleware with the standalone helpers where they fit.
 
-The migration target should be regular Gin middleware:
+Import the standalone auth package separately:
+
+```go
+import (
+    "github.com/gosoline-project/httpserver"
+    "github.com/gosoline-project/httpserver/auth"
+)
+```
+
+Auth settings are now scoped to the named HTTP server. `httpserver.RunDefaultServer` uses the server name `default`, so auth config belongs below `httpserver.default.auth`. If you register `httpserver.NewServer("admin", DefineRouter)`, the auth settings belong below `httpserver.admin.auth`, and you pass `"admin"` to auth constructors.
+
+Common config key migrations:
+
+| Old gosoline key | New standalone key for server `default` |
+|---|---|
+| `api_auth_keys` | `httpserver.default.auth.keys` |
+| `api_auth_basic_users` | `httpserver.default.auth.basic.users` |
+| `api_auth_bearer_id_header` | `httpserver.default.auth.bearer.id_header` |
+| `api_auth_bearer_token_header` | `httpserver.default.auth.bearer.token_header` |
+| `httpserver.<name>.auth.jwt.*` | `httpserver.<name>.auth.jwt.*` |
+
+If you adopted an early standalone auth version that used `httpserver.auth.*`, move those values below the specific server name, for example from `httpserver.auth.keys` to `httpserver.default.auth.keys`.
+
+### API Key Auth
+
+Old application-owned middleware often looked like this:
 
 ```go
 func ApiKeyMiddleware(expected string) gin.HandlerFunc {
@@ -553,12 +578,141 @@ func ApiKeyMiddleware(expected string) gin.HandlerFunc {
 }
 ```
 
-Register it like any other middleware:
+Migrate to `auth.NewConfigKeyHandler` when the valid keys should come from config:
+
+```yaml
+httpserver:
+  default:
+    auth:
+      keys:
+        - ${env:API_KEY}
+```
 
 ```go
+apiKeyAuth, err := auth.NewConfigKeyHandler(config, logger, "default", auth.ProvideValueFromHeader(auth.HeaderApiKey))
+if err != nil {
+    return err
+}
+
 api := router.Group("/api")
-api.Use(ApiKeyMiddleware(config.GetString("api_key")))
+api.Use(apiKeyAuth)
 ```
+
+Use `auth.ProvideValueFromQueryParam("api_key")` or `auth.ProvideValueFromUriPath("apiKey")` if your old middleware read the key from a query parameter or path parameter instead of a header.
+
+### Basic Auth
+
+Move Basic Auth users below the named server:
+
+```yaml
+httpserver:
+  default:
+    auth:
+      basic:
+        users:
+          - admin:${env:BASIC_AUTH_ADMIN_PASSWORD}
+```
+
+Register the middleware with the same server name:
+
+```go
+basicAuth, err := auth.NewBasicAuthHandler(config, logger, "default")
+if err != nil {
+    return err
+}
+
+router.Group("/admin").Use(basicAuth)
+```
+
+### Bearer Token Auth
+
+Move bearer header configuration below the named server:
+
+```yaml
+httpserver:
+  default:
+    auth:
+      bearer:
+        id_header: X-BEARER-ID
+        token_header: X-BEARER-TOKEN
+```
+
+Then pass the server name and your bearer provider:
+
+```go
+bearerAuth, err := auth.NewTokenBearerHandler(config, logger, "default", provider)
+if err != nil {
+    return err
+}
+
+router.Group("/api").Use(bearerAuth)
+```
+
+### JWT Auth
+
+JWT settings live below `httpserver.<name>.auth.jwt`:
+
+```yaml
+httpserver:
+  default:
+    auth:
+      jwt:
+        signingSecret: ${env:JWT_SIGNING_SECRET}
+        issuer: my-service
+        expireDuration: 15m
+```
+
+```go
+jwtAuth, err := auth.NewJwtAuthHandler(config, "default")
+if err != nil {
+    return err
+}
+
+router.Group("/api").Use(jwtAuth)
+```
+
+The standalone JWT helper validates `Authorization: Bearer <token>` headers using HS256 and requires an `email` claim for the authenticated subject.
+
+### Auth Subjects and Chains
+
+Successful authenticators attach an `auth.Subject` to the request context. In bound handlers, retrieve it with `auth.GetSubject(ctx)`:
+
+```go
+func (h *UserHandler) Me(ctx context.Context) (httpserver.Response, error) {
+    subject := auth.GetSubject(ctx)
+
+    return httpserver.NewJsonResponse(subject), nil
+}
+```
+
+If a route accepts multiple auth methods, build authenticators and combine them with `auth.NewChainHandler`. You can optionally restrict enabled methods per server with `httpserver.<name>.auth.allowedAuthenticators`.
+
+```yaml
+httpserver:
+  default:
+    auth:
+      allowedAuthenticators:
+        - apiKey
+        - jwtAuth
+```
+
+```go
+authenticators := map[string]auth.Authenticator{
+    auth.ByApiKey: apiKeyAuth,
+    auth.ByJWT:    jwtAuth,
+}
+
+authenticators, err = auth.OnlyConfiguredAuthenticators(config, "default", authenticators)
+if err != nil {
+    return err
+}
+
+router.Group("/api").Use(auth.NewChainHandler(authenticators))
+```
+
+The old Google auth helper was not ported to the standalone module. If you used `NewConfigGoogleHandler` or `NewConfigGoogleAuthenticator`, keep that logic in application-owned middleware or an application-owned auth package.
+
+See [Authenticate requests](../how-to/http-server/authentication) for the full standalone auth guide.
 
 ## 12. Review Configuration
 
@@ -588,7 +742,7 @@ Keep these points in mind while migrating:
 | Routes | `/health` is still registered by the server. |
 | Compression | Exclude SSE endpoints from compression. |
 | Profiling | Profiling is still configured under `profiling`. |
-| Auth | Old auth helper config does not automatically migrate to the standalone package. |
+| Auth | Auth config is scoped below `httpserver.<name>.auth`; old global auth keys must be moved below the server name. |
 
 ## 13. Migrate Tests
 
@@ -737,7 +891,7 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 - Replace path parameter helpers with `uri` tags on input structs.
 - Replace `CreateRawHandler` and `CreateReaderHandler` with `BindR` or `BindNR` and explicit `req.Body` handling.
 - Replace low-level `NewResponse(body, contentType, statusCode, header)` calls with `NewTextResponse`, `NewJsonResponse`, `NewStatusResponse`, or `NewResponse` options.
-- Move old `pkg/httpserver/auth` usage into application-owned Gin middleware.
+- Replace old `pkg/httpserver/auth` imports with `github.com/gosoline-project/httpserver/auth`, move auth config below `httpserver.<name>.auth`, and pass the server name to auth constructors.
 - Update test suites from definition setup to router factory setup.
 - Run your HTTP tests and exercise validation errors, client errors, and middleware behavior after migration.
 
@@ -746,4 +900,3 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 If you want an AI agent to perform this migration, copy the prepared migration instructions and provide them as the task prompt. The instructions are intentionally operational and include discovery steps, migration order, API mappings, validation checks, and stop conditions.
 
 <CopyToClipboardButton text={AgentInstructions} label="Copy AI migration instructions" />
-
