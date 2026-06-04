@@ -141,6 +141,8 @@ router.Group("/admin").Use(basicAuth)
 
 Each user entry is formatted as `username:password`. On success, the subject is anonymous and contains the username in `subject.Attributes[auth.AttributeUser]`.
 
+Unauthorized responses include a `WWW-Authenticate` Basic realm using the configured gosoline app identity name.
+
 ## Token bearer authentication
 
 Token bearer auth reads a bearer id and a token from configurable headers. Your provider loads the bearer object for the id. The middleware then compares the request token with `bearer.GetToken()` using constant-time comparison.

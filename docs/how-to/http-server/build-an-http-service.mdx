@@ -18,7 +18,7 @@ Together with built-in middleware for logging, metrics, compression, and gracefu
 Install the package:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.2.1
+go get github.com/gosoline-project/httpserver@v0.4.0
 ```
 
 The entry point for any HTTP server is a `RouterFactory` — a function that receives a `*Router` and registers routes on it:
@@ -201,7 +201,7 @@ URI parameters are always bound. Body/query binding depends on the request's Con
 
 ### Validation
 
-The `binding` tag uses [go-playground/validator](https://pkg.go.dev/github.com/go-playground/validator/v10). If validation fails, the request is rejected with a descriptive error:
+The `binding` tag uses [go-playground/validator](https://pkg.go.dev/github.com/go-playground/validator/v10). If binding or validation fails, the request is rejected with `400 Bad Request` and a descriptive client error:
 
 | Tag | Description |
 |---|---|
@@ -269,7 +269,7 @@ return httpserver.NewJsonResponse(
 
 ### Error handling
 
-Return `nil, error` for unexpected errors. The error middleware returns a `500 Internal Server Error` with `{"err": "<message>"}`:
+Return `nil, error` for unexpected errors. The error middleware returns `500 Internal Server Error` with a sanitized `{"err":"internal server error"}` response, so internal details do not leak to clients:
 
 ```go
 func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
@@ -293,6 +293,12 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.R
 ```
 
 The key pattern: return a `Response` with `nil` error for **handled** errors, and `nil, error` for **unexpected** errors.
+
+If middleware or lower-level code attaches an error to the Gin context and needs a specific status code, wrap it with `NewErrorWithStatus`:
+
+```go
+ginCtx.Error(httpserver.NewErrorWithStatus(http.StatusBadRequest, err))
+```
 
 ## Complete example
 

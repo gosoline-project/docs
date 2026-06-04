@@ -228,7 +228,7 @@ httpserver.WithErrorHandler(func(statusCode int, err error) httpserver.Response 
 })
 ```
 
-Sets a custom global error handler. The default returns `{"err": "<message>"}` with the given status code.
+Sets a custom global error handler. The default returns `{"err":"<message>"}` for 4xx responses and `{"err":"internal server error"}` for 5xx responses.
 
 ### [GetErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)
 
@@ -237,6 +237,8 @@ return httpserver.GetErrorHandler()(http.StatusBadRequest, err), nil
 ```
 
 Returns the current error handler, useful for returning client errors with specific status codes.
+
+Use `NewErrorWithStatus(statusCode, err)` when middleware attaches an error to the Gin context and the response should use a status other than 500.
 
 ## Middleware
 
@@ -266,6 +268,7 @@ The following middleware is automatically applied to every server:
 | Metric | Record request metrics |
 | Logging | Log requests (fingers-crossed) |
 | Compression | Gzip compression |
+| Max body size | Limit incoming request bodies |
 | Error | Catch and format errors |
 | Recovery | Panic recovery |
 | Connection lifecycle | Manage connection age |
@@ -302,6 +305,7 @@ Config key: `httpserver.<name>`
 | `timeout` | TimeoutSettings | - | IO timeouts. |
 | `logging` | LoggingSettings | - | Request logging configuration. |
 | `router` | RouterSettings | - | Router configuration. |
+| `max_body_bytes` | int | `10485760` | Maximum incoming request body size in bytes. `0` disables the limit. |
 
 ### TimeoutSettings
 

@@ -3,11 +3,12 @@ module github.com/gosoline-project/docs
 go 1.25.7
 
 require (
-	github.com/gosoline-project/httpserver v0.2.1
+	github.com/gin-gonic/gin v1.11.0
+	github.com/gosoline-project/httpserver v0.4.0
 	github.com/gosoline-project/sqlc v0.3.0
 	github.com/gosoline-project/sqlh v0.7.0
 	github.com/gosoline-project/sqlr v0.8.2
-	github.com/justtrackio/gosoline v0.57.2
+	github.com/justtrackio/gosoline v0.61.0
 )
 
 replace github.com/gosoline-project/sqlh => ../sqlh
@@ -71,6 +72,7 @@ require (
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ettle/strcase v0.2.0 // indirect
+	github.com/evanphx/json-patch v0.5.2 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
@@ -79,7 +81,6 @@ require (
 	github.com/gin-contrib/gzip v0.0.5 // indirect
 	github.com/gin-contrib/location v0.0.2 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
-	github.com/gin-gonic/gin v1.11.0 // indirect
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
