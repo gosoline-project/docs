@@ -1,0 +1,142 @@
+Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver to the standalone package github.com/gosoline-project/httpserver, while preserving HTTP behavior, routes, middleware, response codes, request binding, and tests.
+
+Scope discovery:
+
+- Find all imports of github.com/justtrackio/gosoline/pkg/httpserver.
+- Find all imports of github.com/justtrackio/gosoline/pkg/httpserver/auth.
+- Find all route definer functions with this signature: func(context.Context, cfg.Config, log.Logger) (*httpserver.Definitions, error).
+- Find all application.RunHttpDefaultServer(...) calls.
+- Find all httpserver.New(...) or httpserver.NewWithSettings(...) module registrations from the old package.
+- Find all &httpserver.Definitions{} allocations and Definitions.Group, Definitions.Use, GET, POST, PUT, PATCH, DELETE, OPTIONS, or Handle calls.
+- Find all old handler helpers: CreateHandler, CreateJsonHandler, CreateQueryHandler, CreateUriHandler, CreateMultipleBindingsHandler, CreateRawHandler, CreateReaderHandler, CreateSseHandler, CreateStreamHandler, and CreateDownloadHandler.
+- Find all old handler interfaces: HandlerWithoutInput, HandlerWithInput, HandlerWithMultipleBindings, and HandlerWithStream.
+- Find all uses of httpserver.Request, request.Body, request.Params, request.Url, request.Header, request.Cookies, request.Method, and request.ClientIp.
+- Find all uses of GetStringFromRequest and GetUintFromRequest.
+- Find all uses of old response constructors and fields, especially NewResponse(body, contentType, statusCode, header), ContentTypeText, ContentTypeJson, ContentTypeHtml, ContentTypeProtobuf, Response.AddHeader, Response.WithBody, and Response.WithContentType.
+- Find all HTTP server test setup helpers that return an old httpserver.Definer or implement SetupApiDefinitions.
+
+Do not start with a global import replacement. First classify each usage, because the old package also contained auth and helper APIs that do not map one-to-one to the standalone package.
+
+Migration order:
+
+1. Add the new dependency with: go get github.com/gosoline-project/httpserver
+2. Migrate server startup and router factories.
+3. Migrate route definitions from returned Definitions to mutating *Router.
+4. Migrate middleware registration.
+5. Migrate handlers route group by route group.
+6. Consolidate old route-specific handlers into domain or route-group handlers where they share dependencies.
+7. Migrate request binding and raw request access.
+8. Migrate responses and handled errors.
+9. Migrate tests.
+10. Run formatting and tests.
+
+Keep each step small enough that the codebase remains understandable after every edit.
+
+Server startup transformation:
+
+- Replace application.RunHttpDefaultServer(DefineRouter, options...) with httpserver.RunDefaultServer(DefineRouter, options...).
+- Replace old definer signatures from func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger) (*httpserver.Definitions, error) to func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error.
+- Replace application.WithModuleFactory("http", httpserver.New("default", DefineRouter)) with application.WithModuleFactory("http", httpserver.NewServer("default", DefineRouter)).
+- If the application wraps the old httpserver.Definer in helper functions, update those helper types to accept or return httpserver.RouterFactory.
+
+Route definition transformation:
+
+- Replace allocations of &httpserver.Definitions{} with use of the router argument.
+- Preserve all route paths, methods, group prefixes, and middleware order.
+- Do not normalize or redesign paths during the migration.
+- Convert definitions.Use(...) to router.Use(...).
+- Convert definitions.Group("/api") to router.Group("/api").
+- Convert returned definitions to return nil.
+- Convert error returns from return nil, err to return err in router factories.
+
+Handler consolidation instructions:
+
+- Old code commonly creates one handler per route. When those handlers share dependencies or belong to the same domain, consolidate them into one route-group handler.
+- Prefer one handler type per cohesive route group, with one method per endpoint.
+- Register route-group handlers with router.Group(...).HandleWith(httpserver.With(NewHandler, func(r *httpserver.Router, h *Handler) { ... })).
+- Only keep separate handler types if their dependencies, lifecycle, or domain responsibilities are genuinely different.
+
+Handler signature transformations:
+
+- CreateHandler(handler) where handler.Handle(ctx, request) ignores input becomes BindN(h.Method) with func(ctx context.Context) (httpserver.Response, error).
+- CreateJsonHandler(handler) becomes Bind(h.Method) with json tags on the input struct.
+- CreateQueryHandler(handler) becomes Bind(h.Method) with form tags on the input struct.
+- CreateUriHandler(handler) becomes Bind(h.Method) with uri tags on the input struct.
+- CreateMultipleBindingsHandler(handler) becomes Bind(h.Method) with combined tags, or explicit Gin binders if necessary.
+- CreateRawHandler(handler) becomes BindNR(h.Method) and explicit req.Body reading.
+- CreateReaderHandler(handler) becomes BindNR(h.Method) and direct req.Body use.
+- CreateSseHandler(handler) becomes BindSse or BindSseN.
+
+Replace old GetInput methods with input struct arguments. Old code that returns &Input{} from GetInput and then reads request.Body.(*Input) should become a method that directly accepts input *Input.
+
+Request data migration rules:
+
+- request.Body.(*Input) becomes handler input argument input *Input.
+- GetStringFromRequest(request, "id") becomes a string field tagged `uri:"id" binding:"required"`.
+- GetUintFromRequest(request, "id") becomes a uint field tagged `uri:"id" binding:"required"`.
+- request.Url.RawQuery becomes req.URL.RawQuery via BindR or BindNR.
+- request.Url.Path becomes req.URL.Path via BindR or BindNR.
+- request.Method becomes req.Method via BindR or BindNR.
+- request.Header becomes req.Header via BindR or BindNR.
+- request.Cookies becomes req.Cookies() via BindR or BindNR.
+- request.ClientIp becomes ginCtx.ClientIP() in a raw Gin handler if required.
+
+Prefer typed binding over manual request inspection. Use BindR or BindNR only when the handler truly needs the raw *http.Request.
+
+Response migration rules:
+
+- NewJsonResponse(body) stays NewJsonResponse(body).
+- NewStatusResponse(code) stays NewStatusResponse(code).
+- NewResponse("text", ContentTypeText, code, header) becomes NewTextResponse("text", WithStatusCode(code), WithHeaders(header)).
+- NewResponse([]byte(...), contentType, code, header) becomes NewResponse(WithBody(...), WithHeader("Content-Type", contentType), WithStatusCode(code), WithHeaders(header)).
+- resp.AddHeader(k, v) becomes WithHeader(k, v) at construction time, or an accumulated response option list.
+- resp.WithBody(body) becomes WithBody([]byte(...)) when constructing NewResponse.
+- The new Response is an interface. Do not access fields like resp.StatusCode or resp.Header; use resp.StatusCode() and resp.Header() in tests.
+
+Auth migration rules:
+
+- The old github.com/justtrackio/gosoline/pkg/httpserver/auth subpackage has no direct equivalent in github.com/gosoline-project/httpserver.
+- If the application imports the old auth subpackage, do not replace it with the new httpserver import.
+- Move auth logic into application-owned Gin middleware or an application-owned auth package.
+- Preserve accepted credentials, rejection status codes, response bodies, and context values used by downstream handlers.
+- If handlers read auth data from context.Context, ensure the new middleware writes the same values to ginCtx.Request.Context().
+- Stop and ask for guidance if the old auth logic depends on package internals that are not obvious from the application code.
+
+Test migration rules:
+
+- Replace SetupApiDefinitions() httpserver.Definer with SetupHttpServerRouter() httpserver.RouterFactory.
+- Instantiate the new route-group handler directly in handler unit tests.
+- Call handler methods directly for business logic tests.
+- Assert response.StatusCode(), response.Header(), and response.Body() instead of old response fields.
+- Keep integration or routing tests for binding, middleware, and path behavior.
+
+Validation checklist:
+
+- No application code still imports github.com/justtrackio/gosoline/pkg/httpserver, unless intentionally left for a separate migration step.
+- No application code imports github.com/justtrackio/gosoline/pkg/httpserver/auth, unless the auth migration was explicitly deferred.
+- No route definer returns *httpserver.Definitions.
+- No &httpserver.Definitions{} allocations remain.
+- No old Create*Handler calls remain.
+- No old handler interfaces remain in application code.
+- No code reads old httpserver.Response fields directly.
+- All routes from the old router are present in the new router with the same HTTP method and path.
+- All middleware is registered in the same effective order.
+- All request binding tags still match the route parameters, query parameters, and body fields expected by clients.
+- All handled client errors still return the intended HTTP status code.
+- Tests compile and cover at least one route using URI binding, one route using JSON binding, and one middleware-protected route if applicable.
+
+Commands to run:
+
+- Run the repository's normal formatting and test commands.
+- For a typical Go application, run: gofumpt -w . && go test ./...
+- If the repository uses gosoline's fixture or integration build tags, use the repository-specific commands instead, for example: go test -tags fixtures,integration ./...
+- If tests fail, fix compile errors first, then binding and response behavior regressions.
+- Do not change public route paths, request field names, or status codes merely to make tests pass unless the migration explicitly requires it.
+
+Stop conditions:
+
+- Stop and ask for human guidance if route behavior is ambiguous and there are no tests or callers to confirm it.
+- Stop and ask for human guidance if old auth code depends on shared package internals that cannot be reproduced safely.
+- Stop and ask for human guidance if multiple old route-specific handlers have conflicting initialization logic and it is unclear whether they should be consolidated.
+- Stop and ask for human guidance if a route depends on request.ClientIp or Gin-specific behavior and there is no clear equivalent without changing behavior.
+- Stop and ask for human guidance if the migration would require unrelated application refactoring.

@@ -1,0 +1,749 @@
+---
+sidebar_position: 2
+title: HTTP Server Package
+---
+
+import AgentInstructions from "!!raw-loader!./src/httpserver-migration-agent-instructions.txt";
+import { CopyToClipboardButton } from '../components.jsx';
+
+# Migrating to the Standalone HTTP Server Package
+
+This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package to the standalone `github.com/gosoline-project/httpserver` module.
+
+The new package keeps the Gin-based server lifecycle and middleware model, but it changes the application-facing API. Instead of building and returning a `*httpserver.Definitions` tree, you receive a `*httpserver.Router` and register routes on it directly. Instead of implementing handler interfaces and manually unpacking an `httpserver.Request`, handlers are plain functions or methods registered through `Bind`, `BindN`, `BindR`, or SSE binding helpers.
+
+## 1. Update the Dependency
+
+Add the standalone module:
+
+```bash
+go get github.com/gosoline-project/httpserver
+```
+
+Update imports:
+
+```go
+// Old
+import "github.com/justtrackio/gosoline/pkg/httpserver"
+
+// New
+import "github.com/gosoline-project/httpserver"
+```
+
+Keep gosoline imports for application, config, logging, and other framework packages:
+
+```go
+import (
+    "github.com/gosoline-project/httpserver"
+    "github.com/justtrackio/gosoline/pkg/application"
+    "github.com/justtrackio/gosoline/pkg/cfg"
+    "github.com/justtrackio/gosoline/pkg/log"
+)
+```
+
+## 2. Migrate Server Startup
+
+### Old
+
+The old package commonly used a `Definer` returning route definitions:
+
+```go
+func main() {
+    application.RunHttpDefaultServer(DefineRouter)
+}
+
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger) (*httpserver.Definitions, error) {
+    definitions := &httpserver.Definitions{}
+    definitions.GET("/api/users", httpserver.CreateHandler(handler))
+
+    return definitions, nil
+}
+```
+
+### New
+
+The new package uses a `RouterFactory`. The router is passed in and your function mutates it:
+
+```go
+func main() {
+    httpserver.RunDefaultServer(DefineRouter)
+}
+
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    router.GET("/api/users", listUsers)
+
+    return nil
+}
+```
+
+If your application already uses `application.Run` with explicit modules, register the HTTP server as a module factory:
+
+```go
+func main() {
+    application.Run(
+        application.WithModuleFactory("http", httpserver.NewServer("default", DefineRouter)),
+    )
+}
+```
+
+## 3. Migrate Route Definitions
+
+### Old
+
+```go
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger) (*httpserver.Definitions, error) {
+    definitions := &httpserver.Definitions{}
+    api := definitions.Group("/api")
+
+    api.Use(authMiddleware)
+    api.GET("/users", httpserver.CreateHandler(listUsersHandler))
+    api.GET("/users/:id", httpserver.CreateHandler(getUserHandler))
+    api.POST("/users", httpserver.CreateJsonHandler(createUserHandler))
+
+    return definitions, nil
+}
+```
+
+### New
+
+```go
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    api := router.Group("/api")
+
+    api.Use(authMiddleware)
+    api.GET("/users", httpserver.BindN(listUsers))
+    api.GET("/users/:id", httpserver.Bind(getUser))
+    api.POST("/users", httpserver.Bind(createUser))
+
+    return nil
+}
+```
+
+Route groups, HTTP methods, and Gin middleware still work the same way conceptually. The important change is that the root router is provided by the server, so you no longer allocate and return `&httpserver.Definitions{}`.
+
+## 4. Use the `With` Pattern for Handler Dependencies
+
+For handlers that need dependencies, use `httpserver.With`. The handler factory receives `ctx`, `config`, and `logger`, and the registration function wires methods to routes.
+
+```go
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    router.Group("/api/users").HandleWith(httpserver.With(NewUserHandler, func(r *httpserver.Router, h *UserHandler) {
+        r.GET("", httpserver.BindN(h.ListUsers))
+        r.GET("/:id", httpserver.Bind(h.GetUser))
+        r.POST("", httpserver.Bind(h.CreateUser))
+        r.DELETE("/:id", httpserver.Bind(h.DeleteUser))
+    }))
+
+    return nil
+}
+
+type UserHandler struct {
+    store UserStore
+}
+
+func NewUserHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*UserHandler, error) {
+    store, err := NewUserStore(ctx, config, logger)
+    if err != nil {
+        return nil, err
+    }
+
+    return &UserHandler{store: store}, nil
+}
+```
+
+This replaces the old pattern of constructing handler interface implementations manually before adding routes to `Definitions`.
+
+### From Route-Specific Handlers to Route-Group Handlers
+
+With the old package, applications commonly used one handler instance per route. Each route-specific handler owned its own `Handle` method and was constructed before route registration:
+
+```go
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger) (*httpserver.Definitions, error) {
+    definitions := &httpserver.Definitions{}
+    definitions.Use(authMiddleware)
+
+    listUsersHandler, err := NewListUsersHandler(ctx, config, logger)
+    if err != nil {
+        return nil, fmt.Errorf("can not create list users handler: %w", err)
+    }
+
+    getUserHandler, err := NewGetUserHandler(ctx, config, logger)
+    if err != nil {
+        return nil, fmt.Errorf("can not create get user handler: %w", err)
+    }
+
+    definitions.GET("/api/users", httpserver.CreateHandler(listUsersHandler))
+    definitions.GET("/api/users/:id", httpserver.CreateUriHandler(getUserHandler))
+
+    return definitions, nil
+}
+```
+
+The new package makes it natural to group related routes behind one handler type. The handler is constructed once, shared dependencies are initialized once, and each route maps to a method:
+
+```go
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    router.Group("/api/users").HandleWith(httpserver.With(NewUserHandler, func(r *httpserver.Router, h *UserHandler) {
+        r.GET("", httpserver.BindN(h.ListUsers))
+        r.GET("/:id", httpserver.Bind(h.GetUser))
+    }))
+
+    return nil
+}
+```
+
+This consolidation is not required for every migration, but it is usually the cleaner target. Keep separate handlers when routes truly have unrelated dependencies or lifecycle needs. Otherwise, prefer one handler per domain or route group, with one method per endpoint.
+
+## 5. Migrate Handler Signatures
+
+### Handler without Request Input
+
+Old handlers often implemented `HandlerWithoutInput`:
+
+```go
+type listUsersHandler struct {
+    store UserStore
+}
+
+func (h *listUsersHandler) Handle(ctx context.Context, request *httpserver.Request) (*httpserver.Response, error) {
+    users, err := h.store.List(ctx)
+    if err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewJsonResponse(users), nil
+}
+```
+
+New handlers without request input use `BindN` and return `httpserver.Response`:
+
+```go
+func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+    users, err := h.store.List(ctx)
+    if err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewJsonResponse(users), nil
+}
+```
+
+Register it with:
+
+```go
+r.GET("", httpserver.BindN(h.ListUsers))
+```
+
+### Handler with Input
+
+Old input binding required `GetInput` and one of the `Create*Handler` helpers:
+
+```go
+type getUserHandler struct {
+    store UserStore
+}
+
+type GetUserInput struct {
+    Id uint `uri:"id" binding:"required"`
+}
+
+func (h *getUserHandler) GetInput() any {
+    return &GetUserInput{}
+}
+
+func (h *getUserHandler) Handle(ctx context.Context, request *httpserver.Request) (*httpserver.Response, error) {
+    input := request.Body.(*GetUserInput)
+
+    user, err := h.store.Get(ctx, input.Id)
+    if err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewJsonResponse(user), nil
+}
+```
+
+New handlers receive the typed input directly:
+
+```go
+type GetUserInput struct {
+    Id uint `uri:"id" binding:"required"`
+}
+
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+    user, err := h.store.Get(ctx, input.Id)
+    if err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewJsonResponse(user), nil
+}
+```
+
+Register it with:
+
+```go
+r.GET("/:id", httpserver.Bind(h.GetUser))
+```
+
+## 6. Migrate Request Binding
+
+The old package selected a binding helper explicitly:
+
+| Old helper | Typical new migration |
+|---|---|
+| `CreateHandler` | `BindN` for no input, or raw Gin handler if you need `*gin.Context` |
+| `CreateJsonHandler` | `Bind` with `json` tags |
+| `CreateQueryHandler` | `Bind` with `form` tags |
+| `CreateUriHandler` | `Bind` with `uri` tags |
+| `CreateMultipleBindingsHandler` | `Bind` with multiple tags, or explicit binders if needed |
+| `CreateRawHandler` | `BindNR` or `BindR` and read `req.Body` |
+| `CreateReaderHandler` | `BindNR` or `BindR` and use `req.Body` |
+| `CreateSseHandler` | `BindSse` or `BindSseN` |
+
+The new `Bind` function inspects struct tags and request content type:
+
+```go
+type CreateUserInput struct {
+    Name  string `json:"name" binding:"required"`
+    Email string `json:"email" binding:"required,email"`
+}
+
+func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+    user, err := h.store.Create(ctx, input.Name, input.Email)
+    if err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+}
+```
+
+You can combine URI, query, and body fields in one input struct:
+
+```go
+type UpdateUserInput struct {
+    Id    uint   `uri:"id" binding:"required"`
+    Name  string `json:"name"`
+    Email string `json:"email"`
+    Force bool   `form:"force"`
+}
+```
+
+Use `form` tags for query string parameters and form-encoded bodies.
+
+## 7. Replace Request Parameter Helpers
+
+The old package exposed helpers such as `GetStringFromRequest` and `GetUintFromRequest` for path parameters stored in `httpserver.Request.Params`.
+
+### Old
+
+```go
+func (h *getUserHandler) Handle(ctx context.Context, request *httpserver.Request) (*httpserver.Response, error) {
+    id, ok := httpserver.GetUintFromRequest(request, "id")
+    if !ok {
+        return httpserver.NewStatusResponse(http.StatusBadRequest), nil
+    }
+
+    user, err := h.store.Get(ctx, *id)
+    if err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewJsonResponse(user), nil
+}
+```
+
+### New
+
+Prefer typed input structs with `uri` tags:
+
+```go
+type GetUserInput struct {
+    Id uint `uri:"id" binding:"required"`
+}
+
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+    user, err := h.store.Get(ctx, input.Id)
+    if err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewJsonResponse(user), nil
+}
+```
+
+If you need direct Gin access, register a regular Gin handler:
+
+```go
+router.GET("/api/users/:id", func(ginCtx *gin.Context) {
+    id := ginCtx.Param("id")
+    ginCtx.JSON(http.StatusOK, gin.H{"id": id})
+})
+```
+
+## 8. Access Raw Requests and Bodies
+
+The old `CreateRawHandler` read the body into `request.Body` as a string. The new package keeps this explicit by passing the raw `*http.Request` to your handler.
+
+```go
+func (h *UserHandler) ImportUsers(ctx context.Context, req *http.Request) (httpserver.Response, error) {
+    body, err := io.ReadAll(req.Body)
+    if err != nil {
+        return nil, fmt.Errorf("could not read request body: %w", err)
+    }
+
+    if err := h.store.Import(ctx, body); err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewStatusResponse(http.StatusAccepted), nil
+}
+```
+
+Register it with `BindNR` because it has no typed input but needs the request:
+
+```go
+r.POST("/import", httpserver.BindNR(h.ImportUsers))
+```
+
+For typed input plus raw request access, use `BindR`:
+
+```go
+func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input *UploadAvatarInput) (httpserver.Response, error) {
+    contentType := req.Header.Get("Content-Type")
+    _ = contentType
+
+    return httpserver.NewStatusResponse(http.StatusNoContent), nil
+}
+```
+
+## 9. Migrate Responses
+
+The new package returns a `Response` interface instead of the old concrete `*Response` struct.
+
+### JSON Responses
+
+```go
+return httpserver.NewJsonResponse(user), nil
+```
+
+### Text Responses
+
+Old low-level response:
+
+```go
+return httpserver.NewResponse("ok", httpserver.ContentTypeText, http.StatusOK, make(http.Header)), nil
+```
+
+New response:
+
+```go
+return httpserver.NewTextResponse("ok"), nil
+```
+
+### Status Responses
+
+```go
+return httpserver.NewStatusResponse(http.StatusNoContent), nil
+```
+
+### Custom Status Codes and Headers
+
+Old response options were limited and the constructor accepted status and headers directly. New responses use options consistently:
+
+```go
+return httpserver.NewJsonResponse(
+    user,
+    httpserver.WithStatusCode(http.StatusCreated),
+    httpserver.WithHeader("X-User-Id", strconv.FormatUint(uint64(user.Id), 10)),
+), nil
+```
+
+For raw bodies, use `NewResponse` with options:
+
+```go
+return httpserver.NewResponse(
+    httpserver.WithBody([]byte("accepted")),
+    httpserver.WithHeader("Content-Type", "text/plain; charset=utf-8"),
+    httpserver.WithStatusCode(http.StatusAccepted),
+), nil
+```
+
+## 10. Migrate Error Handling
+
+For unexpected errors, keep returning `nil, err`:
+
+```go
+func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+    users, err := h.store.List(ctx)
+    if err != nil {
+        return nil, fmt.Errorf("could not list users: %w", err)
+    }
+
+    return httpserver.NewJsonResponse(users), nil
+}
+```
+
+For handled client errors, return an error response and a nil Go error:
+
+```go
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+    user, err := h.store.Get(ctx, input.Id)
+    if errors.Is(err, ErrUserNotFound) {
+        return httpserver.GetErrorHandler()(http.StatusNotFound, err), nil
+    }
+    if err != nil {
+        return nil, fmt.Errorf("could not get user: %w", err)
+    }
+
+    return httpserver.NewJsonResponse(user), nil
+}
+```
+
+## 11. Migrate Middleware
+
+Gin middleware remains compatible:
+
+```go
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    router.Use(requestIdMiddleware)
+
+    api := router.Group("/api")
+    api.Use(authMiddleware)
+    api.GET("/users", httpserver.BindN(listUsers))
+
+    return nil
+}
+```
+
+For middleware that needs configuration or a logger, use `UseFactory`:
+
+```go
+router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger) (gin.HandlerFunc, error) {
+    token := config.GetString("api_token")
+
+    return func(ginCtx *gin.Context) {
+        if ginCtx.GetHeader("Authorization") != "Bearer "+token {
+            ginCtx.AbortWithStatus(http.StatusUnauthorized)
+            return
+        }
+
+        ginCtx.Next()
+    }, nil
+})
+```
+
+### Authentication
+
+The old `github.com/justtrackio/gosoline/pkg/httpserver/auth` helpers are not part of the standalone `github.com/gosoline-project/httpserver` module. If you used that subpackage, migrate authentication into application-owned Gin middleware or a small application-owned auth package.
+
+The migration target should be regular Gin middleware:
+
+```go
+func ApiKeyMiddleware(expected string) gin.HandlerFunc {
+    return func(ginCtx *gin.Context) {
+        if ginCtx.Query("api_key") != expected {
+            ginCtx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"err": "invalid authorization"})
+            return
+        }
+
+        ginCtx.Next()
+    }
+}
+```
+
+Register it like any other middleware:
+
+```go
+api := router.Group("/api")
+api.Use(ApiKeyMiddleware(config.GetString("api_key")))
+```
+
+## 12. Review Configuration
+
+The main server configuration still lives under `httpserver.<name>`:
+
+```yaml
+httpserver:
+  default:
+    port: 8080
+    mode: release
+    timeout:
+      read: 60s
+      write: 60s
+      idle: 60s
+      drain: 0s
+      shutdown: 60s
+    compression:
+      level: default
+      decompression: true
+```
+
+Keep these points in mind while migrating:
+
+| Area | Notes |
+|---|---|
+| Server name | `RunDefaultServer` reads `httpserver.default`. `NewServer("admin", ...)` reads `httpserver.admin`. |
+| Routes | `/health` is still registered by the server. |
+| Compression | Exclude SSE endpoints from compression. |
+| Profiling | Profiling is still configured under `profiling`. |
+| Auth | Old auth helper config does not automatically migrate to the standalone package. |
+
+## 13. Migrate Tests
+
+Old test suites usually implemented definition-based setup:
+
+```go
+func (s *UserApiSuite) SetupApiDefinitions() httpserver.Definer {
+    return DefineRouter
+}
+```
+
+New httpserver test cases use router factories:
+
+```go
+func (s *UserApiSuite) SetupHttpServerRouter() httpserver.RouterFactory {
+    return DefineRouter
+}
+```
+
+For handler-level tests, prefer testing handler methods directly where possible:
+
+```go
+func TestGetUser(t *testing.T) {
+    handler := &UserHandler{store: fakeStore}
+
+    response, err := handler.GetUser(context.Background(), &GetUserInput{Id: 1})
+
+    require.NoError(t, err)
+    assert.Equal(t, http.StatusOK, response.StatusCode())
+}
+```
+
+For binding and routing tests, use the package test helpers or an application test case with `SetupHttpServerRouter`.
+
+## 14. Complete Before and After Example
+
+### Old
+
+```go
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger) (*httpserver.Definitions, error) {
+    listUsersHandler, err := NewListUsersHandler(ctx, config, logger)
+    if err != nil {
+        return nil, fmt.Errorf("can not create list users handler: %w", err)
+    }
+
+    getUserHandler, err := NewGetUserHandler(ctx, config, logger)
+    if err != nil {
+        return nil, fmt.Errorf("can not create get user handler: %w", err)
+    }
+
+    createUserHandler, err := NewCreateUserHandler(ctx, config, logger)
+    if err != nil {
+        return nil, fmt.Errorf("can not create create user handler: %w", err)
+    }
+
+    deleteUserHandler, err := NewDeleteUserHandler(ctx, config, logger)
+    if err != nil {
+        return nil, fmt.Errorf("can not create delete user handler: %w", err)
+    }
+
+    definitions := &httpserver.Definitions{}
+    users := definitions.Group("/api/users")
+
+    users.GET("", httpserver.CreateHandler(listUsersHandler))
+    users.GET("/:id", httpserver.CreateUriHandler(getUserHandler))
+    users.POST("", httpserver.CreateJsonHandler(createUserHandler))
+    users.DELETE("/:id", httpserver.CreateUriHandler(deleteUserHandler))
+
+    return definitions, nil
+}
+```
+
+In this style, each route has its own handler instance, even though all four routes belong to the same users API.
+
+### New
+
+```go
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    router.Group("/api/users").HandleWith(httpserver.With(NewUserHandler, func(r *httpserver.Router, h *UserHandler) {
+        r.GET("", httpserver.BindN(h.ListUsers))
+        r.GET("/:id", httpserver.Bind(h.GetUser))
+        r.POST("", httpserver.Bind(h.CreateUser))
+        r.DELETE("/:id", httpserver.Bind(h.DeleteUser))
+    }))
+
+    return nil
+}
+
+type GetUserInput struct {
+    Id uint `uri:"id" binding:"required"`
+}
+
+type CreateUserInput struct {
+    Name  string `json:"name" binding:"required"`
+    Email string `json:"email" binding:"required,email"`
+}
+
+func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+    users, err := h.store.List(ctx)
+    if err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewJsonResponse(users), nil
+}
+
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+    user, err := h.store.Get(ctx, input.Id)
+    if errors.Is(err, ErrUserNotFound) {
+        return httpserver.GetErrorHandler()(http.StatusNotFound, err), nil
+    }
+    if err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewJsonResponse(user), nil
+}
+
+func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+    user, err := h.store.Create(ctx, input.Name, input.Email)
+    if err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+}
+
+func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+    if err := h.store.Delete(ctx, input.Id); err != nil {
+        return nil, err
+    }
+
+    return httpserver.NewStatusResponse(http.StatusNoContent), nil
+}
+```
+
+## Migration Checklist
+
+- Replace `github.com/justtrackio/gosoline/pkg/httpserver` imports with `github.com/gosoline-project/httpserver`.
+- Replace `Definer` functions returning `*Definitions` with `RouterFactory` functions accepting `*Router`.
+- Replace `application.RunHttpDefaultServer` with `httpserver.RunDefaultServer`, or register `httpserver.NewServer` as a module factory.
+- Replace `Definitions` route registration with direct `Router` registration.
+- Replace old handler interfaces with plain methods registered through `Bind`, `BindN`, `BindR`, or `BindNR`.
+- Consolidate route-specific handlers into route-group or domain handlers where the routes share dependencies.
+- Replace `GetInput` and `request.Body.(*Input)` with typed input arguments.
+- Replace path parameter helpers with `uri` tags on input structs.
+- Replace `CreateRawHandler` and `CreateReaderHandler` with `BindR` or `BindNR` and explicit `req.Body` handling.
+- Replace low-level `NewResponse(body, contentType, statusCode, header)` calls with `NewTextResponse`, `NewJsonResponse`, `NewStatusResponse`, or `NewResponse` options.
+- Move old `pkg/httpserver/auth` usage into application-owned Gin middleware.
+- Update test suites from definition setup to router factory setup.
+- Run your HTTP tests and exercise validation errors, client errors, and middleware behavior after migration.
+
+## AI Agent Migration Instructions
+
+If you want an AI agent to perform this migration, copy the prepared migration instructions and provide them as the task prompt. The instructions are intentionally operational and include discovery steps, migration order, API mappings, validation checks, and stop conditions.
+
+<CopyToClipboardButton text={AgentInstructions} label="Copy AI migration instructions" />
+

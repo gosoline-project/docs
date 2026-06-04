@@ -1,4 +1,5 @@
 import React from 'react';
+import { useState } from 'react';
 import Card from '@mui/material/Card';
 import CardActions from '@mui/material/CardActions';
 import CardHeader from '@mui/material/CardHeader';
@@ -12,6 +13,42 @@ import ThemeCodeBlock from '@theme/CodeBlock';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { useColorMode } from '@docusaurus/theme-common'
 import useBaseUrl from '@docusaurus/useBaseUrl';
+
+export function CopyToClipboardButton({ text, label = 'Copy to clipboard' }) {
+    const [status, setStatus] = useState('idle');
+
+    const copy = async () => {
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            }
+
+            setStatus('copied');
+            window.setTimeout(() => setStatus('idle'), 2000);
+        } catch (err) {
+            setStatus('failed');
+            window.setTimeout(() => setStatus('idle'), 3000);
+        }
+    };
+
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1rem 0' }}>
+            <Button variant="contained" onClick={copy}>{label}</Button>
+            {status === 'copied' && <span>Copied.</span>}
+            {status === 'failed' && <span>Copy failed. Select the instructions manually from the source file.</span>}
+        </div>
+    );
+}
 
 export function PrimaryUseCases() {
     const { colorMode } = useColorMode();
