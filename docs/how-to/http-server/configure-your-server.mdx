@@ -60,8 +60,33 @@ application.WithModuleFactory("http-admin", httpserver.NewServer("admin", adminD
 | `compression` | CompressionSettings | - | Gzip compression settings. |
 | `timeout` | TimeoutSettings | - | IO timeout settings. |
 | `logging` | LoggingSettings | - | Request logging settings. |
+| `errors` | ErrorsSettings | - | Error response privacy settings. |
 | `router` | RouterSettings | - | Gin router settings. |
 | `max_body_bytes` | int | `10485760` | Maximum incoming request body size in bytes. `0` disables the limit. |
+
+### Error settings
+
+```yaml
+httpserver:
+  default:
+    errors:
+      privacy: private
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `privacy` | string | `"private"` | Error detail policy for 5xx responses. Use `"private"` to hide internal details, or `"public"` to return the original error message. |
+
+With the default `private` setting, internal 5xx errors return `{"err":"internal server error"}`. Status errors below 500 still expose their message, so client errors returned through `NewErrorWithStatus` or `GetErrorHandler()(status, err)` remain useful to API clients.
+
+Set `privacy` to `public` only when exposing internal 5xx error messages is intentional:
+
+```yaml
+httpserver:
+  default:
+    errors:
+      privacy: public
+```
 
 ### Request body size limit
 

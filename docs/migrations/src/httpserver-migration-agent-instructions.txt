@@ -1,4 +1,4 @@
-Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.4.0, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
+Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.4.1, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
 
 Scope discovery:
 
@@ -14,14 +14,16 @@ Scope discovery:
 - Find all uses of GetStringFromRequest and GetUintFromRequest.
 - Find all uses of old response constructors and fields, especially NewResponse(body, contentType, statusCode, header), ContentTypeText, ContentTypeJson, ContentTypeHtml, ContentTypeProtobuf, Response.AddHeader, Response.WithBody, and Response.WithContentType.
 - Find all HTTP server test setup helpers that return an old httpserver.Definer or implement SetupApiDefinitions.
-- Find endpoints that accept large request bodies and check whether they need a v0.4.0 max_body_bytes override.
+- Find endpoints that accept large request bodies and check whether they need a v0.4.1 max_body_bytes override.
 - Find tests or clients that assert internal error response bodies, binding error status codes, CORS partial-origin matching, health-check error details, or profiling listen addresses.
+- Find all router.UseFactory calls and custom httpserver.MiddlewareFactory implementations, because v0.4.1 middleware factories receive server settings as a fourth argument.
+- Find any environment-specific need to expose internal 5xx error details, which now requires httpserver.<name>.errors.privacy: public.
 
 Do not start with a global import replacement. First classify each usage, because the old package also contained auth and helper APIs that do not map one-to-one to the standalone package.
 
 Migration order:
 
-1. Add the new dependency with: go get github.com/gosoline-project/httpserver@v0.4.0
+1. Add the new dependency with: go get github.com/gosoline-project/httpserver@v0.4.1
 2. Migrate server startup and router factories.
 3. Migrate route definitions from returned Definitions to mutating *Router.
 4. Migrate middleware registration.
@@ -30,7 +32,7 @@ Migration order:
 7. Consolidate old route-specific handlers into domain or route-group handlers where they share dependencies.
 8. Migrate request binding and raw request access.
 9. Migrate responses and handled errors.
-10. Review v0.4.0 runtime behavior: request body limits, binding errors, default error body sanitization, CORS origin matching, health responses, and profiling bind address.
+10. Review v0.4.1 runtime behavior: request body limits, binding errors, configurable error privacy, CORS origin matching, health responses, and profiling bind address.
 11. Migrate tests.
 12. Run formatting and tests.
 
@@ -52,6 +54,8 @@ Route definition transformation:
 - Convert definitions.Group("/api") to router.Group("/api").
 - Convert returned definitions to return nil.
 - Convert error returns from return nil, err to return err in router factories.
+- Convert custom UseFactory callbacks from func(ctx, config, logger) (gin.HandlerFunc, error) to func(ctx, config, logger, settings *httpserver.Settings) (gin.HandlerFunc, error).
+- Use settings.Name inside middleware factories when middleware needs the current server name.
 
 Handler consolidation instructions:
 
@@ -87,7 +91,7 @@ Request data migration rules:
 
 Prefer typed binding over manual request inspection. Use BindR or BindNR only when the handler truly needs the raw *http.Request.
 
-In v0.4.0, Bind and BindSse binding or validation failures are client errors and return 400 Bad Request through the default error middleware. Update tests that expected 500 for malformed input.
+In v0.4.1, Bind and BindSse binding or validation failures are client errors and return 400 Bad Request through the default error middleware. Update tests that expected 500 for malformed input.
 
 Response migration rules:
 
@@ -98,7 +102,8 @@ Response migration rules:
 - resp.AddHeader(k, v) becomes WithHeader(k, v) at construction time, or an accumulated response option list.
 - resp.WithBody(body) becomes WithBody([]byte(...)) when constructing NewResponse.
 - The new Response is an interface. Do not access fields like resp.StatusCode or resp.Header; use resp.StatusCode() and resp.Header() in tests.
-- The v0.4.0 default error handler returns the actual error message for 4xx responses and returns {"err":"internal server error"} for 5xx responses.
+- The v0.4.1 default error handler returns the actual error message for 4xx responses and returns {"err":"internal server error"} for 5xx responses.
+- The 5xx behavior is controlled by httpserver.<name>.errors.privacy. The default private value hides internal details. Set privacy to public only when exposing internal 5xx messages is intentional.
 - For handled client errors, prefer returning GetErrorHandler()(status, err), nil.
 - For errors attached to a Gin context or propagated through middleware, use NewErrorWithStatus(status, err) when the response status should not be 500.
 
@@ -117,6 +122,7 @@ Auth migration rules:
 - Migrate Basic Auth to auth.NewBasicAuthHandler or auth.NewBasicAuthAuthenticator.
 - Migrate bearer-token auth to auth.NewTokenBearerHandler or auth.NewTokenBearerAuthenticator and preserve the provider's token lookup behavior.
 - Migrate JWT auth to auth.NewJwtAuthHandler or auth.NewJWTAuthAuthenticator. The standalone JWT authenticator validates Authorization: Bearer <token> and requires an email claim for the auth subject.
+- When using router.UseFactory, prefer the settings-aware auth middleware factories so the current server name is used automatically: auth.ConfigKeyHandlerFactory(provider), auth.BasicAuthHandlerFactory, auth.TokenBearerHandlerFactory(provider), and auth.JwtAuthHandlerFactory.
 - Use auth.NewChainHandler for routes that accept multiple auth methods. Use auth.OnlyConfiguredAuthenticators with httpserver.<name>.auth.allowedAuthenticators if the enabled methods are configurable.
 - Successful standalone authenticators attach an auth.Subject to the request context. If handlers read old auth data from context.Context, update them to use auth.GetSubject(ctx), or preserve the old context values in application-owned middleware if downstream code requires them.
 - Preserve accepted credentials, rejection status codes, response bodies, and context values used by downstream handlers.
@@ -132,12 +138,13 @@ Test migration rules:
 - Assert response.StatusCode(), response.Header(), and response.Body() instead of old response fields.
 - Keep integration or routing tests for binding, middleware, and path behavior.
 
-Configuration and runtime behavior rules for v0.4.0:
+Configuration and runtime behavior rules for v0.4.1:
 
 - The main server configuration lives under httpserver.<name>. RunDefaultServer uses the name default.
 - The server adds /health automatically. Unhealthy modules are reported as "unhealthy"; underlying error messages are logged but not returned in the response body.
 - Incoming request bodies are limited by httpserver.<name>.max_body_bytes. The default is 10485760 bytes (10 MiB). Set it to 0 to disable the limit, or raise it when the old service intentionally accepted larger bodies.
 - The body limit is applied after decompression, so compressed uploads are limited by their decompressed size.
+- Internal 5xx error details are hidden by default and with httpserver.<name>.errors.privacy: private. Use privacy: public only when clients should see internal 5xx messages.
 - CORS api_cors_allowed_origin_pattern is matched against the full Origin value. Do not rely on partial regex matches; use an explicit pattern that matches the complete allowed origin set.
 - Profiling is configured under profiling and, when enabled, listens on 127.0.0.1:<profiling.api.port>.
 - Keep compression exclusions for SSE endpoints; gzip buffering breaks real-time SSE streams.
@@ -156,9 +163,9 @@ Validation checklist:
 - Auth config has been moved below httpserver.<name>.auth and auth constructors receive the matching server name.
 - All request binding tags still match the route parameters, query parameters, and body fields expected by clients.
 - All handled client errors still return the intended HTTP status code.
-- Large-body endpoints have an explicit max_body_bytes setting if the v0.4.0 default 10 MiB limit is too small.
+- Large-body endpoints have an explicit max_body_bytes setting if the v0.4.1 default 10 MiB limit is too small.
 - Tests expecting binding failures now assert 400 Bad Request.
-- Tests expecting internal error details in 5xx JSON responses now assert the sanitized default body, or the application installs a custom error handler intentionally.
+- Tests expecting internal error details in 5xx JSON responses now assert the sanitized default/private body, configure httpserver.<name>.errors.privacy: public, or install a custom error handler intentionally.
 - CORS tests use full-origin matches and do not depend on partial regex matching.
 - Health-check tests do not expect underlying module error strings in the HTTP response.
 - Profiling tests or deployment checks expect the profiling API on loopback only.

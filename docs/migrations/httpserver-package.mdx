@@ -8,7 +8,7 @@ import { CopyToClipboardButton } from '../components.jsx';
 
 # Migrating to the Standalone HTTP Server Package
 
-This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.4.0`.
+This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.4.1`.
 
 The new package keeps the Gin-based server lifecycle and middleware model, but it changes the application-facing API. Instead of building and returning a `*httpserver.Definitions` tree, you receive a `*httpserver.Router` and register routes on it directly. Instead of implementing handler interfaces and manually unpacking an `httpserver.Request`, handlers are plain functions or methods registered through `Bind`, `BindN`, `BindR`, or SSE binding helpers.
 
@@ -17,7 +17,7 @@ The new package keeps the Gin-based server lifecycle and middleware model, but i
 Add the standalone module:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.4.0
+go get github.com/gosoline-project/httpserver@v0.4.1
 ```
 
 Update imports:
@@ -501,7 +501,16 @@ func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpser
 }
 ```
 
-In `v0.4.0`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
+In `v0.4.1`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
+
+The 5xx behavior is controlled by `httpserver.<name>.errors.privacy`. The default is `private`, which hides internal error details. Set it to `public` only when clients should receive the original internal error message:
+
+```yaml
+httpserver:
+  default:
+    errors:
+      privacy: public
+```
 
 If middleware attaches an error to the Gin context and needs a non-500 status code, wrap it with `NewErrorWithStatus`:
 
@@ -525,10 +534,10 @@ func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, rou
 }
 ```
 
-For middleware that needs configuration or a logger, use `UseFactory`:
+For middleware that needs configuration, a logger, or server settings, use `UseFactory`:
 
 ```go
-router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger) (gin.HandlerFunc, error) {
+router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger, settings *httpserver.Settings) (gin.HandlerFunc, error) {
     token := config.GetString("api_token")
 
     return func(ginCtx *gin.Context) {
@@ -541,6 +550,8 @@ router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger
     }, nil
 })
 ```
+
+The `settings` argument contains the resolved server settings. `settings.Name` is the server name, such as `"default"` for `RunDefaultServer` or `"admin"` for `NewServer("admin", ...)`.
 
 ### Authentication
 
@@ -606,6 +617,13 @@ api.Use(apiKeyAuth)
 
 Use `auth.ProvideValueFromQueryParam("api_key")` or `auth.ProvideValueFromUriPath("apiKey")` if your old middleware read the key from a query parameter or path parameter instead of a header.
 
+For reusable middleware registration that should use the current server name automatically, register the settings-aware factory:
+
+```go
+api := router.Group("/api")
+api.UseFactory(auth.ConfigKeyHandlerFactory(auth.ProvideValueFromHeader(auth.HeaderApiKey)))
+```
+
 ### Basic Auth
 
 Move Basic Auth users below the named server:
@@ -628,6 +646,12 @@ if err != nil {
 }
 
 router.Group("/admin").Use(basicAuth)
+```
+
+Or use the settings-aware factory:
+
+```go
+router.Group("/admin").UseFactory(auth.BasicAuthHandlerFactory)
 ```
 
 Unauthorized Basic Auth responses use the configured gosoline app identity name as the Basic realm.
@@ -656,6 +680,12 @@ if err != nil {
 router.Group("/api").Use(bearerAuth)
 ```
 
+Or use the settings-aware factory:
+
+```go
+router.Group("/api").UseFactory(auth.TokenBearerHandlerFactory(provider))
+```
+
 ### JWT Auth
 
 JWT settings live below `httpserver.<name>.auth.jwt`:
@@ -677,6 +707,12 @@ if err != nil {
 }
 
 router.Group("/api").Use(jwtAuth)
+```
+
+Or use the settings-aware factory:
+
+```go
+router.Group("/api").UseFactory(auth.JwtAuthHandlerFactory)
 ```
 
 The standalone JWT helper validates `Authorization: Bearer <token>` headers using HS256 and requires an `email` claim for the authenticated subject.
@@ -740,6 +776,8 @@ httpserver:
     compression:
       level: default
       decompression: true
+    errors:
+      privacy: private
     max_body_bytes: 10485760
 ```
 
@@ -752,7 +790,7 @@ Keep these points in mind while migrating:
 | Compression | Exclude SSE endpoints from compression. |
 | Request body limit | `max_body_bytes` defaults to `10485760` bytes (10 MiB). Set it to `0` to disable the limit or raise it for large upload endpoints. The limit is applied after request decompression. |
 | Binding errors | `Bind` and `BindSse` binding or validation failures return `400 Bad Request`. |
-| Error responses | The default handler exposes 4xx error messages and returns `{"err":"internal server error"}` for 5xx responses. |
+| Error responses | The default handler exposes 4xx error messages and returns `{"err":"internal server error"}` for 5xx responses. Set `httpserver.<name>.errors.privacy` to `public` only when 5xx error details should be exposed. |
 | CORS | `api_cors_allowed_origin_pattern` is matched against the full `Origin` value. Partial regex matches do not allow origins. |
 | Profiling | Profiling is still configured under `profiling` and binds to `127.0.0.1:<port>`. |
 | Auth | Auth config is scoped below `httpserver.<name>.auth`; old global auth keys must be moved below the server name. |
@@ -905,8 +943,8 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 - Replace `CreateRawHandler` and `CreateReaderHandler` with `BindR` or `BindNR` and explicit `req.Body` handling.
 - Replace low-level `NewResponse(body, contentType, statusCode, header)` calls with `NewTextResponse`, `NewJsonResponse`, `NewStatusResponse`, or `NewResponse` options.
 - Replace old `pkg/httpserver/auth` imports with `github.com/gosoline-project/httpserver/auth`, move auth config below `httpserver.<name>.auth`, and pass the server name to auth constructors.
-- Review `max_body_bytes`; keep the v0.4.0 default 10 MiB limit, raise it, or set it to `0` intentionally.
-- Update tests for v0.4.0 behavior: binding errors return 400, default 5xx bodies are sanitized, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
+- Review `max_body_bytes`; keep the v0.4.1 default 10 MiB limit, raise it, or set it to `0` intentionally.
+- Update tests for v0.4.1 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
 - Update test suites from definition setup to router factory setup.
 - Run your HTTP tests and exercise validation errors, client errors, and middleware behavior after migration.
 

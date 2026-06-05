@@ -35,6 +35,20 @@ func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, rou
 }
 ```
 
+If you want reusable route setup that should not hard-code the server name, register a settings-aware middleware factory instead:
+
+```go
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+    api := router.Group("/api")
+    api.UseFactory(auth.ConfigKeyHandlerFactory(auth.ProvideValueFromHeader(auth.HeaderApiKey)))
+    api.GET("/ping", httpserver.BindN(ping))
+
+    return nil
+}
+```
+
+Middleware factories receive the resolved `*httpserver.Settings`, including `settings.Name`, when the router is built.
+
 Configure the `default` server's auth settings:
 
 ```yaml
@@ -93,6 +107,12 @@ if err != nil {
 router.Group("/api").Use(apiKeyAuth)
 ```
 
+For factory-based registration, use `auth.ConfigKeyHandlerFactory(provider)`:
+
+```go
+router.Group("/api").UseFactory(auth.ConfigKeyHandlerFactory(auth.ProvideValueFromHeader(auth.HeaderApiKey)))
+```
+
 The provider decides where the key is read from:
 
 | Provider | Reads from |
@@ -137,6 +157,12 @@ if err != nil {
 }
 
 router.Group("/admin").Use(basicAuth)
+```
+
+For factory-based registration, use `auth.BasicAuthHandlerFactory`:
+
+```go
+router.Group("/admin").UseFactory(auth.BasicAuthHandlerFactory)
 ```
 
 Each user entry is formatted as `username:password`. On success, the subject is anonymous and contains the username in `subject.Attributes[auth.AttributeUser]`.
@@ -186,6 +212,12 @@ func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, rou
 }
 ```
 
+For factory-based registration, use `auth.TokenBearerHandlerFactory(provider)`:
+
+```go
+router.Group("/api").UseFactory(auth.TokenBearerHandlerFactory(provider))
+```
+
 On success, the subject is anonymous and includes these attributes:
 
 | Attribute | Value |
@@ -217,6 +249,12 @@ if err != nil {
 }
 
 router.Group("/api").Use(jwtAuth)
+```
+
+For factory-based registration, use `auth.JwtAuthHandlerFactory`:
+
+```go
+router.Group("/api").UseFactory(auth.JwtAuthHandlerFactory)
 ```
 
 The signing secret must be at least 32 characters. `expireDuration` defaults to `15m` and must be at least one minute.

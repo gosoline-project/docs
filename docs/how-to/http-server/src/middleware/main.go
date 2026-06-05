@@ -19,9 +19,9 @@ func main() {
 			logger.Info(ctx, "request completed in %s", elapsed)
 		})
 
-		router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger) (gin.HandlerFunc, error) {
+		router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger, settings *httpserver.Settings) (gin.HandlerFunc, error) {
 			return func(ginCtx *gin.Context) {
-				ginCtx.Header("X-Server-Name", "my-server")
+				ginCtx.Header("X-Server-Name", settings.Name)
 				ginCtx.Next()
 			}, nil
 		})

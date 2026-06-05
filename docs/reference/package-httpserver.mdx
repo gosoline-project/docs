@@ -105,12 +105,12 @@ Adds middleware to the router or group.
 #### [UseFactory()](https://github.com/gosoline-project/httpserver/blob/main/router.go)
 
 ```go
-router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger) (gin.HandlerFunc, error) {
-    // create middleware with access to config/logger
+router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger, settings *httpserver.Settings) (gin.HandlerFunc, error) {
+    // create middleware with access to config, logger, and server settings
 })
 ```
 
-Adds a middleware factory that is resolved lazily when the router is built.
+Adds a middleware factory that is resolved lazily when the router is built. `settings.Name` contains the server name used for server-scoped configuration.
 
 #### [HandleWith()](https://github.com/gosoline-project/httpserver/blob/main/router.go)
 
@@ -228,7 +228,7 @@ httpserver.WithErrorHandler(func(statusCode int, err error) httpserver.Response 
 })
 ```
 
-Sets a custom global error handler. The default returns `{"err":"<message>"}` for 4xx responses and `{"err":"internal server error"}` for 5xx responses.
+Sets a custom global error handler. By default, 4xx responses return `{"err":"<message>"}` and 5xx responses return `{"err":"internal server error"}`. Set `httpserver.<name>.errors.privacy` to `public` to expose 5xx error messages.
 
 ### [GetErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)
 

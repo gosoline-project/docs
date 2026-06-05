@@ -14,7 +14,7 @@ Every httpserver automatically includes these middleware, applied in order:
 3. **Logging** — Logs request details using fingers-crossed scope (only logs on errors)
 4. **Compression** — Handles gzip compression/decompression
 5. **Max body size** — Limits incoming request bodies with `httpserver.<name>.max_body_bytes`
-6. **Error** — Catches errors attached to the Gin context and returns JSON error responses
+6. **Error** — Catches errors attached to the Gin context and returns JSON error responses, using `httpserver.<name>.errors`
 7. **Recovery** — Catches panics and returns 500 errors
 8. **Location** — Extracts location information
 9. **Connection lifecycle** — Manages connection age and request count limits
@@ -32,6 +32,26 @@ httpserver:
 ```
 
 Set `max_body_bytes` to `0` to disable the limit. Oversized bodies fail when a handler reads the request body, so bound JSON/form handlers return a client error instead of invoking your handler.
+
+## Error privacy
+
+Every server includes error middleware. By default, 5xx responses hide internal error details and return `{"err":"internal server error"}`. Client errors with a status below 500 still expose their error message.
+
+```yaml
+httpserver:
+  default:
+    errors:
+      privacy: private
+```
+
+Set `privacy` to `public` only when clients should see internal 5xx error messages, for example in local development or trusted internal services:
+
+```yaml
+httpserver:
+  default:
+    errors:
+      privacy: public
+```
 
 ## Custom middleware
 
@@ -56,10 +76,10 @@ api.GET("/users", listUsers)
 
 ## Factory-based middleware
 
-Use `router.UseFactory()` for middleware that needs access to config or logger. The factory is called lazily when the router is built:
+Use `router.UseFactory()` for middleware that needs access to config, logger, or the resolved server settings. The factory is called lazily when the router is built:
 
 ```go
-router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger) (gin.HandlerFunc, error) {
+router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger, settings *httpserver.Settings) (gin.HandlerFunc, error) {
     apiKey := config.GetString("api_key")
     return func(ginCtx *gin.Context) {
         if ginCtx.GetHeader("X-API-Key") != apiKey {
@@ -69,6 +89,14 @@ router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger
         ginCtx.Next()
     }, nil
 })
+```
+
+`settings.Name` contains the server name, such as `"default"` for `RunDefaultServer` or `"admin"` for `NewServer("admin", ...)`. This is useful for reusable middleware that reads server-scoped configuration.
+
+The `auth` package provides settings-aware middleware factories for common authenticators, so the server name does not need to be hard-coded:
+
+```go
+router.UseFactory(auth.ConfigKeyHandlerFactory(auth.ProvideValueFromHeader(auth.HeaderApiKey)))
 ```
 
 ## CORS
