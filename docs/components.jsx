@@ -64,7 +64,7 @@ export function PrimaryUseCases() {
       <ThemeProvider theme={darkTheme}>
         <Grid container spacing={4}>
 
-        <Grid item xs={12} s={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
             <Card style={{ height: '100%' }}>
                 <CardHeader title="HTTP Server" avatar={<CloudQueueIcon />} titleTypographyProps={{variant:'h6'}} />
                 <CardContent>                    
@@ -76,7 +76,7 @@ export function PrimaryUseCases() {
             </Card>
         </Grid>
 
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
             <Card style={{ height: '100%' }}>
                 <CardHeader title="Message Queues" avatar={<LayersIcon />} titleTypographyProps={{variant:'h6'}} />
                 <CardContent>
@@ -88,7 +88,7 @@ export function PrimaryUseCases() {
             </Card>
         </Grid>
 
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
             <Card style={{ height: '100%' }}>
                 <CardHeader title="Kernel Module" avatar={<TerminalIcon />} titleTypographyProps={{variant:'h6'}} />
                 <CardContent>                                    
