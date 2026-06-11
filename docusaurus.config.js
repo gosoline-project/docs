@@ -32,7 +32,7 @@ const config = {
 
   // Enable Docusaurus Faster features for improved build performance
   future: {
-    experimental_faster: true,
+    faster: true,
     v4: true,
   },
 
