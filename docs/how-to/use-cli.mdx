@@ -1,0 +1,159 @@
+---
+sidebar_position: 10
+title: Build a CLI tool
+---
+
+import CodeBlock from '@theme/CodeBlock';
+import Main from "!!raw-loader!./src/cli/main.go";
+import ConfigDist from "!!raw-loader!./src/cli/config.dist.yml";
+
+The `pkg/cli` package lets you build multi-command CLI tools that run inside the gosoline application lifecycle — giving each command access to the same config, logger, and kernel modules as any other gosoline application.
+
+In this guide, you'll learn how to:
+
+- Define a simple command
+- Group related commands (`api serve`, `db migrate`)
+- Add flags and read their values from config
+- Add a built-in `version` command
+
+## Overview
+
+The entry point is `cli.NewCli()`. It embeds a `*Router`, which is a tree of named groups and commands. When you call `Run()`, it parses `os.Args`, resolves the matching command, injects parsed flags into the gosoline config, and starts the kernel with the command's module.
+
+```go
+c := cli.NewCli(/* options... */)
+// register groups and commands on c
+c.Run()
+```
+
+## Defining a command
+
+Register a `Cmd` directly on the `Cli` (or on any child `*Router` returned by `Group()`). Each `Cmd` needs a `Name` and a `ModuleFactory` — the function that builds the module to run:
+
+```go
+c.Cmd(cli.Cmd{
+    Name: "migrate",
+    ModuleFactory: cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
+        return func(ctx context.Context) error {
+            logger.Info(ctx, "running migrations")
+            return nil
+        }, nil
+    }),
+})
+```
+
+`cli.WithRunFunc` is a convenience wrapper that turns a plain function into a `kernel.ModuleFactory`.
+
+## Grouping commands
+
+`Group()` returns a child `*Router`. Register `Cmd`s on that router to create namespaced subcommands:
+
+```go
+apiRouter := c.Group(cli.Group{Name: "api"})
+apiRouter.Cmd(cli.Cmd{Name: "serve", ModuleFactory: /* ... */})
+
+dbRouter := c.Group(cli.Group{Name: "db"})
+dbRouter.Cmd(cli.Cmd{Name: "migrate", ModuleFactory: /* ... */})
+```
+
+This produces commands like `myapp api serve` and `myapp db migrate`. Groups can be nested arbitrarily deep.
+
+## Adding flags
+
+Declare flags on a `Cmd` (or `Group`) with `cli.Flag`. Each flag has a short name, a long name, an optional default, and an optional `CfgKey` to map the value to an arbitrary config path:
+
+```go
+cli.Cmd{
+    Name: "serve",
+    Flags: []cli.Flag{
+        {Short: "p", Long: "port", CfgKey: "httpserver.default.port", Default: "8080", Description: "port to listen on"},
+    },
+    ModuleFactory: /* ... */,
+}
+```
+
+| Field | Description |
+|---|---|
+| `Short` | Single-character flag (`-p`) |
+| `Long` | Long-form flag (`--port`) |
+| `Default` | Value used when the flag is absent |
+| `CfgKey` | If set, the value is also written to this config path |
+| `Description` | Human-readable description |
+
+The flag value is always available at `cli.flags.<long>` in the config. If `CfgKey` is set, it is also written there. The short flag takes precedence over the long flag when both are provided.
+
+Read the value inside your module factory:
+
+```go
+ModuleFactory: cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
+    port := config.GetString("httpserver.default.port") // from CfgKey
+    // or: config.GetString("cli.flags.port")           // always available
+    return func(ctx context.Context) error {
+        logger.Info(ctx, "listening on port %s", port)
+        <-ctx.Done()
+        return nil
+    }, nil
+}),
+```
+
+## Default command
+
+Use `DefaultCmd` to register a fallback that runs when no command matches — useful for showing usage:
+
+```go
+c.DefaultCmd(cli.Cmd{
+    ModuleFactory: cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
+        return func(ctx context.Context) error {
+            fmt.Println("Usage: myapp <command> [flags]")
+            return nil
+        }, nil
+    }),
+})
+```
+
+## Built-in version command
+
+Pass `cli.WithVersion` to add a `version` subcommand that prints a string and exits:
+
+```go
+c := cli.NewCli(
+    cli.WithVersion("1.0.0"),
+)
+```
+
+```bash
+$ myapp version
+1.0.0
+```
+
+## Complete example
+
+<details>
+<summary>main.go</summary>
+
+<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+
+</details>
+
+<details>
+<summary>config.dist.yml</summary>
+
+<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{ConfigDist}</CodeBlock>
+
+</details>
+
+Run the commands:
+
+```bash
+# Show usage (default command)
+go run main.go
+
+# Start the API server on a custom port
+go run main.go api serve --port 9090
+
+# Run migrations against production
+go run main.go db migrate --env prod
+
+# Print the version
+go run main.go version
+```
