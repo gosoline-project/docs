@@ -15,23 +15,21 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-          cache: yarn
-          cache-dependency-path: '**/yarn.lock'
+          bun-version: 1.3.14
 
       - name: Install dependencies
         if: github.event.action != 'closed'
-        run: yarn install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Build Preview
         if: github.event.action != 'closed'
         env:
           DOCS_BASE_URL: /docs/pr-${{ github.event.number }}/
           SEARCH_MODE: local
-        run: yarn build
+        run: bun run build
 
       - name: Deploy Preview to gh-pages
         env:
