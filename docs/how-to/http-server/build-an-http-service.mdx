@@ -222,6 +222,25 @@ func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadIn
 }
 ```
 
+### Resolve the client IP
+
+When your handler needs the caller IP address, use `ResolveClientIP` with the raw request from `BindR` or `BindNR`:
+
+```go
+func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetProfileInput) (httpserver.Response, error) {
+    clientIP, err := httpserver.ResolveClientIP(req)
+    if err != nil {
+        return nil, err
+    }
+
+    logger.Info(ctx, "profile requested from %s", clientIP)
+
+    // ...
+}
+```
+
+`ResolveClientIP` checks `X-Forwarded-For` first, then `X-Real-IP`, and falls back to `req.RemoteAddr`. Use it when your service runs behind a trusted proxy or load balancer that sets these headers.
+
 ## Sending responses
 
 All handler methods return an `httpserver.Response` interface.
