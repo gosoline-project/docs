@@ -18,7 +18,7 @@ Together with built-in middleware for logging, metrics, compression, and gracefu
 Install the package:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.4.1
+go get github.com/gosoline-project/httpserver@v0.5.3
 ```
 
 The entry point for any HTTP server is a `RouterFactory` — a function that receives a `*Router` and registers routes on it:
@@ -201,7 +201,7 @@ URI parameters are always bound. Body/query binding depends on the request's Con
 
 ### Validation
 
-The `binding` tag uses [go-playground/validator](https://pkg.go.dev/github.com/go-playground/validator/v10). If binding or validation fails, the request is rejected with `400 Bad Request` and a descriptive client error:
+The `binding` tag uses [go-playground/validator](https://pkg.go.dev/github.com/go-playground/validator/v10). If binding or validation fails, the request is rejected with `400 Bad Request` and a descriptive client error. Validation bind failures are also logged at warning level, not error level, with field, tag, invalid value, and parameter details:
 
 | Tag | Description |
 |---|---|

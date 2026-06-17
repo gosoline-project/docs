@@ -8,7 +8,7 @@ import { CopyToClipboardButton } from '../components.jsx';
 
 # Migrating to the Standalone HTTP Server Package
 
-This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.4.1`.
+This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.5.2`.
 
 The new package keeps the Gin-based server lifecycle and middleware model, but it changes the application-facing API. Instead of building and returning a `*httpserver.Definitions` tree, you receive a `*httpserver.Router` and register routes on it directly. Instead of implementing handler interfaces and manually unpacking an `httpserver.Request`, handlers are plain functions or methods registered through `Bind`, `BindN`, `BindR`, or SSE binding helpers.
 
@@ -17,7 +17,7 @@ The new package keeps the Gin-based server lifecycle and middleware model, but i
 Add the standalone module:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.4.1
+go get github.com/gosoline-project/httpserver@v0.5.2
 ```
 
 Update imports:
@@ -418,6 +418,25 @@ func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input
 }
 ```
 
+### Client IP
+
+The old `httpserver.Request` exposed `request.ClientIp`. In the standalone package, use raw request access and resolve the client IP explicitly:
+
+```go
+func (h *UserHandler) GetUser(ctx context.Context, req *http.Request, input *GetUserInput) (httpserver.Response, error) {
+    clientIP, err := httpserver.ResolveClientIP(req)
+    if err != nil {
+        return nil, err
+    }
+
+    _ = clientIP
+
+    // ...
+}
+```
+
+Register handlers that need both typed input and the raw request with `BindR`. Use `BindNR` when the handler needs the raw request but no typed input.
+
 ## 9. Migrate Responses
 
 The new package returns a `Response` interface instead of the old concrete `*Response` struct.
@@ -501,7 +520,7 @@ func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpser
 }
 ```
 
-In `v0.4.1`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
+In `v0.5.2`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
 
 The 5xx behavior is controlled by `httpserver.<name>.errors.privacy`. The default is `private`, which hides internal error details. Set it to `public` only when clients should receive the original internal error message:
 
@@ -941,10 +960,11 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 - Replace `GetInput` and `request.Body.(*Input)` with typed input arguments.
 - Replace path parameter helpers with `uri` tags on input structs.
 - Replace `CreateRawHandler` and `CreateReaderHandler` with `BindR` or `BindNR` and explicit `req.Body` handling.
+- Replace `request.ClientIp` with `ResolveClientIP(req)` in `BindR` or `BindNR` handlers.
 - Replace low-level `NewResponse(body, contentType, statusCode, header)` calls with `NewTextResponse`, `NewJsonResponse`, `NewStatusResponse`, or `NewResponse` options.
 - Replace old `pkg/httpserver/auth` imports with `github.com/gosoline-project/httpserver/auth`, move auth config below `httpserver.<name>.auth`, and pass the server name to auth constructors.
-- Review `max_body_bytes`; keep the v0.4.1 default 10 MiB limit, raise it, or set it to `0` intentionally.
-- Update tests for v0.4.1 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
+- Review `max_body_bytes`; keep the v0.5.2 default 10 MiB limit, raise it, or set it to `0` intentionally.
+- Update tests for v0.5.2 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
 - Update test suites from definition setup to router factory setup.
 - Run your HTTP tests and exercise validation errors, client errors, and middleware behavior after migration.
 

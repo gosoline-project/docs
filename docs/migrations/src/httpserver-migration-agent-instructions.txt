@@ -87,9 +87,9 @@ Request data migration rules:
 - request.Method becomes req.Method via BindR or BindNR.
 - request.Header becomes req.Header via BindR or BindNR.
 - request.Cookies becomes req.Cookies() via BindR or BindNR.
-- request.ClientIp becomes ginCtx.ClientIP() in a raw Gin handler if required.
+- request.ClientIp becomes httpserver.ResolveClientIP(req) via BindR or BindNR.
 
-Prefer typed binding over manual request inspection. Use BindR or BindNR only when the handler truly needs the raw *http.Request.
+Prefer typed binding over manual request inspection. Use BindR or BindNR only when the handler truly needs the raw *http.Request, for example to read the body directly or resolve the client IP.
 
 In v0.4.1, Bind and BindSse binding or validation failures are client errors and return 400 Bad Request through the default error middleware. Update tests that expected 500 for malformed input.
 
@@ -162,6 +162,7 @@ Validation checklist:
 - All middleware is registered in the same effective order.
 - Auth config has been moved below httpserver.<name>.auth and auth constructors receive the matching server name.
 - All request binding tags still match the route parameters, query parameters, and body fields expected by clients.
+- All old request.ClientIp usages are replaced with ResolveClientIP(req) in BindR or BindNR handlers.
 - All handled client errors still return the intended HTTP status code.
 - Large-body endpoints have an explicit max_body_bytes setting if the v0.4.1 default 10 MiB limit is too small.
 - Tests expecting binding failures now assert 400 Bad Request.
@@ -184,5 +185,5 @@ Stop conditions:
 - Stop and ask for human guidance if route behavior is ambiguous and there are no tests or callers to confirm it.
 - Stop and ask for human guidance if old auth code depends on shared package internals, including Google auth behavior, that cannot be reproduced safely.
 - Stop and ask for human guidance if multiple old route-specific handlers have conflicting initialization logic and it is unclear whether they should be consolidated.
-- Stop and ask for human guidance if a route depends on request.ClientIp or Gin-specific behavior and there is no clear equivalent without changing behavior.
+- Stop and ask for human guidance if a route depends on Gin-specific behavior and there is no clear equivalent without changing behavior.
 - Stop and ask for human guidance if the migration would require unrelated application refactoring.

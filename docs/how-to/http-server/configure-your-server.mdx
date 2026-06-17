@@ -55,15 +55,50 @@ application.WithModuleFactory("http-admin", httpserver.NewServer("admin", adminD
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `port` | string | `"8080"` | Port the server listens on. Use `"0"` for a random port (useful in tests). |
-| `mode` | string | `"release"` | Gin mode: `debug`, `release`, or `test`. |
 | `compression` | CompressionSettings | - | Gzip compression settings. |
-| `timeout` | TimeoutSettings | - | IO timeout settings. |
-| `logging` | LoggingSettings | - | Request logging settings. |
-| `errors` | ErrorsSettings | - | Error response privacy settings. |
-| `router` | RouterSettings | - | Gin router settings. |
-| `max_body_bytes` | int | `10485760` | Maximum incoming request body size in bytes. `0` disables the limit. |
 | `concurrency` | ConcurrencySettings | - | Concurrent request and connection pressure limits. See [Concurrency and connection pressure](./concurrency-and-connection-pressure). |
+| `errors` | ErrorsSettings | - | Error response privacy settings. |
+| `logging` | LoggingSettings | - | Request logging settings. |
+| `max_body_bytes` | int | `10485760` | Maximum incoming request body size in bytes. `0` disables the limit. |
+| `mode` | string | `"release"` | Gin mode: `debug`, `release`, or `test`. |
+| `port` | string | `"8080"` | Port the server listens on. Use `"0"` for a random port (useful in tests). |
+| `router` | RouterSettings | - | Gin router settings. |
+| `timeout` | TimeoutSettings | - | IO timeout settings. |
+
+### Compression settings
+
+```yaml
+httpserver:
+  default:
+    compression:
+      level: default
+      decompression: true
+      exclude:
+        path:
+          - /api/events
+        extension:
+          - .png
+        pathRegex:
+          - \.json$
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `decompression` | bool | `true` | Whether to decompress gzip-encoded request bodies. |
+| `exclude` | CompressionExcludeSettings | - | Paths/extensions/regexes to exclude from compression. |
+| `level` | string | `"default"` | Compression level: `"none"`, `"default"`, `"fast"`, `"best"`, or `"0"`–`"9"`. |
+
+### Compression exclude settings
+
+| Field | Type | Description |
+|---|---|---|
+| `extension` | string array | File extensions to exclude (e.g., `.png`). |
+| `path` | string array | Exact paths to exclude (e.g., `/api/events`). |
+| `pathRegex` | string array | Regex patterns to exclude (e.g., `\.json$`). |
+
+:::caution
+Always exclude SSE endpoints from compression. Gzip buffering will break real-time streaming. See [Stream with SSE](./stream-with-sse) for details.
+:::
 
 ### Error settings
 
@@ -89,6 +124,33 @@ httpserver:
       privacy: public
 ```
 
+### Logging settings
+
+The server logs request metadata by default. Use `logging` when you need to add selected headers or request bodies to the request log:
+
+```yaml
+httpserver:
+  default:
+    logging:
+      request_body: true
+      request_body_base64: false
+      request_headers:
+        - Content-Type
+        - X-Correlation-Id
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `request_body` | bool | `false` | Read and log the full request body as `request_body`. |
+| `request_body_base64` | bool | `false` | Base64-encode `request_body`. Only applies when `request_body` is enabled. Useful for binary or non-UTF-8 payloads. |
+| `request_headers` | string array | `[]` | Header names to include under `request_headers`. Only the configured headers are logged. |
+
+Request logs already include standard metadata such as method, path, raw path, query string, status, duration, client IP, host, referer, user agent, response bytes, and compression/request-size fields when available. Incoming `X-Request-Id` and `X-Session-Id` headers are also added to the log context automatically when present.
+
+:::caution
+Only enable request body or sensitive header logging deliberately. Request bodies, cookies, authorization headers, API keys, tokens, and query parameters may contain secrets or personal data. Body logging also reads the full request body into memory and can significantly increase log volume. Validation bind errors are logged at warning level and may log invalid field values even when request body logging is disabled; these values are truncated before logging.
+:::
+
 ### Request body size limit
 
 By default, each server limits incoming request bodies to 10 MiB. The limit is applied after request decompression, so compressed uploads are checked by their decompressed size.
@@ -100,6 +162,21 @@ httpserver:
 ```
 
 Set `max_body_bytes` to `0` to disable the limit, or raise it for endpoints that intentionally accept larger bodies.
+
+### Router settings
+
+```yaml
+httpserver:
+  default:
+    router:
+      use_raw_path: false
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `use_raw_path` | bool | `false` | Use Gin's raw escaped URL path for route matching when available. |
+
+By default, Gin matches routes against the decoded request path. Enable `use_raw_path` only when your routes need to distinguish escaped path segments, for example when `%2F` should stay part of a path parameter instead of being treated like `/`.
 
 ### Timeout settings
 
@@ -116,11 +193,11 @@ httpserver:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `read` | duration | `60s` | Maximum duration for reading the entire request, including the body. Minimum 1s. |
-| `write` | duration | `60s` | Maximum duration before timing out writes of the response. Minimum 1s. |
-| `idle` | duration | `60s` | Maximum time to wait for the next request when keep-alives are enabled. Minimum 1s. |
 | `drain` | duration | `0s` | Time to wait after receiving a shutdown signal before starting graceful shutdown. Useful for load balancer deregistration. |
+| `idle` | duration | `60s` | Maximum time to wait for the next request when keep-alives are enabled. Minimum 1s. |
+| `read` | duration | `60s` | Maximum duration for reading the entire request, including the body. Minimum 1s. |
 | `shutdown` | duration | `60s` | Maximum time for graceful shutdown. Minimum 1s. |
+| `write` | duration | `60s` | Maximum duration before timing out writes of the response. Minimum 1s. |
 
 For long-running operations, increase the timeouts:
 
@@ -132,41 +209,6 @@ httpserver:
       read: 10m
       write: 10m
 ```
-
-### Compression settings
-
-```yaml
-httpserver:
-  default:
-    compression:
-      level: default
-      decompression: true
-      exclude:
-        path:
-          - /api/events
-        extension:
-          - .png
-        pathRegex:
-          - \.json$
-```
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `level` | string | `"default"` | Compression level: `"none"`, `"default"`, `"fast"`, `"best"`, or `"0"`–`"9"`. |
-| `decompression` | bool | `true` | Whether to decompress gzip-encoded request bodies. |
-| `exclude` | CompressionExcludeSettings | - | Paths/extensions/regexes to exclude from compression. |
-
-### Compression exclude settings
-
-| Field | Type | Description |
-|---|---|---|
-| `path` | string array | Exact paths to exclude (e.g., `/api/events`). |
-| `extension` | string array | File extensions to exclude (e.g., `.png`). |
-| `pathRegex` | string array | Regex patterns to exclude (e.g., `\.json$`). |
-
-:::caution
-Always exclude SSE endpoints from compression. Gzip buffering will break real-time streaming. See [Stream with SSE](./stream-with-sse) for details.
-:::
 
 ## Health check server
 

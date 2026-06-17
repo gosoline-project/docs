@@ -174,6 +174,8 @@ Input structs use standard tags to specify the data source:
 | `header` | HTTP headers | `header:"X-Request-Id"` |
 | `binding` | Validation rules | `binding:"required,email"` |
 
+Binding and validation failures return `400 Bad Request`. Validation bind failures are logged at warning level, not error level, with field, tag, invalid value, and parameter details; invalid values are truncated before logging.
+
 ## Responses
 
 ### Response constructors
@@ -339,7 +341,7 @@ Config key: `httpserver.<name>`
 |---|---|---|---|
 | `request_body` | bool | `false` | Log request bodies. |
 | `request_body_base64` | bool | `false` | Base64-encode request body in logs. |
-| `request_headers` | bool | `false` | Log request headers. |
+| `request_headers` | string array | `[]` | Header names to include in logs. Only the configured headers are logged. |
 
 ### ConnectionLifeCycleAdvisorSettings
 
