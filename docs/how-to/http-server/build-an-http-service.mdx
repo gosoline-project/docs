@@ -100,10 +100,23 @@ func NewHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*Han
 }
 ```
 
-### Bind vs BindN
+### Bind, BindR, BindN, and BindNR
 
-- **`Bind[I]`** — for handlers that accept an input struct: `(ctx, *Input) (Response, error)`
-- **`BindN`** — for handlers with no input: `(ctx) (Response, error)`
+The standard binding helpers differ by two concerns: whether the handler receives a bound input struct, and whether it receives the raw `*http.Request`.
+
+The suffixes follow a simple pattern:
+
+- **`R`** means the raw `*http.Request` is passed to the handler.
+- **`N`** means there is no input struct to bind.
+
+| Helper | Handler shape | Use when |
+|---|---|---|
+| `Bind[I]` | `(ctx, *Input) (Response, error)` | The endpoint needs request data bound into an input struct. This is the default choice for most endpoints. |
+| `BindR[I]` | `(ctx, *http.Request, *Input) (Response, error)` | The endpoint needs both bound input and raw request access, for example headers, method, body metadata, or client IP resolution. |
+| `BindN` | `(ctx) (Response, error)` | The endpoint does not need request input, for example health checks or static status endpoints. |
+| `BindNR` | `(ctx, *http.Request) (Response, error)` | The endpoint does not need a bound input struct, but still needs raw request access. |
+
+`Bind` and `BindR` can bind request data from JSON bodies, query parameters, form data, URI parameters, headers, and other supported sources. `BindN` and `BindNR` skip request binding entirely because there is no input struct.
 
 ```go
 // With input
@@ -111,9 +124,21 @@ func (h *Handler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.
     // input is populated from the request
 }
 
+// With input and raw request access
+func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (httpserver.Response, error) {
+    contentType := req.Header.Get("Content-Type")
+    // input is populated from the request
+}
+
 // Without input
 func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
     // no request data needed
+}
+
+// Without input, but with raw request access
+func (h *Handler) Ping(ctx context.Context, req *http.Request) (httpserver.Response, error) {
+    userAgent := req.Header.Get("User-Agent")
+    // no input struct is bound
 }
 ```
 
