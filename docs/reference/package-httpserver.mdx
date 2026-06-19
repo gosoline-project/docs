@@ -247,10 +247,18 @@ Use `NewErrorWithStatus(statusCode, err)` when middleware attaches an error to t
 ### [Cors()](https://github.com/gosoline-project/httpserver/blob/main/cors.go)
 
 ```go
-corsMiddleware, err := httpserver.Cors(config)
+corsMiddleware, err := httpserver.Cors(config, "default")
 ```
 
-Creates a CORS middleware from config keys: `api_cors_allowed_origin_pattern`, `api_cors_allowed_headers`, `api_cors_allowed_methods`.
+Creates a CORS middleware from `httpserver.<name>.cors` settings.
+
+### [CorsFactory()](https://github.com/gosoline-project/httpserver/blob/main/cors.go)
+
+```go
+router.UseFactory(httpserver.CorsFactory)
+```
+
+Creates CORS middleware as a settings-aware middleware factory. The factory uses `settings.Name`, so reusable route setup automatically reads the CORS settings for the current named server.
 
 ### [CreateEmbeddedStaticServe()](https://github.com/gosoline-project/httpserver/blob/main/middleware_embedded_static_serve.go)
 
@@ -304,6 +312,7 @@ Config key: `httpserver.<name>`
 | `port` | string | `"8080"` | Listening port. Use `"0"` for random port. |
 | `mode` | string | `"release"` | Gin mode: `debug`, `release`, `test`. |
 | `compression` | CompressionSettings | - | Gzip configuration. |
+| `cors` | CorsSettings | - | CORS middleware configuration. |
 | `timeout` | TimeoutSettings | - | IO timeouts. |
 | `logging` | LoggingSettings | - | Request logging configuration. |
 | `router` | RouterSettings | - | Router configuration. |
@@ -334,6 +343,16 @@ Config key: `httpserver.<name>`
 | `extension` | string array | File extensions to exclude. |
 | `path` | string array | Exact paths to exclude. |
 | `pathRegex` | string array | Regex patterns to exclude. |
+
+### CorsSettings
+
+| Field | Type | Description |
+|---|---|---|
+| `allowed_origin_pattern` | string | Regular expression matched against the full `Origin` value. |
+| `allowed_headers` | string array | Allowed request headers for CORS requests. |
+| `allowed_methods` | string array | Allowed HTTP methods for CORS requests. |
+
+The origin pattern is anchored internally. For example, `https://example\.com` allows `https://example.com`, but not `https://example.com.evil.com`.
 
 ### LoggingSettings
 

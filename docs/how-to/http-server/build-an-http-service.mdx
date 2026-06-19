@@ -9,7 +9,7 @@ In this guide, you'll build a complete HTTP service from scratch. You'll start w
 
 The httpserver package is built on top of [Gin](https://gin-gonic.com/), one of the most popular HTTP frameworks for Go. It inherits all of Gin's routing, middleware, and parameter handling — so you can always fall back to raw `*gin.Context` handlers when you need to.
 
-On top of that foundation, httpserver adds a structured, type-safe way to build HTTP services. The **`With` pattern** gives you clean dependency injection: each handler group gets its own constructor that receives `ctx`, `config`, and `logger`, so your dependencies are initialized in one place and shared across related routes. The **`Bind` function** replaces manual request parsing with struct-tag-driven binding and validation — declare an input struct with `json`, `uri`, or `form` tags, and the request data is populated and validated before your handler even runs. Your handlers return a typed `Response` instead of writing directly to the response writer, making them easy to test and compose.
+On top of that foundation, httpserver adds a structured, type-safe way to build HTTP services. The **`With` pattern** gives you clean dependency injection: each handler group gets its own constructor that receives `ctx`, `config`, and `logger`, so your dependencies are initialized in one place and shared across related routes. The **`Bind` function** replaces manual request parsing with struct-tag-driven binding and validation — declare an input struct with `json`, `uri`, `form`, or `header` tags, and the request data is populated and validated before your handler even runs. Your handlers return a typed `Response` instead of writing directly to the response writer, making them easy to test and compose.
 
 Together with built-in middleware for logging, metrics, compression, and graceful shutdown — all configured through YAML — httpserver lets you focus on your application logic rather than HTTP plumbing.
 
@@ -18,7 +18,7 @@ Together with built-in middleware for logging, metrics, compression, and gracefu
 Install the package:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.5.3
+go get github.com/gosoline-project/httpserver@v0.5.6
 ```
 
 The entry point for any HTTP server is a `RouterFactory` — a function that receives a `*Router` and registers routes on it:
@@ -195,6 +195,17 @@ type CreateUserInput struct {
 }
 ```
 
+### HTTP headers
+
+Use the `header` tag to bind from request headers:
+
+```go
+type AuthenticatedInput struct {
+    RequestId string `header:"X-Request-Id"`
+    UserAgent string `header:"User-Agent"`
+}
+```
+
 ### Combining multiple sources
 
 Combine tags to pull from multiple sources in a single input struct:
@@ -204,14 +215,17 @@ type ListFilesInput struct {
     Database   string            `uri:"database"`
     Table      string            `uri:"table"`
     Partitions map[string]string `json:"partitions" form:"partitions"`
+    RequestId  string            `header:"X-Request-Id"`
 }
 ```
 
-URI parameters are always bound. Body/query binding depends on the request's Content-Type header.
+URI parameters and headers are always bound when their tags are present. Body/query binding depends on the request's Content-Type header.
 
 ### Auto-detection logic
 
 `Bind` examines the input type's struct tags and the request Content-Type to determine how to bind:
+
+The `uri` and `header` tags are inferred from the input type and are not selected by Content-Type.
 
 | Content-Type | Tag used |
 |---|---|

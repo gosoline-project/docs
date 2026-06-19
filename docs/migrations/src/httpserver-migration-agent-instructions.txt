@@ -1,4 +1,4 @@
-Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.4.1, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
+Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.5.6, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
 
 Scope discovery:
 
@@ -14,16 +14,17 @@ Scope discovery:
 - Find all uses of GetStringFromRequest and GetUintFromRequest.
 - Find all uses of old response constructors and fields, especially NewResponse(body, contentType, statusCode, header), ContentTypeText, ContentTypeJson, ContentTypeHtml, ContentTypeProtobuf, Response.AddHeader, Response.WithBody, and Response.WithContentType.
 - Find all HTTP server test setup helpers that return an old httpserver.Definer or implement SetupApiDefinitions.
-- Find endpoints that accept large request bodies and check whether they need a v0.4.1 max_body_bytes override.
+- Find endpoints that accept large request bodies and check whether they need a v0.5.6 max_body_bytes override.
 - Find tests or clients that assert internal error response bodies, binding error status codes, CORS partial-origin matching, health-check error details, or profiling listen addresses.
-- Find all router.UseFactory calls and custom httpserver.MiddlewareFactory implementations, because v0.4.1 middleware factories receive server settings as a fourth argument.
+- Find all router.UseFactory calls and custom httpserver.MiddlewareFactory implementations, because v0.5.6 middleware factories receive server settings as a fourth argument.
 - Find any environment-specific need to expose internal 5xx error details, which now requires httpserver.<name>.errors.privacy: public.
+- Find old global CORS config keys: api_cors_allowed_origin_pattern, api_cors_allowed_headers, and api_cors_allowed_methods.
 
 Do not start with a global import replacement. First classify each usage, because the old package also contained auth and helper APIs that do not map one-to-one to the standalone package.
 
 Migration order:
 
-1. Add the new dependency with: go get github.com/gosoline-project/httpserver@v0.4.1
+1. Add the new dependency with: go get github.com/gosoline-project/httpserver@v0.5.6
 2. Migrate server startup and router factories.
 3. Migrate route definitions from returned Definitions to mutating *Router.
 4. Migrate middleware registration.
@@ -32,7 +33,7 @@ Migration order:
 7. Consolidate old route-specific handlers into domain or route-group handlers where they share dependencies.
 8. Migrate request binding and raw request access.
 9. Migrate responses and handled errors.
-10. Review v0.4.1 runtime behavior: request body limits, binding errors, configurable error privacy, CORS origin matching, health responses, and profiling bind address.
+10. Review v0.5.6 runtime behavior: request body limits, binding errors, configurable error privacy, CORS origin matching, health responses, and profiling bind address.
 11. Migrate tests.
 12. Run formatting and tests.
 
@@ -56,6 +57,7 @@ Route definition transformation:
 - Convert error returns from return nil, err to return err in router factories.
 - Convert custom UseFactory callbacks from func(ctx, config, logger) (gin.HandlerFunc, error) to func(ctx, config, logger, settings *httpserver.Settings) (gin.HandlerFunc, error).
 - Use settings.Name inside middleware factories when middleware needs the current server name.
+- For package CORS middleware, prefer router.UseFactory(httpserver.CorsFactory). If constructing it manually, call httpserver.Cors(config, "<serverName>").
 
 Handler consolidation instructions:
 
@@ -91,7 +93,7 @@ Request data migration rules:
 
 Prefer typed binding over manual request inspection. Use BindR or BindNR only when the handler truly needs the raw *http.Request, for example to read the body directly or resolve the client IP.
 
-In v0.4.1, Bind and BindSse binding or validation failures are client errors and return 400 Bad Request through the default error middleware. Update tests that expected 500 for malformed input.
+In v0.5.6, Bind and BindSse binding or validation failures are client errors and return 400 Bad Request through the default error middleware. Update tests that expected 500 for malformed input.
 
 Response migration rules:
 
@@ -102,7 +104,7 @@ Response migration rules:
 - resp.AddHeader(k, v) becomes WithHeader(k, v) at construction time, or an accumulated response option list.
 - resp.WithBody(body) becomes WithBody([]byte(...)) when constructing NewResponse.
 - The new Response is an interface. Do not access fields like resp.StatusCode or resp.Header; use resp.StatusCode() and resp.Header() in tests.
-- The v0.4.1 default error handler returns the actual error message for 4xx responses and returns {"err":"internal server error"} for 5xx responses.
+- The v0.5.6 default error handler returns the actual error message for 4xx responses and returns {"err":"internal server error"} for 5xx responses.
 - The 5xx behavior is controlled by httpserver.<name>.errors.privacy. The default private value hides internal details. Set privacy to public only when exposing internal 5xx messages is intentional.
 - For handled client errors, prefer returning GetErrorHandler()(status, err), nil.
 - For errors attached to a Gin context or propagated through middleware, use NewErrorWithStatus(status, err) when the response status should not be 500.
@@ -130,6 +132,16 @@ Auth migration rules:
 - The old Google auth helper was not ported to the standalone module. If the application uses NewConfigGoogleHandler or NewConfigGoogleAuthenticator, keep that logic in application-owned Gin middleware or an application-owned auth package.
 - Stop and ask for guidance if the old auth logic depends on package internals that are not obvious from the application code or if Google auth behavior cannot be preserved safely.
 
+CORS migration rules:
+
+- Move api_cors_allowed_origin_pattern to httpserver.<name>.cors.allowed_origin_pattern.
+- Move api_cors_allowed_headers to httpserver.<name>.cors.allowed_headers.
+- Move api_cors_allowed_methods to httpserver.<name>.cors.allowed_methods.
+- RunDefaultServer uses the server name default. NewServer("admin", ...) uses the server name admin.
+- Prefer router.UseFactory(httpserver.CorsFactory) so the current server name is used automatically.
+- If constructing the middleware manually, pass the server name explicitly: httpserver.Cors(config, "default").
+- CORS allowed_origin_pattern is matched against the full Origin value. Do not rely on partial regex matches; use an explicit pattern that matches the complete allowed origin set.
+
 Test migration rules:
 
 - Replace SetupApiDefinitions() httpserver.Definer with SetupHttpServerRouter() httpserver.RouterFactory.
@@ -138,14 +150,14 @@ Test migration rules:
 - Assert response.StatusCode(), response.Header(), and response.Body() instead of old response fields.
 - Keep integration or routing tests for binding, middleware, and path behavior.
 
-Configuration and runtime behavior rules for v0.4.1:
+Configuration and runtime behavior rules for v0.5.6:
 
 - The main server configuration lives under httpserver.<name>. RunDefaultServer uses the name default.
 - The server adds /health automatically. Unhealthy modules are reported as "unhealthy"; underlying error messages are logged but not returned in the response body.
 - Incoming request bodies are limited by httpserver.<name>.max_body_bytes. The default is 10485760 bytes (10 MiB). Set it to 0 to disable the limit, or raise it when the old service intentionally accepted larger bodies.
 - The body limit is applied after decompression, so compressed uploads are limited by their decompressed size.
 - Internal 5xx error details are hidden by default and with httpserver.<name>.errors.privacy: private. Use privacy: public only when clients should see internal 5xx messages.
-- CORS api_cors_allowed_origin_pattern is matched against the full Origin value. Do not rely on partial regex matches; use an explicit pattern that matches the complete allowed origin set.
+- CORS settings live under httpserver.<name>.cors. The allowed_origin_pattern is matched against the full Origin value. Do not rely on partial regex matches; use an explicit pattern that matches the complete allowed origin set.
 - Profiling is configured under profiling and, when enabled, listens on 127.0.0.1:<profiling.api.port>.
 - Keep compression exclusions for SSE endpoints; gzip buffering breaks real-time SSE streams.
 
@@ -161,10 +173,11 @@ Validation checklist:
 - All routes from the old router are present in the new router with the same HTTP method and path.
 - All middleware is registered in the same effective order.
 - Auth config has been moved below httpserver.<name>.auth and auth constructors receive the matching server name.
+- CORS config has been moved from api_cors_* keys to httpserver.<name>.cors.* and package CORS registration uses CorsFactory or Cors(config, name).
 - All request binding tags still match the route parameters, query parameters, and body fields expected by clients.
 - All old request.ClientIp usages are replaced with ResolveClientIP(req) in BindR or BindNR handlers.
 - All handled client errors still return the intended HTTP status code.
-- Large-body endpoints have an explicit max_body_bytes setting if the v0.4.1 default 10 MiB limit is too small.
+- Large-body endpoints have an explicit max_body_bytes setting if the v0.5.6 default 10 MiB limit is too small.
 - Tests expecting binding failures now assert 400 Bad Request.
 - Tests expecting internal error details in 5xx JSON responses now assert the sanitized default/private body, configure httpserver.<name>.errors.privacy: public, or install a custom error handler intentionally.
 - CORS tests use full-origin matches and do not depend on partial regex matching.

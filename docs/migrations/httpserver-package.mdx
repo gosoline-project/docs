@@ -8,7 +8,7 @@ import { CopyToClipboardButton } from '../components.jsx';
 
 # Migrating to the Standalone HTTP Server Package
 
-This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.5.2`.
+This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.5.6`.
 
 The new package keeps the Gin-based server lifecycle and middleware model, but it changes the application-facing API. Instead of building and returning a `*httpserver.Definitions` tree, you receive a `*httpserver.Router` and register routes on it directly. Instead of implementing handler interfaces and manually unpacking an `httpserver.Request`, handlers are plain functions or methods registered through `Bind`, `BindN`, `BindR`, or SSE binding helpers.
 
@@ -17,7 +17,7 @@ The new package keeps the Gin-based server lifecycle and middleware model, but i
 Add the standalone module:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.5.2
+go get github.com/gosoline-project/httpserver@v0.5.6
 ```
 
 Update imports:
@@ -520,7 +520,7 @@ func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpser
 }
 ```
 
-In `v0.5.2`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
+In `v0.5.6`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
 
 The 5xx behavior is controlled by `httpserver.<name>.errors.privacy`. The default is `private`, which hides internal error details. Set it to `public` only when clients should receive the original internal error message:
 
@@ -571,6 +571,49 @@ router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger
 ```
 
 The `settings` argument contains the resolved server settings. `settings.Name` is the server name, such as `"default"` for `RunDefaultServer` or `"admin"` for `NewServer("admin", ...)`.
+
+### CORS
+
+Move the old global CORS settings below the named HTTP server:
+
+| Old gosoline key | New standalone key for server `default` |
+|---|---|
+| `api_cors_allowed_origin_pattern` | `httpserver.default.cors.allowed_origin_pattern` |
+| `api_cors_allowed_headers` | `httpserver.default.cors.allowed_headers` |
+| `api_cors_allowed_methods` | `httpserver.default.cors.allowed_methods` |
+
+```yaml
+httpserver:
+  default:
+    cors:
+      allowed_origin_pattern: ".*"
+      allowed_headers:
+        - Content-Type
+        - Authorization
+      allowed_methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+```
+
+Prefer the settings-aware factory so the middleware reads the current server name automatically:
+
+```go
+router.UseFactory(httpserver.CorsFactory)
+```
+
+If you construct the middleware manually, pass the server name explicitly:
+
+```go
+corsMiddleware, err := httpserver.Cors(config, "default")
+if err != nil {
+    return err
+}
+router.Use(corsMiddleware)
+```
+
+The origin pattern is matched against the full `Origin` value. For example, `https://example\\.com` allows `https://example.com`, but not `https://example.com.evil.com`.
 
 ### Authentication
 
@@ -795,6 +838,16 @@ httpserver:
     compression:
       level: default
       decompression: true
+    cors:
+      allowed_origin_pattern: ".*"
+      allowed_headers:
+        - Content-Type
+        - Authorization
+      allowed_methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
     errors:
       privacy: private
     max_body_bytes: 10485760
@@ -810,7 +863,7 @@ Keep these points in mind while migrating:
 | Request body limit | `max_body_bytes` defaults to `10485760` bytes (10 MiB). Set it to `0` to disable the limit or raise it for large upload endpoints. The limit is applied after request decompression. |
 | Binding errors | `Bind` and `BindSse` binding or validation failures return `400 Bad Request`. |
 | Error responses | The default handler exposes 4xx error messages and returns `{"err":"internal server error"}` for 5xx responses. Set `httpserver.<name>.errors.privacy` to `public` only when 5xx error details should be exposed. |
-| CORS | `api_cors_allowed_origin_pattern` is matched against the full `Origin` value. Partial regex matches do not allow origins. |
+| CORS | Move old `api_cors_*` keys to `httpserver.<name>.cors.*`. `allowed_origin_pattern` is matched against the full `Origin` value, so partial regex matches do not allow origins. |
 | Profiling | Profiling is still configured under `profiling` and binds to `127.0.0.1:<port>`. |
 | Auth | Auth config is scoped below `httpserver.<name>.auth`; old global auth keys must be moved below the server name. |
 
@@ -963,8 +1016,9 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 - Replace `request.ClientIp` with `ResolveClientIP(req)` in `BindR` or `BindNR` handlers.
 - Replace low-level `NewResponse(body, contentType, statusCode, header)` calls with `NewTextResponse`, `NewJsonResponse`, `NewStatusResponse`, or `NewResponse` options.
 - Replace old `pkg/httpserver/auth` imports with `github.com/gosoline-project/httpserver/auth`, move auth config below `httpserver.<name>.auth`, and pass the server name to auth constructors.
-- Review `max_body_bytes`; keep the v0.5.2 default 10 MiB limit, raise it, or set it to `0` intentionally.
-- Update tests for v0.5.2 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
+- Move old global CORS config from `api_cors_*` keys to `httpserver.<name>.cors.*`, and register package CORS with `router.UseFactory(httpserver.CorsFactory)` or `httpserver.Cors(config, name)`.
+- Review `max_body_bytes`; keep the v0.5.6 default 10 MiB limit, raise it, or set it to `0` intentionally.
+- Update tests for v0.5.6 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
 - Update test suites from definition setup to router factory setup.
 - Run your HTTP tests and exercise validation errors, client errors, and middleware behavior after migration.
 

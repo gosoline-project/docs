@@ -57,6 +57,7 @@ application.WithModuleFactory("http-admin", httpserver.NewServer("admin", adminD
 |---|---|---|---|
 | `compression` | CompressionSettings | - | Gzip compression settings. |
 | `concurrency` | ConcurrencySettings | - | Concurrent request and connection pressure limits. See [Concurrency and connection pressure](./concurrency-and-connection-pressure). |
+| `cors` | CorsSettings | - | CORS middleware settings. |
 | `errors` | ErrorsSettings | - | Error response privacy settings. |
 | `logging` | LoggingSettings | - | Request logging settings. |
 | `max_body_bytes` | int | `10485760` | Maximum incoming request body size in bytes. `0` disables the limit. |
@@ -99,6 +100,33 @@ httpserver:
 :::caution
 Always exclude SSE endpoints from compression. Gzip buffering will break real-time streaming. See [Stream with SSE](./stream-with-sse) for details.
 :::
+
+### CORS settings
+
+```yaml
+httpserver:
+  default:
+    cors:
+      allowed_origin_pattern: "https://example\\.com"
+      allowed_headers:
+        - Content-Type
+        - Authorization
+      allowed_methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `allowed_headers` | string array | Allowed request headers for CORS requests. |
+| `allowed_methods` | string array | Allowed HTTP methods for CORS requests. |
+| `allowed_origin_pattern` | string | Regular expression matched against the full `Origin` value. |
+
+Register the package middleware with `router.UseFactory(httpserver.CorsFactory)`. The factory reads `httpserver.<name>.cors` for the server currently being built.
+
+The origin pattern is anchored internally. For example, `https://example\\.com` allows `https://example.com`, but not `https://example.com.evil.com`.
 
 ### Error settings
 
