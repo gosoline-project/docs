@@ -26,14 +26,20 @@ func main() {
 		Flags: []cli.Flag{
 			{Short: "p", Long: "port", CfgKey: "httpserver.default.port", Default: "8080", Description: "port to listen on"},
 		},
-		ModuleFactory: cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
-			port := config.GetString("httpserver.default.port")
-			return func(ctx context.Context) error {
-				logger.Info(ctx, "api server listening on port %s", port)
-				<-ctx.Done()
-				return nil
-			}, nil
-		}),
+		AppOptions: []application.Option{
+			application.WithModuleFactory("main", cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
+				port, err := config.GetString("httpserver.default.port")
+				if err != nil {
+					return nil, err
+				}
+
+				return func(ctx context.Context) error {
+					logger.Info(ctx, "api server listening on port %s", port)
+					<-ctx.Done()
+					return nil
+				}, nil
+			})),
+		},
 	})
 
 	// Register subcommands under the "db" group.
@@ -43,27 +49,35 @@ func main() {
 		Flags: []cli.Flag{
 			{Short: "e", Long: "env", CfgKey: "app.env", Default: "dev", Description: "target environment"},
 		},
-		ModuleFactory: cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
-			env := config.GetString("app.env")
-			return func(ctx context.Context) error {
-				logger.Info(ctx, "running migrations in env: %s", env)
-				return nil
-			}, nil
-		}),
+		AppOptions: []application.Option{
+			application.WithModuleFactory("main", cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
+				env, err := config.GetString("app.env")
+				if err != nil {
+					return nil, err
+				}
+
+				return func(ctx context.Context) error {
+					logger.Info(ctx, "running migrations in env: %s", env)
+					return nil
+				}, nil
+			})),
+		},
 	})
 
 	// Fallback when no command is matched.
 	c.DefaultCmd(cli.Cmd{
-		ModuleFactory: cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
-			return func(ctx context.Context) error {
-				fmt.Println("Usage: myapp <command> [flags]")
-				fmt.Println("Commands:")
-				fmt.Println("  api serve    Start the API server")
-				fmt.Println("  db migrate   Run database migrations")
-				fmt.Println("  version      Print the version")
-				return nil
-			}, nil
-		}),
+		AppOptions: []application.Option{
+			application.WithModuleFactory("main", cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
+				return func(ctx context.Context) error {
+					fmt.Println("Usage: myapp <command> [flags]")
+					fmt.Println("Commands:")
+					fmt.Println("  api serve    Start the API server")
+					fmt.Println("  db migrate   Run database migrations")
+					fmt.Println("  version      Print the version")
+					return nil
+				}, nil
+			})),
+		},
 	})
 
 	c.Run()

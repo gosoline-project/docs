@@ -18,7 +18,7 @@ In this guide, you'll learn how to:
 
 ## Overview
 
-The entry point is `cli.NewCli()`. It embeds a `*Router`, which is a tree of named groups and commands. When you call `Run()`, it parses `os.Args`, resolves the matching command, injects parsed flags into the gosoline config, and starts the kernel with the command's module.
+The entry point is `cli.NewCli()`. It embeds a `*Router`, which is a tree of named groups and commands. When you call `Run()`, it parses `os.Args`, resolves the matching command, injects parsed flags into the gosoline config, and starts the kernel with the command's application options.
 
 ```go
 c := cli.NewCli(/* options... */)
@@ -28,21 +28,23 @@ c.Run()
 
 ## Defining a command
 
-Register a `Cmd` directly on the `Cli` (or on any child `*Router` returned by `Group()`). Each `Cmd` needs a `Name` and a `ModuleFactory` — the function that builds the module to run:
+Register a `Cmd` directly on the `Cli` (or on any child `*Router` returned by `Group()`). Each `Cmd` needs a `Name` and `AppOptions` containing the module to run:
 
 ```go
 c.Cmd(cli.Cmd{
     Name: "migrate",
-    ModuleFactory: cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
-        return func(ctx context.Context) error {
-            logger.Info(ctx, "running migrations")
-            return nil
-        }, nil
-    }),
+    AppOptions: []application.Option{
+        application.WithModuleFactory("main", cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
+            return func(ctx context.Context) error {
+                logger.Info(ctx, "running migrations")
+                return nil
+            }, nil
+        })),
+    },
 })
 ```
 
-`cli.WithRunFunc` is a convenience wrapper that turns a plain function into a `kernel.ModuleFactory`.
+`application.WithModuleFactory` registers the command's kernel module. `cli.WithRunFunc` is a convenience wrapper that turns a plain function into a `kernel.ModuleFactory`.
 
 ## Grouping commands
 
@@ -50,10 +52,10 @@ c.Cmd(cli.Cmd{
 
 ```go
 apiRouter := c.Group(cli.Group{Name: "api"})
-apiRouter.Cmd(cli.Cmd{Name: "serve", ModuleFactory: /* ... */})
+apiRouter.Cmd(cli.Cmd{Name: "serve", AppOptions: /* ... */})
 
 dbRouter := c.Group(cli.Group{Name: "db"})
-dbRouter.Cmd(cli.Cmd{Name: "migrate", ModuleFactory: /* ... */})
+dbRouter.Cmd(cli.Cmd{Name: "migrate", AppOptions: /* ... */})
 ```
 
 This produces commands like `myapp api serve` and `myapp db migrate`. Groups can be nested arbitrarily deep.
@@ -68,7 +70,7 @@ cli.Cmd{
     Flags: []cli.Flag{
         {Short: "p", Long: "port", CfgKey: "httpserver.default.port", Default: "8080", Description: "port to listen on"},
     },
-    ModuleFactory: /* ... */,
+    AppOptions: /* ... */,
 }
 ```
 
@@ -82,18 +84,24 @@ cli.Cmd{
 
 The flag value is always available at `cli.flags.<long>` in the config. If `CfgKey` is set, it is also written there. The short flag takes precedence over the long flag when both are provided.
 
-Read the value inside your module factory:
+Read the value inside your module registration:
 
 ```go
-ModuleFactory: cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
-    port := config.GetString("httpserver.default.port") // from CfgKey
-    // or: config.GetString("cli.flags.port")           // always available
-    return func(ctx context.Context) error {
-        logger.Info(ctx, "listening on port %s", port)
-        <-ctx.Done()
-        return nil
-    }, nil
-}),
+AppOptions: []application.Option{
+    application.WithModuleFactory("main", cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
+        port, err := config.GetString("httpserver.default.port") // from CfgKey
+        // or: config.GetString("cli.flags.port")                // always available
+        if err != nil {
+            return nil, err
+        }
+
+        return func(ctx context.Context) error {
+            logger.Info(ctx, "listening on port %s", port)
+            <-ctx.Done()
+            return nil
+        }, nil
+    })),
+},
 ```
 
 ## Default command
@@ -102,12 +110,14 @@ Use `DefaultCmd` to register a fallback that runs when no command matches — us
 
 ```go
 c.DefaultCmd(cli.Cmd{
-    ModuleFactory: cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
-        return func(ctx context.Context) error {
-            fmt.Println("Usage: myapp <command> [flags]")
-            return nil
-        }, nil
-    }),
+    AppOptions: []application.Option{
+        application.WithModuleFactory("main", cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
+            return func(ctx context.Context) error {
+                fmt.Println("Usage: myapp <command> [flags]")
+                return nil
+            }, nil
+        })),
+    },
 })
 ```
 
