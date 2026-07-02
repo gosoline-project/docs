@@ -79,6 +79,30 @@ const config = {
     ],
   ],
 
+  plugins: [
+    [
+      '@signalwire/docusaurus-plugin-llms-txt',
+      {
+        content: {
+          enableMarkdownFiles: true,
+          enableLlmsFullTxt: true,
+          includeDocs: true,
+          includeBlog: true,
+          includePages: false,
+          excludeRoutes: [
+            '/docs/search',
+            '/docs/blog/archive',
+            '/docs/blog/authors',
+            '/docs/blog/tags',
+            '/docs/blog/tags/**',
+          ],
+        },
+        siteTitle: 'Gosoline Docs',
+        siteDescription: 'Documentation and articles for the Gosoline Go application framework.',
+      },
+    ],
+  ],
+
   themes: searchMode === 'local' ? [
     [
       '@easyops-cn/docusaurus-search-local',
