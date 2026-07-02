@@ -1,0 +1,57 @@
+# Gosoline Docs
+
+> Documentation and articles for the Gosoline Go application framework.
+
+
+## docs
+
+- [Gosoline Blog](/blog.md): Articles and announcements from the gosoline project
+- [gosoline goes modular: smaller packages, better APIs](/blog/gosoline-goes-modular.md): gosoline has grown into a mature application framework that powers production backend systems. It provides the building blocks teams need to run services reliably: application lifecycle management, configuration handling, logging, metrics, tracing, and integrations for many common infrastructure components.
+- [Identity & Naming Patterns: Flexible, Configuration-Driven Resource Naming](/blog/identity-and-naming-patterns.md): Managing cloud resources across multiple environments, teams, and services is hard enough without fighting your own naming conventions. Gosoline's old AppId model locked you into a fixed project/family/group hierarchy — useful in practice, but inflexible by design. This release replaces it with a tag-based Identity system and a unified naming pattern engine that gives you full control over how every resource is named, from a single config file.
+- [Introducing the Standalone HTTP Server Package](/blog/introducing-httpserver-package.md): The HTTP server has always been one of the most commonly used parts of gosoline. Most services need a way to expose APIs, register routes, bind requests, return structured responses, and plug into the application lifecycle.
+- [Log Sampling in Go: Less Noise, More Debuggability](/blog/sampling-fingers-crossed-logging.md): High-traffic services have a logging problem: the more successful traffic you handle, the more you pay to store and query logs that rarely matter. But if you turn logging down, you lose the context you need when something does break.
+- [Fundamentals](/category/fundamentals.md): Learn the fundamental concepts and core principles of gosoline:
+- [Getting started](/category/getting-started.md): Here, you'll find tutorials to help you get started quickly with gosoline:
+- [How-to guides](/category/how-to-guides.md): Here, you'll learn how to do common tasks with gosoline:
+- [HTTP Server](/category/http-server.md): Learn how to build HTTP services with the gosoline httpserver package.
+- [Migrations](/category/migrations.md): Guides for migrating between gosoline versions:
+- [Reference](/category/reference.md): Here, you can look up implementation details about gosoline:
+- [Testing](/category/testing.md): Testing is an important responsibility for developing working code. With these tutorials, you'll write your first tests with gosoline:
+- [The Application](/fundamentals/application.md): Every gosoline application depends on these same three concerns. Configuration provides the values and settings an application needs. Logging makes its behavior visible during development and operation. Execution coordinates the runtime lifecycle of the application and its modules.
+- [Naming Patterns](/fundamentals/naming-patterns.md): Gosoline uses a unified, configuration-driven approach for naming infrastructure resources like SQS queues, SNS topics, DynamoDB tables, and more. This system ensures consistent, predictable resource names across your entire application ecosystem.
+- [Create a consumer](/getting-started/create-a-consumer.md): One of the primary use cases for gosoline is to create a message queue consumer. In this tutorial, you'll do just that!
+- [Create an application](/getting-started/create-an-application.md): For running a simple gosoline application we use the following 3 files:
+- [Test your consumer](/getting-started/testing/test-your-consumer.md): In this tutorial, you'll create an integration test for a message queue consumer that reads from an input and writes to an output.
+- [Working with Relational Databases](/how-to/databases-sql.md): The gosoline framework provides three layered packages for working with relational databases, each building on top of the previous one:
+- [sqlc - SQL Client](/how-to/databases-sql/sqlc.md): The sqlc package provides a fluent API for building and executing SQL queries against relational databases. It supports MySQL and PostgreSQL, and offers connection management, query building, and transaction handling.
+- [sqlh - SQL HTTP Handlers](/how-to/databases-sql/sqlh.md): The sqlh package exposes database entities as REST API endpoints. Built on top of sqlr and sqlc, it provides automatic CRUD handler generation, a transformer pattern for input/output mapping, repository customization hooks, and transaction middleware for wrapping HTTP requests in database transactions.
+- [sqlr - SQL Repository](/how-to/databases-sql/sqlr.md): The sqlr package provides a generic, type-safe repository layer built on top of sqlc. It offers CRUD operations, relationship management, eager loading via joins and preloads, and transaction support — all using Go generics for compile-time type safety.
+- [Add middleware](/how-to/http-server/add-middleware.md): The httpserver includes a built-in middleware chain and supports custom middleware at both the router and route-group level.
+- [Authenticate requests](/how-to/http-server/authentication.md): The github.com/gosoline-project/httpserver/auth package provides Gin-compatible middleware for common HTTP authentication patterns. You can attach auth middleware to the whole server, to a route group, or to selected routes.
+- [Build an HTTP service](/how-to/http-server/build-an-http-service.md): In this guide, you'll build a complete HTTP service from scratch. You'll start with the basics of defining routes, then level up to type-safe handlers with dependency injection, request binding, and structured responses.
+- [Concurrency and connection pressure](/how-to/http-server/concurrency-and-connection-pressure.md): The httpserver provides three complementary mechanisms to protect your service under load:
+- [Configure your server](/how-to/http-server/configure-your-server.md): The httpserver package provides flexible configuration options through YAML config files. All settings live under httpserver. where ` is the server name you pass to NewServer`.
+- [Real-world example](/how-to/http-server/real-world-example.md): This guide walks through how two production applications — flink-admin and lakehouse-admin — use the httpserver package. These patterns demonstrate best practices for structuring a real application.
+- [Serve a frontend](/how-to/http-server/serve-a-frontend.md): If you're building a single-page application (SPA), you can embed the frontend build into your Go binary and serve it directly from the httpserver.
+- [Stream with Server-Sent Events](/how-to/http-server/stream-with-sse.md): Server-Sent Events (SSE) let you push real-time updates from the server to the client over a long-lived HTTP connection. The httpserver package has built-in support for SSE through the SseWriter type.
+- [Notes on general Kafka usage](/how-to/kafka/general.md): In general, using Kafka with gosoline works like any other input/output type supported by the stream package.
+- [How to use the Kafka Schema Registry](/how-to/kafka/use-schema-registry.md): Gosoline provides the option to use the Kafka schema registry when reading from or writing to a Kafka topic.
+- [Load configurations](/how-to/load-configs.md): There are different ways to load configurations into your application:
+- [Implement a log handler](/how-to/logging/implement-a-log-handler.md): With the cfg and log packages, you can implement a handler and make it available via config.
+- [Use context with logs](/how-to/logging/log-context.md): The go Context carries data from the moment the server receives an inbound request to the moment the server makes an outbound request. This means you can use it to propagate data between services and processes. With gosoline, you can use log functions to store data from the request lifecycle in the Context and attach that data to logs to provide more details.
+- [Sampling & fingers-crossed](/how-to/logging/sampling-and-fingers-crossed.md): Gosoline supports log sampling and "fingers-crossed" logging to help you manage log volume without losing critical debug information when errors occur.
+- [Use loggers](/how-to/logging/use-loggers.md): With gosoline, there are multiple ways to configure and use a logger.
+- [Use sampling](/how-to/sampling/use-sampling.md): The smpl package helps you make a consistent sampling decision (sampled vs. not sampled) and store it in a context.Context. Other gosoline packages can then use that decision to change behavior (e.g. reduce log volume).
+- [Build a CLI tool](/how-to/use-cli.md): The pkg/cli package lets you build multi-command CLI tools that run inside the gosoline application lifecycle — giving each command access to the same config, logger, and kernel modules as any other gosoline application.
+- [Implement health checks](/how-to/write-health-checks.md): You can check the health of a running gosoline application.
+- [Migrating to Identity and Naming Patterns](/migrations/app-identity-and-naming-patterns.md): This guide details how to migrate your gosoline application to the new Identity system and dynamic resource naming.
+- [Migrating to the Standalone HTTP Server Package](/migrations/httpserver-package.md): This guide explains how to migrate from the old github.com/justtrackio/gosoline/pkg/httpserver package directly to the standalone github.com/gosoline-project/httpserver module at v0.5.6.
+- [Naming patterns](/reference/naming-patterns.md): Gosoline uses naming patterns to generate consistent names for resources (SQS queues, SNS topics, DynamoDB tables, Kafka topics, Redis keys, metric namespaces, tracing service names, ...).
+- [cfg package](/reference/package-cfg.md): With the cfg package, you can configure and use configurations in your gosoline project.
+- [Package cloud/aws](/reference/package-cloud_aws.md): The cloud/aws package
+- [dbx package](/reference/package-dbx.md): The dbx package provides a fluent API to build SQL queries.
+- [Gosoline Fixture Loader](/reference/package-fixtures.md): While using gosoline you are able to define fixtures directly in code.
+- [httpserver package](/reference/package-httpserver.md): Package httpserver provides a modular HTTP server built on Gin and the gosoline kernel. It offers structured request binding, typed responses, middleware, SSE streaming, and dependency-injected handler registration.
+- [log package](/reference/package-log.md): The gosoline logger is based upon a simple interface that uses handlers internally to enable fully customizable log handling.
+- [Package test](/reference/package-test.md): This package acts as a wrapper over Golang's testing module.
+- [Overview](/index.md): Gosoline is a Golang-based application framework specialized for building microservices in the cloud. It provides tools for handling most of the common challenges like configuration, logging, structured code execution, handling http requests, asynchronous message processing, writing integration tests and much more.

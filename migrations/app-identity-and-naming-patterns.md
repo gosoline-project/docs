@@ -1,0 +1,1016 @@
+# Migrating to Identity and Naming Patterns
+
+This guide details how to migrate your gosoline application to the new `Identity` system and dynamic resource naming.
+
+## 1. Update Configuration[​](#1-update-configuration "Direct link to 1. Update Configuration")
+
+The flat application hierarchy (`project`, `family`, `group`) has been replaced with a flexible tagging system. Move these keys into the `app.tags` structure.
+
+### Basic Identity[​](#basic-identity "Direct link to Basic Identity")
+
+**Old `config.yml`:**
+
+```
+env: production
+
+app_project: justtrack
+
+app_family: platform
+
+app_group: core
+
+app_name: my-service
+```
+
+**New `config.yml`:**
+
+```
+app:
+
+  env: production
+
+  name: my-service
+
+  namespace: "{app.tags.project}.{app.env}.{app.tags.family}.{app.tags.group}"
+
+  tags:
+
+    project: justtrack
+
+    family: platform
+
+    group: core
+```
+
+info
+
+The `app.namespace` configuration is optional but recommended. It defines a reusable namespace pattern that can be referenced as `{app.namespace}` in all resource naming patterns. See the [Namespace Pattern](#namespace-pattern) section for details.
+
+### Environment Variables[​](#environment-variables "Direct link to Environment Variables")
+
+If you configure your app via environment variables, update the keys:
+
+| Old Variable       | New Variable                |
+| ------------------ | --------------------------- |
+| `GOSO_APP_PROJECT` | `GOSO_APP_TAGS_PROJECT`     |
+| `GOSO_APP_FAMILY`  | `GOSO_APP_TAGS_FAMILY`      |
+| `GOSO_APP_GROUP`   | `GOSO_APP_TAGS_GROUP`       |
+| `GOSO_APP_NAME`    | `GOSO_APP_NAME` (no change) |
+| `GOSO_ENV`         | `GOSO_APP_ENV`              |
+| N/A (new feature)  | `GOSO_APP_NAMESPACE`        |
+
+## 2. Update Resource Naming Patterns[​](#2-update-resource-naming-patterns "Direct link to 2. Update Resource Naming Patterns")
+
+warning
+
+The default naming patterns for most services have changed to use `{app.namespace}` instead of explicit tag placeholders. If you don't configure `app.namespace`, your resource names will be missing the project/family/group prefix. For backward compatibility, configure:
+
+```
+app:
+
+  namespace: "{app.tags.project}.{app.env}.{app.tags.family}.{app.tags.group}"
+```
+
+### Namespace Pattern[​](#namespace-pattern "Direct link to Namespace Pattern")
+
+A new `app.namespace` configuration option allows you to define a reusable namespace pattern referenced in all resource naming patterns.
+
+* **Config Key:** `app.namespace`
+* **Format:** A pattern using dots (`.`) as delimiters, with standard `{app.*}` and `{app.tags.*}` placeholders
+* **Usage:** Reference as `{app.namespace}` in any resource naming pattern
+
+**Example:**
+
+```
+app:
+
+  namespace: "{app.tags.project}.{app.env}.{app.tags.family}.{app.tags.group}"
+
+  tags:
+
+    project: justtrack
+
+    family: platform
+
+    group: core
+
+  env: production
+
+
+
+cloud:
+
+  aws:
+
+    sqs:
+
+      clients:
+
+        default:
+
+          naming:
+
+            # {app.namespace} expands to: justtrack-production-platform-core
+
+            queue_pattern: "{app.namespace}-{queueId}"
+```
+
+**Benefits:**
+
+* Define your naming hierarchy once and reuse it everywhere
+* Simplify resource patterns by using `{app.namespace}` instead of repeating the same placeholders
+* Easy to change your naming convention across all resources in one place
+
+When expanded, dots in the namespace pattern are replaced with the service-specific delimiter (usually `-`). If no namespace is configured, `{app.namespace}` expands to an empty string.
+
+### Delimiter Configuration[​](#delimiter-configuration "Direct link to Delimiter Configuration")
+
+Each resource naming pattern has a paired **delimiter** configuration that controls how `{app.namespace}` is expanded:
+
+* Most services use `identity.Format()` with a configurable delimiter (default is usually `-`)
+* The delimiter replaces dots in the `{app.namespace}` pattern during expansion
+* Example: namespace `{app.tags.project}.{app.env}` with delimiter `-` becomes `myproject-prod`
+* Each service's delimiter can be customized via its `naming.delimiter` configuration key
+
+### Placeholder Mapping[​](#placeholder-mapping "Direct link to Placeholder Mapping")
+
+| Old Placeholder | New Placeholder      | Notes                                          |
+| --------------- | -------------------- | ---------------------------------------------- |
+| `{project}`     | `{app.tags.project}` | Requires `project` tag                         |
+| `{family}`      | `{app.tags.family}`  | Requires `family` tag                          |
+| `{group}`       | `{app.tags.group}`   | Requires `group` tag                           |
+| `{env}`         | `{app.env}`          | Built-in field                                 |
+| `{app}`         | `{app.name}`         | Built-in field                                 |
+| `{modelId}`     | **REMOVED**          | See [DynamoDB](#dynamodb-table-naming) section |
+
+### Example: SQS Pattern Update[​](#example-sqs-pattern-update "Direct link to Example: SQS Pattern Update")
+
+**Old:**
+
+```
+cloud:
+
+  aws:
+
+    sqs:
+
+      clients:
+
+        default:
+
+          naming:
+
+            pattern: "{project}-{env}-{queueId}"
+```
+
+**New:**
+
+```
+cloud:
+
+  aws:
+
+    sqs:
+
+      clients:
+
+        default:
+
+          naming:
+
+            queue_pattern: "{app.tags.project}-{app.env}-{queueId}"
+```
+
+### DynamoDB Table Naming[​](#dynamodb-table-naming "Direct link to DynamoDB Table Naming")
+
+For DynamoDB tables, the naming logic has been aligned with other AWS resources.
+
+* **Placeholder Change:** Use `{name}` instead of `{modelId}` to refer to the model name.
+* **No Auto-Append:** Unlike the canonical Model ID, the table name pattern **does not** automatically append the model name. You must explicitly include `{name}` in your pattern.
+
+|     | Pattern                               |
+| --- | ------------------------------------- |
+| Old | `{project}-{env}-{modelId}`           |
+| New | `{app.tags.project}-{app.env}-{name}` |
+
+**Steps:**
+
+1. Replace `{modelId}` with `{name}`.
+2. Ensure `{name}` is present in your pattern.
+
+## 3. Update Go Code[​](#3-update-go-code "Direct link to 3. Update Go Code")
+
+### `cfg.AppId` is now `cfg.Identity`[​](#cfgappid-is-now-cfgidentity "Direct link to cfgappid-is-now-cfgidentity")
+
+The `AppId` struct and its getters have been removed.
+
+```
+// OLD
+
+appId, _ := cfg.GetAppIdFromConfig(config)
+
+fmt.Println(appId.Project)
+
+
+
+// NEW
+
+identity, _ := cfg.GetAppIdentity(config)
+
+fmt.Println(identity.Tags["project"])
+```
+
+### `mdl.ModelId` Refactoring[​](#mdlmodelid-refactoring "Direct link to mdlmodelid-refactoring")
+
+The `mdl.ModelId` struct no longer has explicit hierarchy fields.
+
+```
+// OLD
+
+modelId := mdl.ModelId{
+
+    Project: "my-project",
+
+    Family:  "my-family",
+
+    Name:    "my-model",
+
+}
+
+
+
+// NEW
+
+modelId := mdl.ModelId{
+
+    Name:        "my-model",
+
+    Application: "my-app",
+
+    Tags: map[string]string{
+
+        "project": "my-project",
+
+        "family":  "my-family",
+
+    },
+
+}
+```
+
+### ModelId Domain Pattern[​](#modelid-domain-pattern "Direct link to ModelId Domain Pattern")
+
+The string representation of a `ModelId` (used for message routing attributes, etc.) is now configurable via `app.model_id.domain_pattern`.
+
+* **Config Key:** `app.model_id.domain_pattern`
+* **Recommended Value:** `{app.tags.project}.{app.env}.{app.tags.family}.{app.tags.group}`
+
+If this pattern is missing, calling `modelId.String()` will return an error.
+
+caution
+
+1. The `{modelId}` placeholder is **NOT** used in this pattern. The model name is automatically appended as the last dot-separated segment.
+2. Patterns may freely mix placeholders with static text and use any delimiter between placeholders. Only `{app.env}`, `{app.name}`, and `{app.tags.<key>}` placeholders are allowed.
+3. When parsing, each placeholder matches non-dot characters (`[^.]+`), and the model name is everything after the final dot.
+
+**Valid:** `{app.tags.project}.{app.env}`
+
+**Valid:** `{app.tags.project}-{app.env}` (non-dot delimiters allowed)
+
+**Valid:** `prefix-{app.env}` (static text allowed)
+
+**Example:**
+
+* Pattern: `{app.tags.project}.{app.env}`
+* Model Name: `myModel`
+* Result: `myProject.production.myModel`
+
+### `pkg/parquet` Removed[​](#pkgparquet-removed "Direct link to pkgparquet-removed")
+
+The `pkg/parquet` package has been deleted. Remove any imports or usage of this package from your codebase.
+
+## 4. Redis Key Prefixing[​](#4-redis-key-prefixing "Direct link to 4. Redis Key Prefixing")
+
+A new feature allows automatic key prefixing for Redis. If you were manually prefixing keys in your application code, you can now move this to configuration:
+
+```
+redis:
+
+  clients:
+
+    default:
+
+      naming:
+
+        key_pattern: "{app.tags.project}:{app.name}:{key}"
+```
+
+## 5. Stream Input/Output Configuration[​](#5-stream-inputoutput-configuration "Direct link to 5. Stream Input/Output Configuration")
+
+The configuration for stream inputs and outputs has been updated to use the new `Identity` structure.
+
+### General Change[​](#general-change "Direct link to General Change")
+
+For most outputs (Kafka, Kinesis, SNS, SQS) and inputs (SQS, SNS, Kafka, Kinesis), the old flat fields `project`, `family`, `group`, and `application` have been replaced with flat `ResourceIdentifier` fields: `application`, `env`, and `tags`.
+
+**Old output config:**
+
+```
+stream:
+
+  output:
+
+    my-output:
+
+      type: sqs
+
+      project: my-project
+
+      family: my-family
+
+      group: my-group
+
+      queue_id: my-queue
+```
+
+**New output config:**
+
+```
+stream:
+
+  output:
+
+    my-output:
+
+      type: sqs
+
+      application: my-app       # optional, defaults to app.name
+
+      tags:                     # optional, merged with app.tags
+
+        project: my-project
+
+        family: my-family
+
+        group: my-group
+
+      queue_id: my-queue
+```
+
+### SQS Input[​](#sqs-input "Direct link to SQS Input")
+
+For SQS inputs, the `target_identity` and `target_queue_id` fields have been replaced with flat `ResourceIdentifier` fields and `queue_id`.
+
+**Old:**
+
+```
+stream:
+
+  input:
+
+    my-input:
+
+      type: sqs
+
+      target_family: my-family
+
+      target_group: my-group
+
+      target_queue_id: my-queue
+```
+
+**New:**
+
+```
+stream:
+
+  input:
+
+    my-input:
+
+      type: sqs
+
+      application: target-app   # optional, defaults to app.name
+
+      tags:                     # optional, merged with app.tags
+
+        family: my-family
+
+        group: my-group
+
+      queue_id: my-queue
+```
+
+### SNS Input[​](#sns-input "Direct link to SNS Input")
+
+For SNS inputs, the consumer identity and target topic identities have been updated.
+
+**Old:**
+
+```
+stream:
+
+  input:
+
+    my-sns-input:
+
+      type: sns
+
+      id: my-consumer
+
+      family: my-family
+
+      group: my-group
+
+      targets:
+
+        - family: target-family
+
+          group: target-group
+
+          topic_id: target-topic
+```
+
+**New:**
+
+```
+stream:
+
+  input:
+
+    my-sns-input:
+
+      type: sns
+
+      id: my-consumer
+
+      tags:                     # optional — identity of the SQS queue used for fan-out
+
+        family: my-family
+
+        group: my-group
+
+      targets:
+
+        - application: target-app   # optional — identity of the SNS topic to subscribe to
+
+          tags:
+
+            family: target-family
+
+            group: target-group
+
+          topic_id: target-topic
+```
+
+### Kafka and Kinesis Inputs[​](#kafka-and-kinesis-inputs "Direct link to Kafka and Kinesis Inputs")
+
+Kafka and Kinesis inputs now also use flat `ResourceIdentifier` fields:
+
+**Old (Kafka input):**
+
+```
+stream:
+
+  input:
+
+    my-kafka-input:
+
+      type: kafka
+
+      env: production
+
+      name: my-app
+
+      tags:
+
+        project: my-project
+
+        family: my-family
+
+        group: my-group
+
+      topic_id: my-topic
+```
+
+**New (Kafka input):**
+
+```
+stream:
+
+  input:
+
+    my-kafka-input:
+
+      type: kafka
+
+      application: my-app       # optional, defaults to app.name
+
+      tags:                     # optional, merged with app.tags
+
+        project: my-project
+
+        family: my-family
+
+        group: my-group
+
+      topic_id: my-topic
+```
+
+The same pattern applies to Kinesis inputs and outputs.
+
+note
+
+Redis list inputs and outputs do **not** use `ResourceIdentifier`. They only require `server_name`, `key`, and transport-specific settings. The Redis client's naming configuration handles key and address naming independently.
+
+### mdlsub Publisher Configuration[​](#mdlsub-publisher-configuration "Direct link to mdlsub Publisher Configuration")
+
+The `PublisherSettings` struct has changed: `mdl.ModelId` is now embedded directly (anonymous field) instead of being a named field with the config tag `model_id`. All ModelId-related configuration keys are now at the same level as the publisher key — no `model_id` nesting.
+
+**Old:**
+
+```
+mdlsub:
+
+  publishers:
+
+    my-model:
+
+      name: my-model
+
+      project: my-project
+
+      family: my-family
+
+      group: my-group
+
+      output_type: sns
+```
+
+**New:**
+
+```
+mdlsub:
+
+  publishers:
+
+    my-model:
+
+      name: my-model          # optional: defaults to the publisher map key
+
+      tags:
+
+        project: my-project
+
+        family: my-family
+
+        group: my-group
+
+      output_type: sns
+```
+
+**In Go code:**
+
+```
+// OLD
+
+settings := &mdlsub.PublisherSettings{
+
+    ModelId: mdl.ModelId{
+
+        Project: "my-project",
+
+        Name:    "my-model",
+
+    },
+
+    OutputType: "sns",
+
+}
+
+
+
+// NEW
+
+settings := &mdlsub.PublisherSettings{
+
+    ModelId: mdl.ModelId{
+
+        Name:        "my-model",
+
+        Application: "my-app",
+
+        Tags: map[string]string{
+
+            "project": "my-project",
+
+        },
+
+    },
+
+    OutputType: "sns",
+
+}
+```
+
+## 6. Reference: Naming Patterns per Service[​](#6-reference-naming-patterns-per-service "Direct link to 6. Reference: Naming Patterns per Service")
+
+This section lists the configuration keys, their old and new defaults, and the corresponding environment variables.
+
+### SQS Queue Naming[​](#sqs-queue-naming "Direct link to SQS Queue Naming")
+
+|                       | Value                                                     |
+| --------------------- | --------------------------------------------------------- |
+| **Config Key**        | `cloud.aws.sqs.clients.default.naming.queue_pattern`      |
+| **Old Default**       | `{project}-{env}-{family}-{group}-{queueId}`              |
+| **New Default**       | `{app.namespace}-{queueId}`                               |
+| **Env Var**           | `GOSO_CLOUD_AWS_SQS_CLIENTS_DEFAULT_NAMING_QUEUE_PATTERN` |
+| **Delimiter Config**  | `cloud.aws.sqs.clients.default.naming.queue_delimiter`    |
+| **Delimiter Default** | `-`                                                       |
+
+### SNS Topic Naming[​](#sns-topic-naming "Direct link to SNS Topic Naming")
+
+|                       | Value                                                     |
+| --------------------- | --------------------------------------------------------- |
+| **Config Key**        | `cloud.aws.sns.clients.default.naming.topic_pattern`      |
+| **Old Default**       | `{project}-{env}-{family}-{group}-{topicId}`              |
+| **New Default**       | `{app.namespace}-{topicId}`                               |
+| **Env Var**           | `GOSO_CLOUD_AWS_SNS_CLIENTS_DEFAULT_NAMING_TOPIC_PATTERN` |
+| **Delimiter Config**  | `cloud.aws.sns.clients.default.naming.topic_delimiter`    |
+| **Delimiter Default** | `-`                                                       |
+
+### Kinesis Stream Naming[​](#kinesis-stream-naming "Direct link to Kinesis Stream Naming")
+
+|                       | Value                                                          |
+| --------------------- | -------------------------------------------------------------- |
+| **Config Key**        | `cloud.aws.kinesis.clients.default.naming.stream_pattern`      |
+| **Old Default**       | `{project}-{env}-{family}-{group}-{streamName}`                |
+| **New Default**       | `{app.namespace}-{streamName}`                                 |
+| **Env Var**           | `GOSO_CLOUD_AWS_KINESIS_CLIENTS_DEFAULT_NAMING_STREAM_PATTERN` |
+| **Delimiter Config**  | `cloud.aws.kinesis.clients.default.naming.stream_delimiter`    |
+| **Delimiter Default** | `-`                                                            |
+
+#### Kinesis Metadata Table[​](#kinesis-metadata-table "Direct link to Kinesis Metadata Table")
+
+|                       | Value                                                               |
+| --------------------- | ------------------------------------------------------------------- |
+| **Config Key**        | `cloud.aws.kinesis.clients.default.naming.metadata_table_pattern`   |
+| **Old Default**       | `{app.env}-kinsumer-metadata`                                       |
+| **New Default**       | `{app.namespace}-kinsumer-metadata`                                 |
+| **Delimiter Config**  | `cloud.aws.kinesis.clients.default.naming.metadata_table_delimiter` |
+| **Delimiter Default** | `-`                                                                 |
+
+#### Kinesis Metadata Namespace[​](#kinesis-metadata-namespace "Direct link to Kinesis Metadata Namespace")
+
+|                       | Value                                                                   |
+| --------------------- | ----------------------------------------------------------------------- |
+| **Config Key**        | `cloud.aws.kinesis.clients.default.naming.metadata_namespace_pattern`   |
+| **Old Default**       | `{project}-{env}-{family}-{group}-{app}`                                |
+| **New Default**       | `{app.namespace}-{app.name}`                                            |
+| **Delimiter Config**  | `cloud.aws.kinesis.clients.default.naming.metadata_namespace_delimiter` |
+| **Delimiter Default** | `-`                                                                     |
+
+### Kafka Naming[​](#kafka-naming "Direct link to Kafka Naming")
+
+**Topic Pattern:**
+
+|                       | Value                                        |
+| --------------------- | -------------------------------------------- |
+| **Config Key**        | `kafka.naming.topic_pattern`                 |
+| **Old Default**       | `{project}-{env}-{family}-{group}-{topicId}` |
+| **New Default**       | `{app.namespace}-{topicId}`                  |
+| **Env Var**           | `GOSO_KAFKA_NAMING_TOPIC_PATTERN`            |
+| **Delimiter Config**  | `kafka.naming.topic_delimiter`               |
+| **Delimiter Default** | `-`                                          |
+
+**Consumer Group Pattern:**
+
+|                       | Value                                              |
+| --------------------- | -------------------------------------------------- |
+| **Config Key**        | `kafka.naming.group_pattern`                       |
+| **Old Default**       | `{project}-{env}-{family}-{group}-{app}-{groupId}` |
+| **New Default**       | `{app.namespace}-{app.name}-{groupId}`             |
+| **Env Var**           | `GOSO_KAFKA_NAMING_GROUP_PATTERN`                  |
+| **Delimiter Config**  | `kafka.naming.group_delimiter`                     |
+| **Delimiter Default** | `-`                                                |
+
+### DynamoDB Table Naming[​](#dynamodb-table-naming-1 "Direct link to DynamoDB Table Naming")
+
+|                       | Value                                                          |
+| --------------------- | -------------------------------------------------------------- |
+| **Config Key**        | `cloud.aws.dynamodb.clients.default.naming.table_pattern`      |
+| **Old Default**       | `{project}-{env}-{family}-{group}-{modelId}`                   |
+| **New Default**       | `{app.namespace}-{name}`                                       |
+| **Env Var**           | `GOSO_CLOUD_AWS_DYNAMODB_CLIENTS_DEFAULT_NAMING_TABLE_PATTERN` |
+| **Delimiter Config**  | `cloud.aws.dynamodb.clients.default.naming.table_delimiter`    |
+| **Delimiter Default** | `-`                                                            |
+
+### DynamoDB Leader Election Table[​](#dynamodb-leader-election-table "Direct link to DynamoDB Leader Election Table")
+
+|                       | Value                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| **Config Key**        | `conc.leader_election.<name>.naming.table_pattern` (renamed from `naming.pattern`) |
+| **Old Default**       | `{project}-{env}-{family}-leader-elections`                                        |
+| **New Default**       | `{app.tags.project}-{app.env}-{app.tags.family}-leader-elections`                  |
+| **Delimiter Config**  | `conc.leader_election.<name>.naming.table_delimiter`                               |
+| **Delimiter Default** | `-`                                                                                |
+
+**Steps:**
+
+1. Rename `naming.pattern` to `naming.table_pattern` in your config.
+2. Replace old-style placeholders with new-style ones.
+3. If you need a custom delimiter, set `naming.table_delimiter`.
+
+### Metric Calculator DynamoDB Table[​](#metric-calculator-dynamodb-table "Direct link to Metric Calculator DynamoDB Table")
+
+|                 | Value                                                                             |
+| --------------- | --------------------------------------------------------------------------------- |
+| **Config Key**  | `metric.calculator.dynamodb.naming.table_pattern` (renamed from `naming.pattern`) |
+| **Old Default** | `{project}-{env}-{family}`                                                        |
+| **New Default** | `{app.env}-metric-calculator-leaders`                                             |
+
+warning
+
+The default pattern has changed significantly. It no longer uses `{project}` or `{family}` and now includes a descriptive suffix. If you relied on the old default, explicitly set the pattern:
+
+```
+metric:
+
+  calculator:
+
+    dynamodb:
+
+      naming:
+
+        table_pattern: "{app.tags.project}-{app.env}-{app.tags.family}-metric-calculator-leaders"
+```
+
+### CloudWatch Namespace[​](#cloudwatch-namespace "Direct link to CloudWatch Namespace")
+
+|                       | Value                                                          |
+| --------------------- | -------------------------------------------------------------- |
+| **Config Key**        | `metric.writer_settings.cloudwatch.naming.namespace_pattern`   |
+| **Old Default**       | `{project}/{env}/{family}/{group}-{app}`                       |
+| **New Default**       | `{app.namespace}-{app.name}`                                   |
+| **Delimiter Config**  | `metric.writer_settings.cloudwatch.naming.namespace_delimiter` |
+| **Delimiter Default** | `/`                                                            |
+
+CloudWatch uses `/` as the delimiter, creating hierarchical namespaces in AWS Console.
+
+### Prometheus Namespace[​](#prometheus-namespace "Direct link to Prometheus Namespace")
+
+|                       | Value                                                          |
+| --------------------- | -------------------------------------------------------------- |
+| **Config Key**        | `metric.writer_settings.prometheus.naming.namespace_pattern`   |
+| **Old Default**       | `{project}-{env}-{family}-{group}-{app}`                       |
+| **New Default**       | `{app.namespace}-{app.name}`                                   |
+| **Delimiter Config**  | `metric.writer_settings.prometheus.naming.namespace_delimiter` |
+| **Delimiter Default** | `_` (underscores, following Prometheus naming conventions)     |
+
+### Redis Key Prefix[​](#redis-key-prefix "Direct link to Redis Key Prefix")
+
+|                       | Value                                        |
+| --------------------- | -------------------------------------------- |
+| **Config Key**        | `redis.clients.default.naming.key_pattern`   |
+| **Old Default**       | N/A (feature did not exist)                  |
+| **New Default**       | `{key}` (no prefix)                          |
+| **Delimiter Config**  | `redis.clients.default.naming.key_delimiter` |
+| **Delimiter Default** | `-`                                          |
+
+### KvStore Redis Key Pattern[​](#kvstore-redis-key-pattern "Direct link to KvStore Redis Key Pattern")
+
+|                 | Value                                                                         |
+| --------------- | ----------------------------------------------------------------------------- |
+| **Config Key**  | `kvstore.<name>.redis.key_pattern` or `kvstore.default.redis.key_pattern`     |
+| **Old Default** | `{app.tags.project}-{app.tags.family}-{app.tags.group}-kvstore-{store}-{key}` |
+| **New Default** | `{app.namespace}-kvstore-{store}-{key}`                                       |
+
+The `{store}` placeholder is resolved by the kvstore config postprocessor before the pattern is passed to the underlying Redis client.
+
+### Tracing Service Name[​](#tracing-service-name "Direct link to Tracing Service Name")
+
+|                       | Value                                    |
+| --------------------- | ---------------------------------------- |
+| **Config Key**        | `tracing.naming.pattern`                 |
+| **Old Default**       | `{project}-{env}-{family}-{group}-{app}` |
+| **New Default**       | `{app.namespace}-{app.name}`             |
+| **Delimiter Config**  | `tracing.naming.delimiter`               |
+| **Delimiter Default** | `-`                                      |
+
+### Blob / S3 Bucket Patterns[​](#blob--s3-bucket-patterns "Direct link to Blob / S3 Bucket Patterns")
+
+The `blob` package now delegates bucket naming to the `cloud.aws.s3` package. The configuration keys `blob.<store_name>.bucket_pattern` and `blob.default.bucket_pattern` have been **removed**.
+
+|                       | Value                                                      |
+| --------------------- | ---------------------------------------------------------- |
+| **Config Key**        | `cloud.aws.s3.clients.<client_name>.naming.bucket_pattern` |
+| **Old Default**       | `{app.tags.project}-{app.env}-{app.tags.family}`           |
+| **New Default**       | `{app.namespace}`                                          |
+| **New Placeholder**   | `{bucketId}` (resolves to the blob store name)             |
+| **Delimiter Config**  | `cloud.aws.s3.clients.<client_name>.naming.delimiter`      |
+| **Delimiter Default** | `-`                                                        |
+
+**Migration:**
+
+1. Move any custom bucket patterns to the new S3 naming config key.
+2. Configure `app.namespace` to match your previous naming structure:
+
+```
+app:
+
+  namespace: "{app.tags.project}.{app.env}.{app.tags.family}"
+
+
+
+cloud:
+
+  aws:
+
+    s3:
+
+      clients:
+
+        default:
+
+          naming:
+
+            # Option 1: Use namespace (results in same pattern as before)
+
+            bucket_pattern: "{app.namespace}-data"
+
+
+
+            # Option 2: Define pattern explicitly
+
+            bucket_pattern: "{app.tags.project}-{app.env}-data"
+```
+
+## 7. `application.Default()` Slimmed Down[​](#7-applicationdefault-slimmed-down "Direct link to 7-applicationdefault-slimmed-down")
+
+warning
+
+`application.Default()` has been reduced from \~22 default options to 7 basic options. Applications relying on the old defaults will silently lose functionality unless the removed options are added back explicitly.
+
+### What Changed[​](#what-changed "Direct link to What Changed")
+
+The new `Default()` only includes these options:
+
+```
+application.Default(
+
+    // These 7 options are still included by default:
+
+    // - WithConfigDebug
+
+    // - WithConfigEnvKeyReplacer(cfg.DefaultEnvKeyReplacer)
+
+    // - WithConfigSanitizers(cfg.TimeSanitizer)
+
+    // - WithLoggerApplicationName
+
+    // - WithLoggerContextFieldsMessageEncoder
+
+    // - WithLoggerContextFieldsResolver(log.ContextFieldsResolver)
+
+    // - WithLoggerHandlersFromConfig
+
+)
+```
+
+### Removed Options[​](#removed-options "Direct link to Removed Options")
+
+The following options were removed from `Default()` and must now be added explicitly if needed:
+
+| Removed Option                                                   | Capability Lost                                     |
+| ---------------------------------------------------------------- | --------------------------------------------------- |
+| `WithConfigFile("./config.dist.yml", "yml")`                     | Automatic loading of `config.dist.yml`              |
+| `WithConfigFileFlag`                                             | `--config` CLI flag for specifying config files     |
+| `WithHttpHealthCheck`                                            | HTTP health check endpoint                          |
+| `WithMetadataServer`                                             | HTTP server exposing build info and module metadata |
+| `WithMetricsCalculatorModule`                                    | Metrics calculator module                           |
+| `WithLoggerApplicationTag("group")`                              | `group` tag added to all log entries                |
+| `WithLoggerMetricHandler`                                        | Logger metric handler (counts log entries by level) |
+| `WithLoggerSentryHandler(...)`                                   | Sentry error reporting integration                  |
+| `WithMetrics`                                                    | Metrics collection and export                       |
+| `WithProducerDaemon`                                             | Background producer daemon for stream batching      |
+| `WithTaskRunner`                                                 | Task runner module                                  |
+| `WithProfiling`                                                  | Profiling module (pprof)                            |
+| `WithTracing`                                                    | Distributed tracing (X-Ray / OpenTelemetry)         |
+| `WithUTCClock(true)`                                             | UTC clock as default time source                    |
+| `WithMiddlewareFactory(reslife.LifeCycleManagerMiddleware, ...)` | Resource lifecycle management middleware            |
+
+### How to Migrate[​](#how-to-migrate "Direct link to How to Migrate")
+
+Add the options your application needs back explicitly. For a full backward-compatible setup that restores the old `Default()` behavior:
+
+```
+import (
+
+    "github.com/justtrackio/gosoline/pkg/application"
+
+    "github.com/justtrackio/gosoline/pkg/kernel"
+
+    "github.com/justtrackio/gosoline/pkg/log"
+
+    "github.com/justtrackio/gosoline/pkg/reslife"
+
+)
+
+
+
+func main() {
+
+    application.Run(
+
+        // Config
+
+        application.WithConfigFile("./config.dist.yml", "yml"),
+
+        application.WithConfigFileFlag,
+
+
+
+        // Health & metadata
+
+        application.WithHttpHealthCheck,
+
+        application.WithMetadataServer,
+
+
+
+        // Logging
+
+        application.WithLoggerApplicationTag("group"),
+
+        application.WithLoggerMetricHandler,
+
+        application.WithLoggerSentryHandler(log.SentryContextConfigProvider, log.SentryContextEcsMetadataProvider),
+
+
+
+        // Metrics & observability
+
+        application.WithMetrics,
+
+        application.WithMetricsCalculatorModule,
+
+        application.WithTracing,
+
+        application.WithProfiling,
+
+
+
+        // Runtime
+
+        application.WithProducerDaemon,
+
+        application.WithTaskRunner,
+
+        application.WithUTCClock(true),
+
+        application.WithMiddlewareFactory(reslife.LifeCycleManagerMiddleware, kernel.PositionBeginning),
+
+
+
+        // Your modules
+
+        application.WithModuleFactory("my-module", NewMyModule),
+
+    )
+
+}
+```
+
+caution
+
+At a minimum, most applications will need to add back `WithConfigFile` since without it gosoline will not load any configuration file. If your application previously relied on the `--config` flag, you must also add `WithConfigFileFlag`.
+
+## Quick Start: Minimal Backward-Compatible Configuration[​](#quick-start-minimal-backward-compatible-configuration "Direct link to Quick Start: Minimal Backward-Compatible Configuration")
+
+If you want the fastest migration path with minimal risk, add this to your configuration to preserve existing resource names:
+
+```
+app:
+
+  env: production              # was: env
+
+  name: my-service             # was: app_name
+
+  namespace: "{app.tags.project}.{app.env}.{app.tags.family}.{app.tags.group}"
+
+  tags:
+
+    project: justtrack         # was: app_project
+
+    family: platform           # was: app_family
+
+    group: core                # was: app_group
+
+
+
+  model_id:
+
+    domain_pattern: "{app.tags.project}.{app.env}.{app.tags.family}.{app.tags.group}"
+```
+
+This configuration ensures all resource names resolve identically to the old defaults while using the new configuration structure.
