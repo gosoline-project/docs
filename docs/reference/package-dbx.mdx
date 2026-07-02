@@ -19,7 +19,7 @@ type YourModel struct {
 }
 ```
 
-### [NewClient()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)
+### [NewClient()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)
 
 #### Usage
 
@@ -38,7 +38,7 @@ The `table` argument is the name of the database table.
 
 The dbx package provides query builders for SELECT, INSERT, UPDATE, DELETE, and GET statements.
 
-### [Get()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)
+### [Get()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)
 
 #### Usage
 
@@ -90,7 +90,7 @@ result, err := client.Get().
     Exec(ctx)
 ```
 
-### [Select()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)
+### [Select()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)
 
 #### Usage
 
@@ -115,7 +115,7 @@ results, err := client.Select().Where(YourModel{Id: 1}).Exec(ctx)
 SELECT id, name FROM your_table WHERE id = 1
 ```
 
-### [Insert()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)
+### [Insert()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)
 
 #### Usage
 
@@ -142,7 +142,7 @@ INSERT INTO your_table (id,name) VALUES (1,'test1'), (2,'test2');
 
 Creates a new INSERT query builder. You need to provide the model with the values to insert. You can also provide multiple models to insert multiple rows at once. The `Exec` method executes the query.
 
-### [Replace()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)
+### [Replace()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)
 
 #### Usage
 
@@ -157,7 +157,7 @@ REPLACE INTO your_table (id,name) VALUES (1,'test')
 
 Creates a new REPLACE query builder. You need to provide the model with the values to insert. The `Exec` method executes the query.
 
-### [Update()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)
+### [Update()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)
 
 #### Usage
 
@@ -181,7 +181,7 @@ _, err := client.Update(YourModel{Name: "new_name"}).Where(dbx.Eq{"id": 1}).Exec
 UPDATE your_table SET name = 'new_name' WHERE id = 1
 ```
 
-### [Delete()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)
+### [Delete()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)
 
 #### Usage
 
@@ -198,7 +198,7 @@ Creates a new DELETE query builder. You can use the `Where` method to add condit
 
 ## Error Handling
 
-### [ErrNotFound](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)
+### [ErrNotFound](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)
 
 The `dbx.ErrNotFound` error is returned by the `Get()` method when no rows match the query. You can use `errors.Is()` to check for this error:
 
@@ -219,7 +219,7 @@ if err != nil {
 
 The `Select` and `Get` builders provide the following methods to build complex queries. Note that `Get` automatically adds `LIMIT 2` to detect multiple results.
 
-### [Distinct()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)
+### [Distinct()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)
 
 Adds a `DISTINCT` clause to the query.
 
@@ -230,7 +230,7 @@ results, err := client.Select().Distinct().Exec(ctx)
 SELECT DISTINCT id, name FROM your_table
 ```
 
-### [Join()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)
+### [Join()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)
 
 Adds a `JOIN` clause to the query.
 
@@ -243,7 +243,7 @@ SELECT id, name FROM your_table JOIN other_table ON other_table.id = your_table.
 
 You can also use `LeftJoin`, `RightJoin`, `InnerJoin` and `CrossJoin`.
 
-### [GroupBy()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)
+### [GroupBy()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)
 
 Adds a `GROUP BY` clause to the query.
 
@@ -254,7 +254,7 @@ results, err := client.Select().GroupBy("name").Exec(ctx)
 SELECT id, name FROM your_table GROUP BY name
 ```
 
-### [Having()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)
+### [Having()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)
 
 Adds a `HAVING` clause to the query.
 
@@ -265,7 +265,7 @@ results, err := client.Select().GroupBy("name").Having(dbx.Gt{"COUNT(id)": 1}).E
 SELECT id, name FROM your_table GROUP BY name HAVING COUNT(id) > 1
 ```
 
-### [OrderBy()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)
+### [OrderBy()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)
 
 Adds an `ORDER BY` clause to the query.
 
@@ -276,7 +276,7 @@ results, err := client.Select().OrderBy("name DESC").Exec(ctx)
 SELECT id, name FROM your_table ORDER BY name DESC
 ```
 
-### [Limit()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)
+### [Limit()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)
 
 Adds a `LIMIT` clause to the query.
 
@@ -287,7 +287,7 @@ results, err := client.Select().Limit(10).Exec(ctx)
 SELECT id, name FROM your_table LIMIT 10
 ```
 
-### [Offset()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)
+### [Offset()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)
 
 Adds an `OFFSET` clause to the query.
 
@@ -302,7 +302,7 @@ SELECT id, name FROM your_table LIMIT 10 OFFSET 10
 
 The `Sqlizer` interface can be converted to SQL. There are many implementations of this interface.
 
-### [Expr](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [Expr](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Builds an expression from a SQL fragment and arguments.
 
@@ -313,7 +313,7 @@ client.Select().Where(dbx.Expr("FROM_UNIXTIME(?) > ?", 1672531200, 1000))
 SELECT id, name FROM your_table WHERE FROM_UNIXTIME(1672531200) > 1000
 ```
 
-### [ConcatExpr](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [ConcatExpr](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Builds an expression by concatenating strings and other expressions.
 
@@ -324,7 +324,7 @@ client.Select().Column(dbx.ConcatExpr("COALESCE(full_name, ", dbx.Expr("CONCAT(?
 SELECT COALESCE(full_name, CONCAT('first', ' ', 'last')) FROM your_table
 ```
 
-### [Alias](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [Alias](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Allows to define an alias for a column.
 
@@ -335,7 +335,7 @@ client.Select().Column(dbx.Alias(dbx.Expr("COUNT(*)"), "total"))
 SELECT (COUNT(*)) AS total FROM your_table
 ```
 
-### [Eq](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [Eq](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates an "equal" expression.
 
@@ -346,7 +346,7 @@ client.Select().Where(dbx.Eq{"id": 1})
 SELECT id, name FROM your_table WHERE id = 1
 ```
 
-### [NotEq](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [NotEq](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates a "not equal" expression.
 
@@ -357,7 +357,7 @@ client.Select().Where(dbx.NotEq{"id": 1})
 SELECT id, name FROM your_table WHERE id <> 1
 ```
 
-### [Like](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [Like](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates a "like" expression.
 
@@ -368,7 +368,7 @@ client.Select().Where(dbx.Like{"name": "%test%"})
 SELECT id, name FROM your_table WHERE name LIKE '%test%'
 ```
 
-### [NotLike](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [NotLike](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates a "not like" expression.
 
@@ -379,7 +379,7 @@ client.Select().Where(dbx.NotLike{"name": "%test%"})
 SELECT id, name FROM your_table WHERE name NOT LIKE '%test%'
 ```
 
-### [ILike](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [ILike](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates a case-insensitive "like" expression.
 
@@ -390,7 +390,7 @@ client.Select().Where(dbx.ILike{"name": "test%"})
 SELECT id, name FROM your_table WHERE name ILIKE 'test%'
 ```
 
-### [NotILike](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [NotILike](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates a case-insensitive "not like" expression.
 
@@ -401,7 +401,7 @@ client.Select().Where(dbx.NotILike{"name": "test%"})
 SELECT id, name FROM your_table WHERE name NOT ILIKE 'test%'
 ```
 
-### [Lt](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [Lt](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates a "less than" expression.
 
@@ -412,7 +412,7 @@ client.Select().Where(dbx.Lt{"age": 18})
 SELECT id, name FROM your_table WHERE age < 18
 ```
 
-### [LtOrEq](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [LtOrEq](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates a "less than or equal" expression.
 
@@ -423,7 +423,7 @@ client.Select().Where(dbx.LtOrEq{"age": 18})
 SELECT id, name FROM your_table WHERE age <= 18
 ```
 
-### [Gt](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [Gt](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates a "greater than" expression.
 
@@ -434,7 +434,7 @@ client.Select().Where(dbx.Gt{"age": 18})
 SELECT id, name FROM your_table WHERE age > 18
 ```
 
-### [GtOrEq](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [GtOrEq](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates a "greater than or equal" expression.
 
@@ -445,7 +445,7 @@ client.Select().Where(dbx.GtOrEq{"age": 18})
 SELECT id, name FROM your_table WHERE age >= 18
 ```
 
-### [And](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [And](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates an "and" conjunction of expressions.
 
@@ -456,7 +456,7 @@ client.Select().Where(dbx.And(dbx.Eq{"id": 1}, dbx.Like{"name": "%test%"}))
 SELECT id, name FROM your_table WHERE (id = 1 AND name LIKE '%test%')
 ```
 
-### [Or](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)
+### [Or](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)
 
 Creates an "or" conjunction of expressions.
 
@@ -471,10 +471,10 @@ SELECT id, name FROM your_table WHERE (id = 1 OR id = 2)
 
 The dbx package supports two placeholder formats: `Question` and `Dollar`. The default is `Question`. You can change the placeholder format by passing it to the `NewClientWithInterfaces` function.
 
-### [Question](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/placeholder.go)
+### [Question](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/placeholder.go)
 
 The `Question` format uses `?` as a placeholder.
 
-### [Dollar](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/placeholder.go)
+### [Dollar](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/placeholder.go)
 
 The `Dollar` format uses `$` as a placeholder.

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/justtrackio/gosoline/pkg/application"
 	"github.com/justtrackio/gosoline/pkg/cfg"
@@ -13,6 +12,7 @@ import (
 
 func main() {
 	c := cli.NewCli(
+		cli.WithHelp("myapp", "Example CLI application."),
 		cli.WithVersion("1.0.0"),
 		cli.WithAppOptions(
 			application.WithConfigFile("config.dist.yml", "yml"),
@@ -20,9 +20,13 @@ func main() {
 	)
 
 	// Register subcommands under the "api" group.
-	apiRouter := c.Group(cli.Group{Name: "api"})
+	apiRouter := c.Group(cli.Group{Name: "api", Description: "Manage the API."})
 	apiRouter.Cmd(cli.Cmd{
-		Name: "serve",
+		Name:        "serve",
+		Description: "Start the API server.",
+		Examples: []cli.CmdExample{
+			{Description: "Start the API server on a custom port:", Args: "myapp api serve --port 9090"},
+		},
 		Flags: []cli.Flag{
 			{Short: "p", Long: "port", CfgKey: "httpserver.default.port", Default: "8080", Description: "port to listen on"},
 		},
@@ -43,11 +47,17 @@ func main() {
 	})
 
 	// Register subcommands under the "db" group.
-	dbRouter := c.Group(cli.Group{Name: "db"})
+	dbRouter := c.Group(cli.Group{Name: "db", Description: "Manage the database."})
 	dbRouter.Cmd(cli.Cmd{
-		Name: "migrate",
+		Name:        "migrate",
+		Description: "Run database migrations.",
+		Arguments:   cli.CmdArgumentsMultiple,
+		Examples: []cli.CmdExample{
+			{Description: "Run migrations against production:", Args: "myapp db migrate --env prod"},
+		},
 		Flags: []cli.Flag{
 			{Short: "e", Long: "env", CfgKey: "app.env", Default: "dev", Description: "target environment"},
+			{Short: "i", Long: "include", Kind: cli.FlagKindList, Description: "migration file or pattern to include"},
 		},
 		AppOptions: []application.Option{
 			application.WithModuleFactory("main", cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
@@ -56,24 +66,23 @@ func main() {
 					return nil, err
 				}
 
+				args, err := cli.GetArguments(config)
+				if err != nil {
+					return nil, err
+				}
+
+				flags, err := cli.UnmarshalFlags[struct {
+					Include []string `cfg:"include"`
+				}](config)
+				if err != nil {
+					return nil, err
+				}
+
 				return func(ctx context.Context) error {
 					logger.Info(ctx, "running migrations in env: %s", env)
-					return nil
-				}, nil
-			})),
-		},
-	})
+					logger.Info(ctx, "migration arguments: %v", args)
+					logger.Info(ctx, "included migrations: %v", flags.Include)
 
-	// Fallback when no command is matched.
-	c.DefaultCmd(cli.Cmd{
-		AppOptions: []application.Option{
-			application.WithModuleFactory("main", cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
-				return func(ctx context.Context) error {
-					fmt.Println("Usage: myapp <command> [flags]")
-					fmt.Println("Commands:")
-					fmt.Println("  api serve    Start the API server")
-					fmt.Println("  db migrate   Run database migrations")
-					fmt.Println("  version      Print the version")
 					return nil
 				}, nil
 			})),

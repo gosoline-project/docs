@@ -7,18 +7,19 @@ import CodeBlock from '@theme/CodeBlock';
 import Main from "!!raw-loader!./src/cli/main.go";
 import ConfigDist from "!!raw-loader!./src/cli/config.dist.yml";
 
-The `pkg/cli` package lets you build multi-command CLI tools that run inside the gosoline application lifecycle — giving each command access to the same config, logger, and kernel modules as any other gosoline application.
+The `pkg/cli` package lets you build multi-command CLI tools that run inside the gosoline application lifecycle, giving each command access to the same config, logger, and kernel modules as any other gosoline application.
 
 In this guide, you'll learn how to:
 
 - Define a simple command
 - Group related commands (`api serve`, `db migrate`)
-- Add flags and read their values from config
+- Add flags, positional arguments, and read their values from config
+- Add built-in help output
 - Add a built-in `version` command
 
 ## Overview
 
-The entry point is `cli.NewCli()`. It embeds a `*Router`, which is a tree of named groups and commands. When you call `Run()`, it parses `os.Args`, resolves the matching command, injects parsed flags into the gosoline config, and starts the kernel with the command's application options.
+The entry point is `cli.NewCli()`. It embeds a `*Router`, which is a tree of named groups and commands. When you call `Run()`, it parses `os.Args`, resolves the matching command, injects parsed flags and positional arguments into the gosoline config, and starts the kernel with the command's application options.
 
 ```go
 c := cli.NewCli(/* options... */)
@@ -28,11 +29,15 @@ c.Run()
 
 ## Defining a command
 
-Register a `Cmd` directly on the `Cli` (or on any child `*Router` returned by `Group()`). Each `Cmd` needs a `Name` and `AppOptions` containing the module to run:
+Register a `Cmd` directly on the `Cli` (or on any child `*Router` returned by `Group()`). Each `Cmd` needs a `Name` and `AppOptions` containing the module to run. Add `Description` and `Examples` to improve generated help output:
 
 ```go
 c.Cmd(cli.Cmd{
-    Name: "migrate",
+    Name:        "migrate",
+    Description: "Run database migrations.",
+    Examples: []cli.CmdExample{
+        {Description: "Run migrations against production:", Args: "myapp migrate --env prod"},
+    },
     AppOptions: []application.Option{
         application.WithModuleFactory("main", cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
             return func(ctx context.Context) error {
@@ -46,23 +51,25 @@ c.Cmd(cli.Cmd{
 
 `application.WithModuleFactory` registers the command's kernel module. `cli.WithRunFunc` is a convenience wrapper that turns a plain function into a `kernel.ModuleFactory`.
 
+For simple command modules, you can also use `cli.Module` to wrap a typed factory and handler into the required `application.Option`.
+
 ## Grouping commands
 
-`Group()` returns a child `*Router`. Register `Cmd`s on that router to create namespaced subcommands:
+`Group()` returns a child `*Router`. Register `Cmd`s on that router to create namespaced subcommands. Groups can also have a `Description`, shared `Flags`, and shared `AppOptions`:
 
 ```go
-apiRouter := c.Group(cli.Group{Name: "api"})
-apiRouter.Cmd(cli.Cmd{Name: "serve", AppOptions: /* ... */})
+apiRouter := c.Group(cli.Group{Name: "api", Description: "Manage the API."})
+apiRouter.Cmd(cli.Cmd{Name: "serve", Description: "Start the API server.", AppOptions: /* ... */})
 
-dbRouter := c.Group(cli.Group{Name: "db"})
-dbRouter.Cmd(cli.Cmd{Name: "migrate", AppOptions: /* ... */})
+dbRouter := c.Group(cli.Group{Name: "db", Description: "Manage the database."})
+dbRouter.Cmd(cli.Cmd{Name: "migrate", Description: "Run database migrations.", AppOptions: /* ... */})
 ```
 
 This produces commands like `myapp api serve` and `myapp db migrate`. Groups can be nested arbitrarily deep.
 
 ## Adding flags
 
-Declare flags on a `Cmd` (or `Group`) with `cli.Flag`. Each flag has a short name, a long name, an optional default, and an optional `CfgKey` to map the value to an arbitrary config path:
+Declare flags on a `Cmd`, `Group`, or globally with `cli.WithFlag`. Each flag has a short name, a long name, an optional default, and an optional `CfgKey` to map the value to an arbitrary config path:
 
 ```go
 cli.Cmd{
@@ -78,11 +85,31 @@ cli.Cmd{
 |---|---|
 | `Short` | Single-character flag (`-p`) |
 | `Long` | Long-form flag (`--port`) |
+| `Kind` | Parse mode: `cli.FlagKindString` or `cli.FlagKindList` |
 | `Default` | Value used when the flag is absent |
 | `CfgKey` | If set, the value is also written to this config path |
 | `Description` | Human-readable description |
 
-The flag value is always available at `cli.flags.<long>` in the config. If `CfgKey` is set, it is also written there. The short flag takes precedence over the long flag when both are provided.
+The flag value is always available at `cli.flags.<long>` in the config, with hyphens replaced by underscores. For example, `--dry-run` is available as `cli.flags.dry_run`. If `CfgKey` is set, the value is also written there.
+
+String flags use `cli.FlagKindString`, which is also the default when `Kind` is omitted. When the same string flag is provided multiple times, the last matching short or long value wins.
+
+List flags use `cli.FlagKindList` and collect all matching short and long values in order:
+
+```go
+cli.Flag{
+    Short:       "i",
+    Long:        "include",
+    Kind:        cli.FlagKindList,
+    Description: "file or pattern to include",
+}
+```
+
+```bash
+myapp run --include users.json -i orders.json
+```
+
+This writes `[]string{"users.json", "orders.json"}` to `cli.flags.include`.
 
 Read the value inside your module registration:
 
@@ -104,9 +131,73 @@ AppOptions: []application.Option{
 },
 ```
 
+You can also unmarshal all values from `cli.flags` into a struct:
+
+```go
+type ServeFlags struct {
+    Port string `cfg:"port"`
+}
+
+flags, err := cli.UnmarshalFlags[ServeFlags](config)
+if err != nil {
+    return nil, err
+}
+```
+
+## Positional arguments
+
+Commands can document the positional arguments they accept. This affects help output:
+
+```go
+cli.Cmd{
+    Name:        "import",
+    Description: "Import one or more files.",
+    Arguments:   cli.CmdArgumentsMultiple,
+    AppOptions:  /* ... */,
+}
+```
+
+| Value | Help usage |
+|---|---|
+| `cli.CmdArgumentsNone` | no positional arguments |
+| `cli.CmdArgumentsSingle` | `<arg>` |
+| `cli.CmdArgumentsMultiple` | `<args...>` |
+
+Runtime arguments are written to `cli.args`. Read them with `cli.GetArguments`:
+
+```go
+args, err := cli.GetArguments(config)
+if err != nil {
+    return nil, err
+}
+```
+
+The selected command path is written to `cli.cmd`.
+
+## Built-in help
+
+Pass `cli.WithHelp` to configure top-level help text and register the built-in `help` command:
+
+```go
+c := cli.NewCli(
+    cli.WithHelp("myapp", "Example CLI application."),
+)
+```
+
+Users can request help with the `help` command or with `-h` / `--help`:
+
+```bash
+myapp help
+myapp help api serve
+myapp api serve --help
+myapp api serve -h
+```
+
+Help output includes command and group descriptions, usage, flags, defaults, positional argument markers, and command examples. Unknown commands print an error and then the relevant help output. You can change help wrapping with `cli.WithHelpLineLength`; pass a negative value to disable wrapping.
+
 ## Default command
 
-Use `DefaultCmd` to register a fallback that runs when no command matches — useful for showing usage:
+Use `DefaultCmd` to register a fallback that runs when no explicit command is selected. This is useful when empty input should execute a command instead of showing help:
 
 ```go
 c.DefaultCmd(cli.Cmd{
@@ -120,6 +211,8 @@ c.DefaultCmd(cli.Cmd{
     },
 })
 ```
+
+Unknown commands do not run the default command. They return an error and, when help is configured, print contextual help.
 
 ## Built-in version command
 
@@ -155,14 +248,17 @@ $ myapp version
 Run the commands:
 
 ```bash
-# Show usage (default command)
-go run main.go
+# Show top-level help
+go run main.go help
+
+# Show command help
+go run main.go api serve --help
 
 # Start the API server on a custom port
 go run main.go api serve --port 9090
 
-# Run migrations against production
-go run main.go db migrate --env prod
+# Run migrations against production with positional args and a repeated list flag
+go run main.go db migrate migrations/*.sql --env prod --include users -i orders
 
 # Print the version
 go run main.go version
