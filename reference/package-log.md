@@ -4,7 +4,7 @@ The gosoline logger is based upon a simple interface that uses handlers internal
 
 ## Functions[​](#functions "Direct link to Functions")
 
-### [NewLogger()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/logger.go#L91)[​](#newlogger "Direct link to newlogger")
+### [NewLogger()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/logger.go#L91)[​](#newlogger "Direct link to newlogger")
 
 #### Usage[​](#usage "Direct link to Usage")
 
@@ -16,7 +16,7 @@ logger := log.NewLogger()
 
 Create a logger with no handlers and a real time clock. This provides an extended interface, including the `Option(opt ...Option) error` function to change the behaviour of the logger.
 
-### [NewLoggerWithInterfaces()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/logger.go#L95)[​](#newloggerwithinterfaces "Direct link to newloggerwithinterfaces")
+### [NewLoggerWithInterfaces()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/logger.go#L95)[​](#newloggerwithinterfaces "Direct link to newloggerwithinterfaces")
 
 #### Usage[​](#usage-1 "Direct link to Usage")
 
@@ -28,7 +28,7 @@ logger := log.NewLoggerWithInterfaces(myClock, []log.Handler{handler1, handler2}
 
 Provide a clock and some handlers when you create a new logger. Like [`NewLogger()`](#newlogger), this provides an extended interface, including the `Option(opt ...Option) error` function to change the behaviour of the logger.
 
-### [InitContext()](https://github.com/justtrackio/gosoline/blob/47a5bcfec77e453330c6ac6d5fb72c486f9c7321/pkg/log/context.go#L80)[​](#initcontext "Direct link to initcontext")
+### [InitContext()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/context.go#L80)[​](#initcontext "Direct link to initcontext")
 
 #### Usage[​](#usage-2 "Direct link to Usage")
 
@@ -40,7 +40,7 @@ ctx = log.InitContext(ctx)
 
 Return a new context capable of carrying (mutable) local and global logger fields.
 
-### [AppendContextFields()](https://github.com/justtrackio/gosoline/blob/47a5bcfec77e453330c6ac6d5fb72c486f9c7321/pkg/log/context.go#L115C6-L115C25)[​](#appendcontextfields "Direct link to appendcontextfields")
+### [AppendContextFields()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/context.go#L115C6-L115C25)[​](#appendcontextfields "Direct link to appendcontextfields")
 
 #### Usage[​](#usage-3 "Direct link to Usage")
 
@@ -102,7 +102,7 @@ caution
 
 Global fields override local fields when they have the same name.
 
-### [ContextFieldsResolver()](https://github.com/justtrackio/gosoline/blob/47a5bcfec77e453330c6ac6d5fb72c486f9c7321/pkg/log/context.go#L209C6-L209C27)[​](#contextfieldsresolver "Direct link to contextfieldsresolver")
+### [ContextFieldsResolver()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/context.go#L209C6-L209C27)[​](#contextfieldsresolver "Direct link to contextfieldsresolver")
 
 #### Usage[​](#usage-4 "Direct link to Usage")
 
@@ -130,7 +130,7 @@ print(localFields["field"])
 
 ## Methods[​](#methods "Direct link to Methods")
 
-### [Debug()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/logger.go#L119)[​](#debug "Direct link to debug")
+### [Debug()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/logger.go#L119)[​](#debug "Direct link to debug")
 
 ```
 logger.Debug(ctx, "Message")
@@ -160,7 +160,7 @@ Error()
 logger.Error(ctx, "Message")
 ```
 
-### [WithContextFieldsResolver()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/options.go#L5)[​](#withcontextfieldsresolver "Direct link to withcontextfieldsresolver")
+### [WithContextFieldsResolver()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/options.go#L5)[​](#withcontextfieldsresolver "Direct link to withcontextfieldsresolver")
 
 #### Usage[​](#usage-5 "Direct link to Usage")
 
@@ -176,7 +176,7 @@ if err := logger.Option(log.WithContextFieldsResolver(log.ContextFieldsResolver)
 
 Adds a context fields resolver to the logger.
 
-### [WithFields()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/options.go#L13)[​](#withfields "Direct link to withfields")
+### [WithFields()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/options.go#L13)[​](#withfields "Direct link to withfields")
 
 #### Usage[​](#usage-6 "Direct link to Usage")
 
@@ -192,7 +192,7 @@ loggerWithFields := logger.WithFields(log.Fields{
 
 Adds global fields to the logger, which will be set on every log message.
 
-### [WithHandlers()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/options.go#L21)[​](#withhandlers "Direct link to withhandlers")
+### [WithHandlers()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/options.go#L21)[​](#withhandlers "Direct link to withhandlers")
 
 #### Usage[​](#usage-7 "Direct link to Usage")
 
@@ -212,7 +212,7 @@ Adds additional handlers to the logger.
 
 ## Interfaces[​](#interfaces "Direct link to Interfaces")
 
-### [Handler](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/handler.go#L10)[​](#handler "Direct link to handler")
+### [Handler](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/handler.go#L10)[​](#handler "Direct link to handler")
 
 #### Definition[​](#definition "Direct link to Definition")
 

@@ -42,7 +42,7 @@
 - [Sampling & fingers-crossed](/how-to/logging/sampling-and-fingers-crossed.md): Gosoline supports log sampling and "fingers-crossed" logging to help you manage log volume without losing critical debug information when errors occur.
 - [Use loggers](/how-to/logging/use-loggers.md): With gosoline, there are multiple ways to configure and use a logger.
 - [Use sampling](/how-to/sampling/use-sampling.md): The smpl package helps you make a consistent sampling decision (sampled vs. not sampled) and store it in a context.Context. Other gosoline packages can then use that decision to change behavior (e.g. reduce log volume).
-- [Build a CLI tool](/how-to/use-cli.md): The pkg/cli package lets you build multi-command CLI tools that run inside the gosoline application lifecycle — giving each command access to the same config, logger, and kernel modules as any other gosoline application.
+- [Build a CLI tool](/how-to/use-cli.md): The pkg/cli package lets you build multi-command CLI tools that run inside the gosoline application lifecycle, giving each command access to the same config, logger, and kernel modules as any other gosoline application.
 - [Implement health checks](/how-to/write-health-checks.md): You can check the health of a running gosoline application.
 - [Migrating to Identity and Naming Patterns](/migrations/app-identity-and-naming-patterns.md): This guide details how to migrate your gosoline application to the new Identity system and dynamic resource naming.
 - [Migrating to the Standalone HTTP Server Package](/migrations/httpserver-package.md): This guide explains how to migrate from the old github.com/justtrackio/gosoline/pkg/httpserver package directly to the standalone github.com/gosoline-project/httpserver module at v0.5.6.
@@ -11870,18 +11870,19 @@ smpl.AddStrategy("my-strategy", func(ctx context.Context, config cfg.Config) (sm
 
 # Build a CLI tool
 
-The `pkg/cli` package lets you build multi-command CLI tools that run inside the gosoline application lifecycle — giving each command access to the same config, logger, and kernel modules as any other gosoline application.
+The `pkg/cli` package lets you build multi-command CLI tools that run inside the gosoline application lifecycle, giving each command access to the same config, logger, and kernel modules as any other gosoline application.
 
 In this guide, you'll learn how to:
 
 * Define a simple command
 * Group related commands (`api serve`, `db migrate`)
-* Add flags and read their values from config
+* Add flags, positional arguments, and read their values from config
+* Add built-in help output
 * Add a built-in `version` command
 
 ## Overview[​](#overview "Direct link to Overview")
 
-The entry point is `cli.NewCli()`. It embeds a `*Router`, which is a tree of named groups and commands. When you call `Run()`, it parses `os.Args`, resolves the matching command, injects parsed flags into the gosoline config, and starts the kernel with the command's application options.
+The entry point is `cli.NewCli()`. It embeds a `*Router`, which is a tree of named groups and commands. When you call `Run()`, it parses `os.Args`, resolves the matching command, injects parsed flags and positional arguments into the gosoline config, and starts the kernel with the command's application options.
 
 ```
 c := cli.NewCli(/* options... */)
@@ -11893,12 +11894,20 @@ c.Run()
 
 ## Defining a command[​](#defining-a-command "Direct link to Defining a command")
 
-Register a `Cmd` directly on the `Cli` (or on any child `*Router` returned by `Group()`). Each `Cmd` needs a `Name` and `AppOptions` containing the module to run:
+Register a `Cmd` directly on the `Cli` (or on any child `*Router` returned by `Group()`). Each `Cmd` needs a `Name` and `AppOptions` containing the module to run. Add `Description` and `Examples` to improve generated help output:
 
 ```
 c.Cmd(cli.Cmd{
 
-    Name: "migrate",
+    Name:        "migrate",
+
+    Description: "Run database migrations.",
+
+    Examples: []cli.CmdExample{
+
+        {Description: "Run migrations against production:", Args: "myapp migrate --env prod"},
+
+    },
 
     AppOptions: []application.Option{
 
@@ -11921,27 +11930,29 @@ c.Cmd(cli.Cmd{
 
 `application.WithModuleFactory` registers the command's kernel module. `cli.WithRunFunc` is a convenience wrapper that turns a plain function into a `kernel.ModuleFactory`.
 
+For simple command modules, you can also use `cli.Module` to wrap a typed factory and handler into the required `application.Option`.
+
 ## Grouping commands[​](#grouping-commands "Direct link to Grouping commands")
 
-`Group()` returns a child `*Router`. Register `Cmd`s on that router to create namespaced subcommands:
+`Group()` returns a child `*Router`. Register `Cmd`s on that router to create namespaced subcommands. Groups can also have a `Description`, shared `Flags`, and shared `AppOptions`:
 
 ```
-apiRouter := c.Group(cli.Group{Name: "api"})
+apiRouter := c.Group(cli.Group{Name: "api", Description: "Manage the API."})
 
-apiRouter.Cmd(cli.Cmd{Name: "serve", AppOptions: /* ... */})
+apiRouter.Cmd(cli.Cmd{Name: "serve", Description: "Start the API server.", AppOptions: /* ... */})
 
 
 
-dbRouter := c.Group(cli.Group{Name: "db"})
+dbRouter := c.Group(cli.Group{Name: "db", Description: "Manage the database."})
 
-dbRouter.Cmd(cli.Cmd{Name: "migrate", AppOptions: /* ... */})
+dbRouter.Cmd(cli.Cmd{Name: "migrate", Description: "Run database migrations.", AppOptions: /* ... */})
 ```
 
 This produces commands like `myapp api serve` and `myapp db migrate`. Groups can be nested arbitrarily deep.
 
 ## Adding flags[​](#adding-flags "Direct link to Adding flags")
 
-Declare flags on a `Cmd` (or `Group`) with `cli.Flag`. Each flag has a short name, a long name, an optional default, and an optional `CfgKey` to map the value to an arbitrary config path:
+Declare flags on a `Cmd`, `Group`, or globally with `cli.WithFlag`. Each flag has a short name, a long name, an optional default, and an optional `CfgKey` to map the value to an arbitrary config path:
 
 ```
 cli.Cmd{
@@ -11959,15 +11970,40 @@ cli.Cmd{
 }
 ```
 
-| Field         | Description                                           |
-| ------------- | ----------------------------------------------------- |
-| `Short`       | Single-character flag (`-p`)                          |
-| `Long`        | Long-form flag (`--port`)                             |
-| `Default`     | Value used when the flag is absent                    |
-| `CfgKey`      | If set, the value is also written to this config path |
-| `Description` | Human-readable description                            |
+| Field         | Description                                            |
+| ------------- | ------------------------------------------------------ |
+| `Short`       | Single-character flag (`-p`)                           |
+| `Long`        | Long-form flag (`--port`)                              |
+| `Kind`        | Parse mode: `cli.FlagKindString` or `cli.FlagKindList` |
+| `Default`     | Value used when the flag is absent                     |
+| `CfgKey`      | If set, the value is also written to this config path  |
+| `Description` | Human-readable description                             |
 
-The flag value is always available at `cli.flags.<long>` in the config. If `CfgKey` is set, it is also written there. The short flag takes precedence over the long flag when both are provided.
+The flag value is always available at `cli.flags.<long>` in the config, with hyphens replaced by underscores. For example, `--dry-run` is available as `cli.flags.dry_run`. If `CfgKey` is set, the value is also written there.
+
+String flags use `cli.FlagKindString`, which is also the default when `Kind` is omitted. When the same string flag is provided multiple times, the last matching short or long value wins.
+
+List flags use `cli.FlagKindList` and collect all matching short and long values in order:
+
+```
+cli.Flag{
+
+    Short:       "i",
+
+    Long:        "include",
+
+    Kind:        cli.FlagKindList,
+
+    Description: "file or pattern to include",
+
+}
+```
+
+```
+myapp run --include users.json -i orders.json
+```
+
+This writes `[]string{"users.json", "orders.json"}` to `cli.flags.include`.
 
 Read the value inside your module registration:
 
@@ -12003,9 +12039,93 @@ AppOptions: []application.Option{
 },
 ```
 
+You can also unmarshal all values from `cli.flags` into a struct:
+
+```
+type ServeFlags struct {
+
+    Port string `cfg:"port"`
+
+}
+
+
+
+flags, err := cli.UnmarshalFlags[ServeFlags](config)
+
+if err != nil {
+
+    return nil, err
+
+}
+```
+
+## Positional arguments[​](#positional-arguments "Direct link to Positional arguments")
+
+Commands can document the positional arguments they accept. This affects help output:
+
+```
+cli.Cmd{
+
+    Name:        "import",
+
+    Description: "Import one or more files.",
+
+    Arguments:   cli.CmdArgumentsMultiple,
+
+    AppOptions:  /* ... */,
+
+}
+```
+
+| Value                      | Help usage              |
+| -------------------------- | ----------------------- |
+| `cli.CmdArgumentsNone`     | no positional arguments |
+| `cli.CmdArgumentsSingle`   | `<arg>`                 |
+| `cli.CmdArgumentsMultiple` | `<args...>`             |
+
+Runtime arguments are written to `cli.args`. Read them with `cli.GetArguments`:
+
+```
+args, err := cli.GetArguments(config)
+
+if err != nil {
+
+    return nil, err
+
+}
+```
+
+The selected command path is written to `cli.cmd`.
+
+## Built-in help[​](#built-in-help "Direct link to Built-in help")
+
+Pass `cli.WithHelp` to configure top-level help text and register the built-in `help` command:
+
+```
+c := cli.NewCli(
+
+    cli.WithHelp("myapp", "Example CLI application."),
+
+)
+```
+
+Users can request help with the `help` command or with `-h` / `--help`:
+
+```
+myapp help
+
+myapp help api serve
+
+myapp api serve --help
+
+myapp api serve -h
+```
+
+Help output includes command and group descriptions, usage, flags, defaults, positional argument markers, and command examples. Unknown commands print an error and then the relevant help output. You can change help wrapping with `cli.WithHelpLineLength`; pass a negative value to disable wrapping.
+
 ## Default command[​](#default-command "Direct link to Default command")
 
-Use `DefaultCmd` to register a fallback that runs when no command matches — useful for showing usage:
+Use `DefaultCmd` to register a fallback that runs when no explicit command is selected. This is useful when empty input should execute a command instead of showing help:
 
 ```
 c.DefaultCmd(cli.Cmd{
@@ -12028,6 +12148,8 @@ c.DefaultCmd(cli.Cmd{
 
 })
 ```
+
+Unknown commands do not run the default command. They return an error and, when help is configured, print contextual help.
 
 ## Built-in version command[​](#built-in-version-command "Direct link to Built-in version command")
 
@@ -12062,8 +12184,6 @@ import (
 
 	"context"
 
-	"fmt"
-
 
 
 	"github.com/justtrackio/gosoline/pkg/application"
@@ -12084,6 +12204,8 @@ func main() {
 
 	c := cli.NewCli(
 
+		cli.WithHelp("myapp", "Example CLI application."),
+
 		cli.WithVersion("1.0.0"),
 
 		cli.WithAppOptions(
@@ -12098,11 +12220,19 @@ func main() {
 
 	// Register subcommands under the "api" group.
 
-	apiRouter := c.Group(cli.Group{Name: "api"})
+	apiRouter := c.Group(cli.Group{Name: "api", Description: "Manage the API."})
 
 	apiRouter.Cmd(cli.Cmd{
 
-		Name: "serve",
+		Name:        "serve",
+
+		Description: "Start the API server.",
+
+		Examples: []cli.CmdExample{
+
+			{Description: "Start the API server on a custom port:", Args: "myapp api serve --port 9090"},
+
+		},
 
 		Flags: []cli.Flag{
 
@@ -12144,15 +12274,27 @@ func main() {
 
 	// Register subcommands under the "db" group.
 
-	dbRouter := c.Group(cli.Group{Name: "db"})
+	dbRouter := c.Group(cli.Group{Name: "db", Description: "Manage the database."})
 
 	dbRouter.Cmd(cli.Cmd{
 
-		Name: "migrate",
+		Name:        "migrate",
+
+		Description: "Run database migrations.",
+
+		Arguments:   cli.CmdArgumentsMultiple,
+
+		Examples: []cli.CmdExample{
+
+			{Description: "Run migrations against production:", Args: "myapp db migrate --env prod"},
+
+		},
 
 		Flags: []cli.Flag{
 
 			{Short: "e", Long: "env", CfgKey: "app.env", Default: "dev", Description: "target environment"},
+
+			{Short: "i", Long: "include", Kind: cli.FlagKindList, Description: "migration file or pattern to include"},
 
 		},
 
@@ -12170,41 +12312,39 @@ func main() {
 
 
 
+				args, err := cli.GetArguments(config)
+
+				if err != nil {
+
+					return nil, err
+
+				}
+
+
+
+				flags, err := cli.UnmarshalFlags[struct {
+
+					Include []string `cfg:"include"`
+
+				}](config)
+
+				if err != nil {
+
+					return nil, err
+
+				}
+
+
+
 				return func(ctx context.Context) error {
 
 					logger.Info(ctx, "running migrations in env: %s", env)
 
-					return nil
+					logger.Info(ctx, "migration arguments: %v", args)
 
-				}, nil
-
-			})),
-
-		},
-
-	})
+					logger.Info(ctx, "included migrations: %v", flags.Include)
 
 
-
-	// Fallback when no command is matched.
-
-	c.DefaultCmd(cli.Cmd{
-
-		AppOptions: []application.Option{
-
-			application.WithModuleFactory("main", cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
-
-				return func(ctx context.Context) error {
-
-					fmt.Println("Usage: myapp <command> [flags]")
-
-					fmt.Println("Commands:")
-
-					fmt.Println("  api serve    Start the API server")
-
-					fmt.Println("  db migrate   Run database migrations")
-
-					fmt.Println("  version      Print the version")
 
 					return nil
 
@@ -12238,9 +12378,15 @@ app:
 Run the commands:
 
 ```
-# Show usage (default command)
+# Show top-level help
 
-go run main.go
+go run main.go help
+
+
+
+# Show command help
+
+go run main.go api serve --help
 
 
 
@@ -12250,9 +12396,9 @@ go run main.go api serve --port 9090
 
 
 
-# Run migrations against production
+# Run migrations against production with positional args and a repeated list flag
 
-go run main.go db migrate --env prod
+go run main.go db migrate migrations/*.sql --env prod --include users -i orders
 
 
 
@@ -15482,7 +15628,7 @@ With the cfg package, you can configure and use configurations in your gosoline 
 
 ## Functions[​](#functions "Direct link to Functions")
 
-### [WithConfigFile()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/cfg/options.go#L23)[​](#withconfigfile "Direct link to withconfigfile")
+### [WithConfigFile()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/cfg/options.go#L23)[​](#withconfigfile "Direct link to withconfigfile")
 
 #### Usage[​](#usage "Direct link to Usage")
 
@@ -15504,7 +15650,7 @@ YAML is currently the only supported configuration filetype.
 
 ## Methods[​](#methods "Direct link to Methods")
 
-### [GetInt()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/cfg/config.go#L129)[​](#getint "Direct link to getint")
+### [GetInt()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/cfg/config.go#L129)[​](#getint "Direct link to getint")
 
 #### Usage[​](#usage-1 "Direct link to Usage")
 
@@ -15620,7 +15766,7 @@ enabled, err := config.GetBool("enabled", true)
 
 ## Variables[​](#variables "Direct link to Variables")
 
-### [DefaultEnvKeyReplacer](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/cfg/config.go#L62)[​](#defaultenvkeyreplacer "Direct link to defaultenvkeyreplacer")
+### [DefaultEnvKeyReplacer](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/cfg/config.go#L62)[​](#defaultenvkeyreplacer "Direct link to defaultenvkeyreplacer")
 
 #### Usage[​](#usage-2 "Direct link to Usage")
 
@@ -16043,7 +16189,7 @@ type YourModel struct {
 }
 ```
 
-### [NewClient()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)[​](#newclient "Direct link to newclient")
+### [NewClient()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)[​](#newclient "Direct link to newclient")
 
 #### Usage[​](#usage "Direct link to Usage")
 
@@ -16061,7 +16207,7 @@ The `clientName` argument is the name of the database client to use, as configur
 
 The dbx package provides query builders for SELECT, INSERT, UPDATE, DELETE, and GET statements.
 
-### [Get()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)[​](#get "Direct link to get")
+### [Get()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)[​](#get "Direct link to get")
 
 #### Usage[​](#usage-1 "Direct link to Usage")
 
@@ -16129,7 +16275,7 @@ result, err := client.Get().
     Exec(ctx)
 ```
 
-### [Select()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)[​](#select "Direct link to select")
+### [Select()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)[​](#select "Direct link to select")
 
 #### Usage[​](#usage-2 "Direct link to Usage")
 
@@ -16155,7 +16301,7 @@ results, err := client.Select().Where(YourModel{Id: 1}).Exec(ctx)
 SELECT id, name FROM your_table WHERE id = 1
 ```
 
-### [Insert()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)[​](#insert "Direct link to insert")
+### [Insert()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)[​](#insert "Direct link to insert")
 
 #### Usage[​](#usage-3 "Direct link to Usage")
 
@@ -16189,7 +16335,7 @@ INSERT INTO your_table (id,name) VALUES (1,'test1'), (2,'test2');
 
 Creates a new INSERT query builder. You need to provide the model with the values to insert. You can also provide multiple models to insert multiple rows at once. The `Exec` method executes the query.
 
-### [Replace()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)[​](#replace "Direct link to replace")
+### [Replace()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)[​](#replace "Direct link to replace")
 
 #### Usage[​](#usage-4 "Direct link to Usage")
 
@@ -16205,7 +16351,7 @@ REPLACE INTO your_table (id,name) VALUES (1,'test')
 
 Creates a new REPLACE query builder. You need to provide the model with the values to insert. The `Exec` method executes the query.
 
-### [Update()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)[​](#update "Direct link to update")
+### [Update()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)[​](#update "Direct link to update")
 
 #### Usage[​](#usage-5 "Direct link to Usage")
 
@@ -16231,7 +16377,7 @@ _, err := client.Update(YourModel{Name: "new_name"}).Where(dbx.Eq{"id": 1}).Exec
 UPDATE your_table SET name = 'new_name' WHERE id = 1
 ```
 
-### [Delete()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)[​](#delete "Direct link to delete")
+### [Delete()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)[​](#delete "Direct link to delete")
 
 #### Usage[​](#usage-6 "Direct link to Usage")
 
@@ -16249,7 +16395,7 @@ Creates a new DELETE query builder. You can use the `Where` method to add condit
 
 ## Error Handling[​](#error-handling "Direct link to Error Handling")
 
-### [ErrNotFound](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/client.go)[​](#errnotfound "Direct link to errnotfound")
+### [ErrNotFound](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/client.go)[​](#errnotfound "Direct link to errnotfound")
 
 The `dbx.ErrNotFound` error is returned by the `Get()` method when no rows match the query. You can use `errors.Is()` to check for this error:
 
@@ -16279,7 +16425,7 @@ if err != nil {
 
 The `Select` and `Get` builders provide the following methods to build complex queries. Note that `Get` automatically adds `LIMIT 2` to detect multiple results.
 
-### [Distinct()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)[​](#distinct "Direct link to distinct")
+### [Distinct()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)[​](#distinct "Direct link to distinct")
 
 Adds a `DISTINCT` clause to the query.
 
@@ -16291,7 +16437,7 @@ results, err := client.Select().Distinct().Exec(ctx)
 SELECT DISTINCT id, name FROM your_table
 ```
 
-### [Join()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)[​](#join "Direct link to join")
+### [Join()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)[​](#join "Direct link to join")
 
 Adds a `JOIN` clause to the query.
 
@@ -16305,7 +16451,7 @@ SELECT id, name FROM your_table JOIN other_table ON other_table.id = your_table.
 
 You can also use `LeftJoin`, `RightJoin`, `InnerJoin` and `CrossJoin`.
 
-### [GroupBy()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)[​](#groupby "Direct link to groupby")
+### [GroupBy()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)[​](#groupby "Direct link to groupby")
 
 Adds a `GROUP BY` clause to the query.
 
@@ -16317,7 +16463,7 @@ results, err := client.Select().GroupBy("name").Exec(ctx)
 SELECT id, name FROM your_table GROUP BY name
 ```
 
-### [Having()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)[​](#having "Direct link to having")
+### [Having()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)[​](#having "Direct link to having")
 
 Adds a `HAVING` clause to the query.
 
@@ -16329,7 +16475,7 @@ results, err := client.Select().GroupBy("name").Having(dbx.Gt{"COUNT(id)": 1}).E
 SELECT id, name FROM your_table GROUP BY name HAVING COUNT(id) > 1
 ```
 
-### [OrderBy()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)[​](#orderby "Direct link to orderby")
+### [OrderBy()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)[​](#orderby "Direct link to orderby")
 
 Adds an `ORDER BY` clause to the query.
 
@@ -16341,7 +16487,7 @@ results, err := client.Select().OrderBy("name DESC").Exec(ctx)
 SELECT id, name FROM your_table ORDER BY name DESC
 ```
 
-### [Limit()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)[​](#limit "Direct link to limit")
+### [Limit()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)[​](#limit "Direct link to limit")
 
 Adds a `LIMIT` clause to the query.
 
@@ -16353,7 +16499,7 @@ results, err := client.Select().Limit(10).Exec(ctx)
 SELECT id, name FROM your_table LIMIT 10
 ```
 
-### [Offset()](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/select.go)[​](#offset "Direct link to offset")
+### [Offset()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/select.go)[​](#offset "Direct link to offset")
 
 Adds an `OFFSET` clause to the query.
 
@@ -16369,7 +16515,7 @@ SELECT id, name FROM your_table LIMIT 10 OFFSET 10
 
 The `Sqlizer` interface can be converted to SQL. There are many implementations of this interface.
 
-### [Expr](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#expr "Direct link to expr")
+### [Expr](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#expr "Direct link to expr")
 
 Builds an expression from a SQL fragment and arguments.
 
@@ -16381,7 +16527,7 @@ client.Select().Where(dbx.Expr("FROM_UNIXTIME(?) > ?", 1672531200, 1000))
 SELECT id, name FROM your_table WHERE FROM_UNIXTIME(1672531200) > 1000
 ```
 
-### [ConcatExpr](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#concatexpr "Direct link to concatexpr")
+### [ConcatExpr](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#concatexpr "Direct link to concatexpr")
 
 Builds an expression by concatenating strings and other expressions.
 
@@ -16393,7 +16539,7 @@ client.Select().Column(dbx.ConcatExpr("COALESCE(full_name, ", dbx.Expr("CONCAT(?
 SELECT COALESCE(full_name, CONCAT('first', ' ', 'last')) FROM your_table
 ```
 
-### [Alias](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#alias "Direct link to alias")
+### [Alias](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#alias "Direct link to alias")
 
 Allows to define an alias for a column.
 
@@ -16405,7 +16551,7 @@ client.Select().Column(dbx.Alias(dbx.Expr("COUNT(*)"), "total"))
 SELECT (COUNT(*)) AS total FROM your_table
 ```
 
-### [Eq](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#eq "Direct link to eq")
+### [Eq](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#eq "Direct link to eq")
 
 Creates an "equal" expression.
 
@@ -16417,7 +16563,7 @@ client.Select().Where(dbx.Eq{"id": 1})
 SELECT id, name FROM your_table WHERE id = 1
 ```
 
-### [NotEq](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#noteq "Direct link to noteq")
+### [NotEq](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#noteq "Direct link to noteq")
 
 Creates a "not equal" expression.
 
@@ -16429,7 +16575,7 @@ client.Select().Where(dbx.NotEq{"id": 1})
 SELECT id, name FROM your_table WHERE id <> 1
 ```
 
-### [Like](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#like "Direct link to like")
+### [Like](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#like "Direct link to like")
 
 Creates a "like" expression.
 
@@ -16441,7 +16587,7 @@ client.Select().Where(dbx.Like{"name": "%test%"})
 SELECT id, name FROM your_table WHERE name LIKE '%test%'
 ```
 
-### [NotLike](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#notlike "Direct link to notlike")
+### [NotLike](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#notlike "Direct link to notlike")
 
 Creates a "not like" expression.
 
@@ -16453,7 +16599,7 @@ client.Select().Where(dbx.NotLike{"name": "%test%"})
 SELECT id, name FROM your_table WHERE name NOT LIKE '%test%'
 ```
 
-### [ILike](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#ilike "Direct link to ilike")
+### [ILike](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#ilike "Direct link to ilike")
 
 Creates a case-insensitive "like" expression.
 
@@ -16465,7 +16611,7 @@ client.Select().Where(dbx.ILike{"name": "test%"})
 SELECT id, name FROM your_table WHERE name ILIKE 'test%'
 ```
 
-### [NotILike](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#notilike "Direct link to notilike")
+### [NotILike](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#notilike "Direct link to notilike")
 
 Creates a case-insensitive "not like" expression.
 
@@ -16477,7 +16623,7 @@ client.Select().Where(dbx.NotILike{"name": "test%"})
 SELECT id, name FROM your_table WHERE name NOT ILIKE 'test%'
 ```
 
-### [Lt](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#lt "Direct link to lt")
+### [Lt](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#lt "Direct link to lt")
 
 Creates a "less than" expression.
 
@@ -16489,7 +16635,7 @@ client.Select().Where(dbx.Lt{"age": 18})
 SELECT id, name FROM your_table WHERE age < 18
 ```
 
-### [LtOrEq](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#ltoreq "Direct link to ltoreq")
+### [LtOrEq](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#ltoreq "Direct link to ltoreq")
 
 Creates a "less than or equal" expression.
 
@@ -16501,7 +16647,7 @@ client.Select().Where(dbx.LtOrEq{"age": 18})
 SELECT id, name FROM your_table WHERE age <= 18
 ```
 
-### [Gt](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#gt "Direct link to gt")
+### [Gt](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#gt "Direct link to gt")
 
 Creates a "greater than" expression.
 
@@ -16513,7 +16659,7 @@ client.Select().Where(dbx.Gt{"age": 18})
 SELECT id, name FROM your_table WHERE age > 18
 ```
 
-### [GtOrEq](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#gtoreq "Direct link to gtoreq")
+### [GtOrEq](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#gtoreq "Direct link to gtoreq")
 
 Creates a "greater than or equal" expression.
 
@@ -16525,7 +16671,7 @@ client.Select().Where(dbx.GtOrEq{"age": 18})
 SELECT id, name FROM your_table WHERE age >= 18
 ```
 
-### [And](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#and "Direct link to and")
+### [And](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#and "Direct link to and")
 
 Creates an "and" conjunction of expressions.
 
@@ -16537,7 +16683,7 @@ client.Select().Where(dbx.And(dbx.Eq{"id": 1}, dbx.Like{"name": "%test%"}))
 SELECT id, name FROM your_table WHERE (id = 1 AND name LIKE '%test%')
 ```
 
-### [Or](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/expr.go)[​](#or "Direct link to or")
+### [Or](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/expr.go)[​](#or "Direct link to or")
 
 Creates an "or" conjunction of expressions.
 
@@ -16553,11 +16699,11 @@ SELECT id, name FROM your_table WHERE (id = 1 OR id = 2)
 
 The dbx package supports two placeholder formats: `Question` and `Dollar`. The default is `Question`. You can change the placeholder format by passing it to the `NewClientWithInterfaces` function.
 
-### [Question](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/placeholder.go)[​](#question "Direct link to question")
+### [Question](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/placeholder.go)[​](#question "Direct link to question")
 
 The `Question` format uses `?` as a placeholder.
 
-### [Dollar](https://github.com/justtrackio/gosoline/blob/main/pkg/dbx/placeholder.go)[​](#dollar "Direct link to dollar")
+### [Dollar](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/placeholder.go)[​](#dollar "Direct link to dollar")
 
 The `Dollar` format uses `$` as a placeholder.
 
@@ -17514,7 +17660,7 @@ The gosoline logger is based upon a simple interface that uses handlers internal
 
 ## Functions[​](#functions "Direct link to Functions")
 
-### [NewLogger()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/logger.go#L91)[​](#newlogger "Direct link to newlogger")
+### [NewLogger()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/logger.go#L91)[​](#newlogger "Direct link to newlogger")
 
 #### Usage[​](#usage "Direct link to Usage")
 
@@ -17526,7 +17672,7 @@ logger := log.NewLogger()
 
 Create a logger with no handlers and a real time clock. This provides an extended interface, including the `Option(opt ...Option) error` function to change the behaviour of the logger.
 
-### [NewLoggerWithInterfaces()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/logger.go#L95)[​](#newloggerwithinterfaces "Direct link to newloggerwithinterfaces")
+### [NewLoggerWithInterfaces()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/logger.go#L95)[​](#newloggerwithinterfaces "Direct link to newloggerwithinterfaces")
 
 #### Usage[​](#usage-1 "Direct link to Usage")
 
@@ -17538,7 +17684,7 @@ logger := log.NewLoggerWithInterfaces(myClock, []log.Handler{handler1, handler2}
 
 Provide a clock and some handlers when you create a new logger. Like [`NewLogger()`](#newlogger), this provides an extended interface, including the `Option(opt ...Option) error` function to change the behaviour of the logger.
 
-### [InitContext()](https://github.com/justtrackio/gosoline/blob/47a5bcfec77e453330c6ac6d5fb72c486f9c7321/pkg/log/context.go#L80)[​](#initcontext "Direct link to initcontext")
+### [InitContext()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/context.go#L80)[​](#initcontext "Direct link to initcontext")
 
 #### Usage[​](#usage-2 "Direct link to Usage")
 
@@ -17550,7 +17696,7 @@ ctx = log.InitContext(ctx)
 
 Return a new context capable of carrying (mutable) local and global logger fields.
 
-### [AppendContextFields()](https://github.com/justtrackio/gosoline/blob/47a5bcfec77e453330c6ac6d5fb72c486f9c7321/pkg/log/context.go#L115C6-L115C25)[​](#appendcontextfields "Direct link to appendcontextfields")
+### [AppendContextFields()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/context.go#L115C6-L115C25)[​](#appendcontextfields "Direct link to appendcontextfields")
 
 #### Usage[​](#usage-3 "Direct link to Usage")
 
@@ -17612,7 +17758,7 @@ caution
 
 Global fields override local fields when they have the same name.
 
-### [ContextFieldsResolver()](https://github.com/justtrackio/gosoline/blob/47a5bcfec77e453330c6ac6d5fb72c486f9c7321/pkg/log/context.go#L209C6-L209C27)[​](#contextfieldsresolver "Direct link to contextfieldsresolver")
+### [ContextFieldsResolver()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/context.go#L209C6-L209C27)[​](#contextfieldsresolver "Direct link to contextfieldsresolver")
 
 #### Usage[​](#usage-4 "Direct link to Usage")
 
@@ -17640,7 +17786,7 @@ print(localFields["field"])
 
 ## Methods[​](#methods "Direct link to Methods")
 
-### [Debug()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/logger.go#L119)[​](#debug "Direct link to debug")
+### [Debug()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/logger.go#L119)[​](#debug "Direct link to debug")
 
 ```
 logger.Debug(ctx, "Message")
@@ -17670,7 +17816,7 @@ Error()
 logger.Error(ctx, "Message")
 ```
 
-### [WithContextFieldsResolver()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/options.go#L5)[​](#withcontextfieldsresolver "Direct link to withcontextfieldsresolver")
+### [WithContextFieldsResolver()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/options.go#L5)[​](#withcontextfieldsresolver "Direct link to withcontextfieldsresolver")
 
 #### Usage[​](#usage-5 "Direct link to Usage")
 
@@ -17686,7 +17832,7 @@ if err := logger.Option(log.WithContextFieldsResolver(log.ContextFieldsResolver)
 
 Adds a context fields resolver to the logger.
 
-### [WithFields()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/options.go#L13)[​](#withfields "Direct link to withfields")
+### [WithFields()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/options.go#L13)[​](#withfields "Direct link to withfields")
 
 #### Usage[​](#usage-6 "Direct link to Usage")
 
@@ -17702,7 +17848,7 @@ loggerWithFields := logger.WithFields(log.Fields{
 
 Adds global fields to the logger, which will be set on every log message.
 
-### [WithHandlers()](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/options.go#L21)[​](#withhandlers "Direct link to withhandlers")
+### [WithHandlers()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/options.go#L21)[​](#withhandlers "Direct link to withhandlers")
 
 #### Usage[​](#usage-7 "Direct link to Usage")
 
@@ -17722,7 +17868,7 @@ Adds additional handlers to the logger.
 
 ## Interfaces[​](#interfaces "Direct link to Interfaces")
 
-### [Handler](https://github.com/justtrackio/gosoline/blob/ff4eff871415fdf1b2b0d4ae86f99a48a990778c/pkg/log/handler.go#L10)[​](#handler "Direct link to handler")
+### [Handler](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/log/handler.go#L10)[​](#handler "Direct link to handler")
 
 #### Definition[​](#definition "Direct link to Definition")
 
@@ -17830,7 +17976,7 @@ This package acts as a wrapper over Golang's `testing` module.
 
 ## Interfaces[​](#interfaces "Direct link to Interfaces")
 
-### [Suite](https://github.com/justtrackio/gosoline/blob/9b64c30bc4156d16fb1f2d11930f0b686b5d0113/pkg/test/suite/suite.go#L11)[​](#suite "Direct link to suite")
+### [Suite](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/test/suite/suite.go#L11)[​](#suite "Direct link to suite")
 
 #### Interface[​](#interface "Direct link to Interface")
 
@@ -17852,7 +17998,7 @@ type TestingSuite interface {
 
 ## Functions[​](#functions "Direct link to Functions")
 
-### [Run()](https://github.com/justtrackio/gosoline/blob/9b64c30bc4156d16fb1f2d11930f0b686b5d0113/pkg/test/suite/run.go#L30)[​](#run "Direct link to run")
+### [Run()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/test/suite/run.go#L30)[​](#run "Direct link to run")
 
 #### Parameters[​](#parameters "Direct link to Parameters")
 

@@ -1,17 +1,18 @@
 # Build a CLI tool
 
-The `pkg/cli` package lets you build multi-command CLI tools that run inside the gosoline application lifecycle — giving each command access to the same config, logger, and kernel modules as any other gosoline application.
+The `pkg/cli` package lets you build multi-command CLI tools that run inside the gosoline application lifecycle, giving each command access to the same config, logger, and kernel modules as any other gosoline application.
 
 In this guide, you'll learn how to:
 
 * Define a simple command
 * Group related commands (`api serve`, `db migrate`)
-* Add flags and read their values from config
+* Add flags, positional arguments, and read their values from config
+* Add built-in help output
 * Add a built-in `version` command
 
 ## Overview[​](#overview "Direct link to Overview")
 
-The entry point is `cli.NewCli()`. It embeds a `*Router`, which is a tree of named groups and commands. When you call `Run()`, it parses `os.Args`, resolves the matching command, injects parsed flags into the gosoline config, and starts the kernel with the command's application options.
+The entry point is `cli.NewCli()`. It embeds a `*Router`, which is a tree of named groups and commands. When you call `Run()`, it parses `os.Args`, resolves the matching command, injects parsed flags and positional arguments into the gosoline config, and starts the kernel with the command's application options.
 
 ```
 c := cli.NewCli(/* options... */)
@@ -23,12 +24,20 @@ c.Run()
 
 ## Defining a command[​](#defining-a-command "Direct link to Defining a command")
 
-Register a `Cmd` directly on the `Cli` (or on any child `*Router` returned by `Group()`). Each `Cmd` needs a `Name` and `AppOptions` containing the module to run:
+Register a `Cmd` directly on the `Cli` (or on any child `*Router` returned by `Group()`). Each `Cmd` needs a `Name` and `AppOptions` containing the module to run. Add `Description` and `Examples` to improve generated help output:
 
 ```
 c.Cmd(cli.Cmd{
 
-    Name: "migrate",
+    Name:        "migrate",
+
+    Description: "Run database migrations.",
+
+    Examples: []cli.CmdExample{
+
+        {Description: "Run migrations against production:", Args: "myapp migrate --env prod"},
+
+    },
 
     AppOptions: []application.Option{
 
@@ -51,27 +60,29 @@ c.Cmd(cli.Cmd{
 
 `application.WithModuleFactory` registers the command's kernel module. `cli.WithRunFunc` is a convenience wrapper that turns a plain function into a `kernel.ModuleFactory`.
 
+For simple command modules, you can also use `cli.Module` to wrap a typed factory and handler into the required `application.Option`.
+
 ## Grouping commands[​](#grouping-commands "Direct link to Grouping commands")
 
-`Group()` returns a child `*Router`. Register `Cmd`s on that router to create namespaced subcommands:
+`Group()` returns a child `*Router`. Register `Cmd`s on that router to create namespaced subcommands. Groups can also have a `Description`, shared `Flags`, and shared `AppOptions`:
 
 ```
-apiRouter := c.Group(cli.Group{Name: "api"})
+apiRouter := c.Group(cli.Group{Name: "api", Description: "Manage the API."})
 
-apiRouter.Cmd(cli.Cmd{Name: "serve", AppOptions: /* ... */})
+apiRouter.Cmd(cli.Cmd{Name: "serve", Description: "Start the API server.", AppOptions: /* ... */})
 
 
 
-dbRouter := c.Group(cli.Group{Name: "db"})
+dbRouter := c.Group(cli.Group{Name: "db", Description: "Manage the database."})
 
-dbRouter.Cmd(cli.Cmd{Name: "migrate", AppOptions: /* ... */})
+dbRouter.Cmd(cli.Cmd{Name: "migrate", Description: "Run database migrations.", AppOptions: /* ... */})
 ```
 
 This produces commands like `myapp api serve` and `myapp db migrate`. Groups can be nested arbitrarily deep.
 
 ## Adding flags[​](#adding-flags "Direct link to Adding flags")
 
-Declare flags on a `Cmd` (or `Group`) with `cli.Flag`. Each flag has a short name, a long name, an optional default, and an optional `CfgKey` to map the value to an arbitrary config path:
+Declare flags on a `Cmd`, `Group`, or globally with `cli.WithFlag`. Each flag has a short name, a long name, an optional default, and an optional `CfgKey` to map the value to an arbitrary config path:
 
 ```
 cli.Cmd{
@@ -89,15 +100,40 @@ cli.Cmd{
 }
 ```
 
-| Field         | Description                                           |
-| ------------- | ----------------------------------------------------- |
-| `Short`       | Single-character flag (`-p`)                          |
-| `Long`        | Long-form flag (`--port`)                             |
-| `Default`     | Value used when the flag is absent                    |
-| `CfgKey`      | If set, the value is also written to this config path |
-| `Description` | Human-readable description                            |
+| Field         | Description                                            |
+| ------------- | ------------------------------------------------------ |
+| `Short`       | Single-character flag (`-p`)                           |
+| `Long`        | Long-form flag (`--port`)                              |
+| `Kind`        | Parse mode: `cli.FlagKindString` or `cli.FlagKindList` |
+| `Default`     | Value used when the flag is absent                     |
+| `CfgKey`      | If set, the value is also written to this config path  |
+| `Description` | Human-readable description                             |
 
-The flag value is always available at `cli.flags.<long>` in the config. If `CfgKey` is set, it is also written there. The short flag takes precedence over the long flag when both are provided.
+The flag value is always available at `cli.flags.<long>` in the config, with hyphens replaced by underscores. For example, `--dry-run` is available as `cli.flags.dry_run`. If `CfgKey` is set, the value is also written there.
+
+String flags use `cli.FlagKindString`, which is also the default when `Kind` is omitted. When the same string flag is provided multiple times, the last matching short or long value wins.
+
+List flags use `cli.FlagKindList` and collect all matching short and long values in order:
+
+```
+cli.Flag{
+
+    Short:       "i",
+
+    Long:        "include",
+
+    Kind:        cli.FlagKindList,
+
+    Description: "file or pattern to include",
+
+}
+```
+
+```
+myapp run --include users.json -i orders.json
+```
+
+This writes `[]string{"users.json", "orders.json"}` to `cli.flags.include`.
 
 Read the value inside your module registration:
 
@@ -133,9 +169,93 @@ AppOptions: []application.Option{
 },
 ```
 
+You can also unmarshal all values from `cli.flags` into a struct:
+
+```
+type ServeFlags struct {
+
+    Port string `cfg:"port"`
+
+}
+
+
+
+flags, err := cli.UnmarshalFlags[ServeFlags](config)
+
+if err != nil {
+
+    return nil, err
+
+}
+```
+
+## Positional arguments[​](#positional-arguments "Direct link to Positional arguments")
+
+Commands can document the positional arguments they accept. This affects help output:
+
+```
+cli.Cmd{
+
+    Name:        "import",
+
+    Description: "Import one or more files.",
+
+    Arguments:   cli.CmdArgumentsMultiple,
+
+    AppOptions:  /* ... */,
+
+}
+```
+
+| Value                      | Help usage              |
+| -------------------------- | ----------------------- |
+| `cli.CmdArgumentsNone`     | no positional arguments |
+| `cli.CmdArgumentsSingle`   | `<arg>`                 |
+| `cli.CmdArgumentsMultiple` | `<args...>`             |
+
+Runtime arguments are written to `cli.args`. Read them with `cli.GetArguments`:
+
+```
+args, err := cli.GetArguments(config)
+
+if err != nil {
+
+    return nil, err
+
+}
+```
+
+The selected command path is written to `cli.cmd`.
+
+## Built-in help[​](#built-in-help "Direct link to Built-in help")
+
+Pass `cli.WithHelp` to configure top-level help text and register the built-in `help` command:
+
+```
+c := cli.NewCli(
+
+    cli.WithHelp("myapp", "Example CLI application."),
+
+)
+```
+
+Users can request help with the `help` command or with `-h` / `--help`:
+
+```
+myapp help
+
+myapp help api serve
+
+myapp api serve --help
+
+myapp api serve -h
+```
+
+Help output includes command and group descriptions, usage, flags, defaults, positional argument markers, and command examples. Unknown commands print an error and then the relevant help output. You can change help wrapping with `cli.WithHelpLineLength`; pass a negative value to disable wrapping.
+
 ## Default command[​](#default-command "Direct link to Default command")
 
-Use `DefaultCmd` to register a fallback that runs when no command matches — useful for showing usage:
+Use `DefaultCmd` to register a fallback that runs when no explicit command is selected. This is useful when empty input should execute a command instead of showing help:
 
 ```
 c.DefaultCmd(cli.Cmd{
@@ -158,6 +278,8 @@ c.DefaultCmd(cli.Cmd{
 
 })
 ```
+
+Unknown commands do not run the default command. They return an error and, when help is configured, print contextual help.
 
 ## Built-in version command[​](#built-in-version-command "Direct link to Built-in version command")
 
@@ -192,8 +314,6 @@ import (
 
 	"context"
 
-	"fmt"
-
 
 
 	"github.com/justtrackio/gosoline/pkg/application"
@@ -214,6 +334,8 @@ func main() {
 
 	c := cli.NewCli(
 
+		cli.WithHelp("myapp", "Example CLI application."),
+
 		cli.WithVersion("1.0.0"),
 
 		cli.WithAppOptions(
@@ -228,11 +350,19 @@ func main() {
 
 	// Register subcommands under the "api" group.
 
-	apiRouter := c.Group(cli.Group{Name: "api"})
+	apiRouter := c.Group(cli.Group{Name: "api", Description: "Manage the API."})
 
 	apiRouter.Cmd(cli.Cmd{
 
-		Name: "serve",
+		Name:        "serve",
+
+		Description: "Start the API server.",
+
+		Examples: []cli.CmdExample{
+
+			{Description: "Start the API server on a custom port:", Args: "myapp api serve --port 9090"},
+
+		},
 
 		Flags: []cli.Flag{
 
@@ -274,15 +404,27 @@ func main() {
 
 	// Register subcommands under the "db" group.
 
-	dbRouter := c.Group(cli.Group{Name: "db"})
+	dbRouter := c.Group(cli.Group{Name: "db", Description: "Manage the database."})
 
 	dbRouter.Cmd(cli.Cmd{
 
-		Name: "migrate",
+		Name:        "migrate",
+
+		Description: "Run database migrations.",
+
+		Arguments:   cli.CmdArgumentsMultiple,
+
+		Examples: []cli.CmdExample{
+
+			{Description: "Run migrations against production:", Args: "myapp db migrate --env prod"},
+
+		},
 
 		Flags: []cli.Flag{
 
 			{Short: "e", Long: "env", CfgKey: "app.env", Default: "dev", Description: "target environment"},
+
+			{Short: "i", Long: "include", Kind: cli.FlagKindList, Description: "migration file or pattern to include"},
 
 		},
 
@@ -300,41 +442,39 @@ func main() {
 
 
 
+				args, err := cli.GetArguments(config)
+
+				if err != nil {
+
+					return nil, err
+
+				}
+
+
+
+				flags, err := cli.UnmarshalFlags[struct {
+
+					Include []string `cfg:"include"`
+
+				}](config)
+
+				if err != nil {
+
+					return nil, err
+
+				}
+
+
+
 				return func(ctx context.Context) error {
 
 					logger.Info(ctx, "running migrations in env: %s", env)
 
-					return nil
+					logger.Info(ctx, "migration arguments: %v", args)
 
-				}, nil
-
-			})),
-
-		},
-
-	})
+					logger.Info(ctx, "included migrations: %v", flags.Include)
 
 
-
-	// Fallback when no command is matched.
-
-	c.DefaultCmd(cli.Cmd{
-
-		AppOptions: []application.Option{
-
-			application.WithModuleFactory("main", cli.WithRunFunc(func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.ModuleRunFunc, error) {
-
-				return func(ctx context.Context) error {
-
-					fmt.Println("Usage: myapp <command> [flags]")
-
-					fmt.Println("Commands:")
-
-					fmt.Println("  api serve    Start the API server")
-
-					fmt.Println("  db migrate   Run database migrations")
-
-					fmt.Println("  version      Print the version")
 
 					return nil
 
@@ -368,9 +508,15 @@ app:
 Run the commands:
 
 ```
-# Show usage (default command)
+# Show top-level help
 
-go run main.go
+go run main.go help
+
+
+
+# Show command help
+
+go run main.go api serve --help
 
 
 
@@ -380,9 +526,9 @@ go run main.go api serve --port 9090
 
 
 
-# Run migrations against production
+# Run migrations against production with positional args and a repeated list flag
 
-go run main.go db migrate --env prod
+go run main.go db migrate migrations/*.sql --env prod --include users -i orders
 
 
 

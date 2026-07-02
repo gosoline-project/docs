@@ -42,7 +42,7 @@
 - [Sampling & fingers-crossed](/how-to/logging/sampling-and-fingers-crossed.md): Gosoline supports log sampling and "fingers-crossed" logging to help you manage log volume without losing critical debug information when errors occur.
 - [Use loggers](/how-to/logging/use-loggers.md): With gosoline, there are multiple ways to configure and use a logger.
 - [Use sampling](/how-to/sampling/use-sampling.md): The smpl package helps you make a consistent sampling decision (sampled vs. not sampled) and store it in a context.Context. Other gosoline packages can then use that decision to change behavior (e.g. reduce log volume).
-- [Build a CLI tool](/how-to/use-cli.md): The pkg/cli package lets you build multi-command CLI tools that run inside the gosoline application lifecycle — giving each command access to the same config, logger, and kernel modules as any other gosoline application.
+- [Build a CLI tool](/how-to/use-cli.md): The pkg/cli package lets you build multi-command CLI tools that run inside the gosoline application lifecycle, giving each command access to the same config, logger, and kernel modules as any other gosoline application.
 - [Implement health checks](/how-to/write-health-checks.md): You can check the health of a running gosoline application.
 - [Migrating to Identity and Naming Patterns](/migrations/app-identity-and-naming-patterns.md): This guide details how to migrate your gosoline application to the new Identity system and dynamic resource naming.
 - [Migrating to the Standalone HTTP Server Package](/migrations/httpserver-package.md): This guide explains how to migrate from the old github.com/justtrackio/gosoline/pkg/httpserver package directly to the standalone github.com/gosoline-project/httpserver module at v0.5.6.

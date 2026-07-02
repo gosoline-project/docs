@@ -4,7 +4,7 @@ This package acts as a wrapper over Golang's `testing` module.
 
 ## Interfaces[​](#interfaces "Direct link to Interfaces")
 
-### [Suite](https://github.com/justtrackio/gosoline/blob/9b64c30bc4156d16fb1f2d11930f0b686b5d0113/pkg/test/suite/suite.go#L11)[​](#suite "Direct link to suite")
+### [Suite](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/test/suite/suite.go#L11)[​](#suite "Direct link to suite")
 
 #### Interface[​](#interface "Direct link to Interface")
 
@@ -26,7 +26,7 @@ type TestingSuite interface {
 
 ## Functions[​](#functions "Direct link to Functions")
 
-### [Run()](https://github.com/justtrackio/gosoline/blob/9b64c30bc4156d16fb1f2d11930f0b686b5d0113/pkg/test/suite/run.go#L30)[​](#run "Direct link to run")
+### [Run()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/test/suite/run.go#L30)[​](#run "Direct link to run")
 
 #### Parameters[​](#parameters "Direct link to Parameters")
 
