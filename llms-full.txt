@@ -29,6 +29,7 @@
 - [Add middleware](/how-to/http-server/add-middleware.md): The httpserver includes a built-in middleware chain and supports custom middleware at both the router and route-group level.
 - [Authenticate requests](/how-to/http-server/authentication.md): The github.com/gosoline-project/httpserver/auth package provides Gin-compatible middleware for common HTTP authentication patterns. You can attach auth middleware to the whole server, to a route group, or to selected routes.
 - [Build an HTTP service](/how-to/http-server/build-an-http-service.md): In this guide, you'll build a complete HTTP service from scratch. You'll start with the basics of defining routes, then level up to type-safe handlers with dependency injection, request binding, and structured responses.
+- [Chaos middleware](/how-to/http-server/chaos-middleware.md): The httpserver includes an optional chaos middleware for resilience testing. When enabled, it randomly introduces failures to exercise client retry logic, circuit breakers, and timeout handling in non-production environments.
 - [Concurrency and connection pressure](/how-to/http-server/concurrency-and-connection-pressure.md): The httpserver provides three complementary mechanisms to protect your service under load:
 - [Configure your server](/how-to/http-server/configure-your-server.md): The httpserver package provides flexible configuration options through YAML config files. All settings live under httpserver. where ` is the server name you pass to NewServer`.
 - [Real-world example](/how-to/http-server/real-world-example.md): This guide walks through how two production applications — flink-admin and lakehouse-admin — use the httpserver package. These patterns demonstrate best practices for structuring a real application.
@@ -6089,8 +6090,10 @@ Every httpserver automatically includes these middleware, applied in order:
 7. **Recovery** — Catches panics and returns 500 errors
 8. **Location** — Extracts location information
 9. **Connection lifecycle** — Manages connection age and request count limits
+10. **Concurrency** — Limits concurrent requests
+11. **Chaos** — Randomly introduces failures for resilience testing (disabled by default)
 
-You don't need to configure these — they are enabled by default.
+You don't need to configure these — they are enabled by default (except chaos, which is opt-in).
 
 ## Request body size limit[​](#request-body-size-limit "Direct link to Request body size limit")
 
@@ -7643,6 +7646,267 @@ curl http://localhost:8088/api/users/health
 * [Configure your server](/docs/how-to/http-server/configure-your-server.md) — timeouts, compression, multiple servers
 * [Add middleware](/docs/how-to/http-server/add-middleware.md) — custom middleware, CORS
 * [Real-world example](/docs/how-to/http-server/real-world-example.md) — patterns from production applications
+
+
+---
+
+# Chaos middleware
+
+The httpserver includes an optional chaos middleware for resilience testing. When enabled, it randomly introduces failures to exercise client retry logic, circuit breakers, and timeout handling in non-production environments.
+
+The middleware is applied **after** the health check route, so Kubernetes liveness and readiness probes are never affected.
+
+## Enabling chaos[​](#enabling-chaos "Direct link to Enabling chaos")
+
+Chaos is disabled by default. Enable it under `httpserver.<name>.chaos`:
+
+```
+httpserver:
+
+  default:
+
+    chaos:
+
+      enabled: true
+```
+
+When `enabled` is `false` (the default), the middleware is a no-op with zero overhead.
+
+## Failure scenarios[​](#failure-scenarios "Direct link to Failure scenarios")
+
+The middleware evaluates scenarios in this order on every request:
+
+1. **Drop** → **Delay** → **Reject** → **Slow response** → **Truncate** → normal processing
+
+Each scenario has an independent `percent` probability (0–100). **Drop** and **reject** are terminal — if they trigger, the request ends immediately. The other scenarios combine: a single request can be delayed *and* get a slow response *and* be truncated. This produces realistic compound failures (e.g. a slow upstream that also crashes mid-response).
+
+### Drop[​](#drop "Direct link to Drop")
+
+Hijacks the TCP connection and closes it immediately without sending any response. The client sees `connection reset by peer` or `EOF`.
+
+**Simulates:** OOM-killed pod, network partition, hard crash.
+
+```
+chaos:
+
+  enabled: true
+
+  drop:
+
+    percent: 2
+```
+
+| Field     | Type | Default | Description                                       |
+| --------- | ---- | ------- | ------------------------------------------------- |
+| `percent` | int  | `3`     | Probability (0–100) that a connection is dropped. |
+
+### Delay[​](#delay "Direct link to Delay")
+
+Adds random latency before the request is processed. The delay is uniformly distributed between `min_duration` and `max_duration`.
+
+**Simulates:** Garbage collection pauses, overloaded upstream, network congestion.
+
+```
+chaos:
+
+  enabled: true
+
+  delay:
+
+    percent: 5
+
+    min_duration: 1s
+
+    max_duration: 30s
+```
+
+| Field          | Type     | Default | Description                                    |
+| -------------- | -------- | ------- | ---------------------------------------------- |
+| `percent`      | int      | `3`     | Probability (0–100) that a request is delayed. |
+| `min_duration` | duration | `0`     | Minimum delay before processing.               |
+| `max_duration` | duration | `60s`   | Maximum delay before processing.               |
+
+The delay respects context cancellation — if the client disconnects, the delay is interrupted immediately.
+
+### Reject[​](#reject "Direct link to Reject")
+
+Responds with a random HTTP error status code, chosen from the configured list.
+
+**Simulates:** Backend returning 5xx errors under load.
+
+```
+chaos:
+
+  enabled: true
+
+  reject:
+
+    percent: 5
+
+    status_codes:
+
+      - 500
+
+      - 502
+
+      - 503
+
+      - 504
+```
+
+| Field          | Type   | Default                     | Description                                                                |
+| -------------- | ------ | --------------------------- | -------------------------------------------------------------------------- |
+| `percent`      | int    | `3`                         | Probability (0–100) that a request is rejected.                            |
+| `status_codes` | \[]int | `[499, 500, 502, 503, 504]` | Status codes to respond with. One is chosen randomly per rejected request. |
+
+### Slow response[​](#slow-response "Direct link to Slow response")
+
+Wraps the response writer so the response body is trickled to the client in small chunks with configurable delays between them. Headers are sent immediately, but the body takes a very long time to arrive.
+
+**Simulates:** Overloaded upstream sending bytes slowly, defeating simple read timeouts because bytes *are* arriving.
+
+```
+chaos:
+
+  enabled: true
+
+  slow_response:
+
+    percent: 3
+
+    delay: 1s
+
+    chunk_size: 64
+```
+
+| Field        | Type     | Default | Description                                       |
+| ------------ | -------- | ------- | ------------------------------------------------- |
+| `percent`    | int      | `3`     | Probability (0–100) that a response is throttled. |
+| `delay`      | duration | `1s`    | Pause between each chunk written to the client.   |
+| `chunk_size` | int      | `64`    | Number of bytes per chunk.                        |
+
+### Truncate[​](#truncate "Direct link to Truncate")
+
+Sends the response headers and a partial body, then forcibly closes the connection. The client receives a valid HTTP status and headers, starts reading the body, then gets `unexpected EOF`.
+
+**Simulates:** Upstream crash mid-response, load balancer timeout after partial forward.
+
+```
+chaos:
+
+  enabled: true
+
+  truncate:
+
+    percent: 2
+
+    max_bytes: 512
+```
+
+| Field       | Type | Default | Description                                                                                                             |
+| ----------- | ---- | ------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `percent`   | int  | `3`     | Probability (0–100) that a response is truncated.                                                                       |
+| `max_bytes` | int  | `512`   | Maximum body bytes sent before dropping the connection. A random value between 1 and `max_bytes` is chosen per request. |
+
+## Full configuration example[​](#full-configuration-example "Direct link to Full configuration example")
+
+A sandbox configuration that produces a realistic mix of failures:
+
+```
+httpserver:
+
+  default:
+
+    chaos:
+
+      enabled: true
+
+      drop:
+
+        percent: 2
+
+      delay:
+
+        percent: 5
+
+        min_duration: 500ms
+
+        max_duration: 10s
+
+      reject:
+
+        percent: 5
+
+        status_codes:
+
+          - 499
+
+          - 500
+
+          - 502
+
+          - 503
+
+          - 504
+
+      slow_response:
+
+        percent: 3
+
+        delay: 1s
+
+        chunk_size: 64
+
+      truncate:
+
+        percent: 2
+
+        max_bytes: 512
+```
+
+With this configuration, roughly 17% of requests are affected by some failure (2 + 5 + 5 + 3 + 2, though the exact probability is slightly lower since earlier scenarios short-circuit later ones).
+
+## Using chaos per route group[​](#using-chaos-per-route-group "Direct link to Using chaos per route group")
+
+The built-in chaos middleware is applied to the entire server. If you need chaos only on specific routes, use `router.UseFactory` or `router.Use` on a group:
+
+```
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+
+    chaosSettings := httpserver.ChaosSettings{
+
+        Enabled: true,
+
+        Drop:    httpserver.ChaosDropSettings{Percent: 10},
+
+    }
+
+
+
+    api := router.Group("/api")
+
+    api.Use(httpserver.ChaosMiddleware(ctx, logger, chaosSettings))
+
+
+
+    api.GET("/users", httpserver.BindN(listUsers))
+
+
+
+    return nil
+
+}
+```
+
+## Safety notes[​](#safety-notes "Direct link to Safety notes")
+
+warning
+
+Never enable chaos middleware in production. The middleware is designed for sandbox and staging environments only. Use environment-specific config files or environment variable overrides to ensure `chaos.enabled` is always `false` in production.
+
+note
+
+The `/health` endpoint is registered before the chaos middleware, so health checks are never affected — pods will not be killed by liveness probes hitting a dropped connection.
 
 
 ---
@@ -17588,16 +17852,20 @@ Register custom field validators for use in `binding` tags.
 
 Config key: `httpserver.<name>`
 
-| Field            | Type                | Default     | Description                                                          |
-| ---------------- | ------------------- | ----------- | -------------------------------------------------------------------- |
-| `port`           | string              | `"8080"`    | Listening port. Use `"0"` for random port.                           |
-| `mode`           | string              | `"release"` | Gin mode: `debug`, `release`, `test`.                                |
-| `compression`    | CompressionSettings | -           | Gzip configuration.                                                  |
-| `cors`           | CorsSettings        | -           | CORS middleware configuration.                                       |
-| `timeout`        | TimeoutSettings     | -           | IO timeouts.                                                         |
-| `logging`        | LoggingSettings     | -           | Request logging configuration.                                       |
-| `router`         | RouterSettings      | -           | Router configuration.                                                |
-| `max_body_bytes` | int                 | `10485760`  | Maximum incoming request body size in bytes. `0` disables the limit. |
+| Field                  | Type                               | Default     | Description                                                          |
+| ---------------------- | ---------------------------------- | ----------- | -------------------------------------------------------------------- |
+| `port`                 | string                             | `"8080"`    | Listening port. Use `"0"` for random port.                           |
+| `mode`                 | string                             | `"release"` | Gin mode: `debug`, `release`, `test`.                                |
+| `compression`          | CompressionSettings                | -           | Gzip configuration.                                                  |
+| `cors`                 | CorsSettings                       | -           | CORS middleware configuration.                                       |
+| `timeout`              | TimeoutSettings                    | -           | IO timeouts.                                                         |
+| `logging`              | LoggingSettings                    | -           | Request logging configuration.                                       |
+| `errors`               | ErrorsSettings                     | -           | Error response privacy configuration.                                |
+| `router`               | RouterSettings                     | -           | Router configuration.                                                |
+| `max_body_bytes`       | int                                | `10485760`  | Maximum incoming request body size in bytes. `0` disables the limit. |
+| `concurrency`          | ConcurrencySettings                | -           | Request and connection pressure limits.                              |
+| `connection_lifecycle` | ConnectionLifeCycleAdvisorSettings | -           | Connection age and request count limits.                             |
+| `chaos`                | ChaosSettings                      | -           | Chaos middleware for resilience testing.                             |
 
 ### TimeoutSettings[​](#timeoutsettings "Direct link to TimeoutSettings")
 
@@ -17643,13 +17911,87 @@ The origin pattern is anchored internally. For example, `https://example\.com` a
 | `request_body_base64` | bool         | `false` | Base64-encode request body in logs.                                      |
 | `request_headers`     | string array | `[]`    | Header names to include in logs. Only the configured headers are logged. |
 
+### ErrorsSettings[​](#errorssettings "Direct link to ErrorsSettings")
+
+| Field     | Type   | Default     | Description                                                                          |
+| --------- | ------ | ----------- | ------------------------------------------------------------------------------------ |
+| `privacy` | string | `"private"` | `"private"` hides internal error details for 5xx responses. `"public"` exposes them. |
+
+### RouterSettings[​](#routersettings "Direct link to RouterSettings")
+
+| Field          | Type | Default | Description                                            |
+| -------------- | ---- | ------- | ------------------------------------------------------ |
+| `use_raw_path` | bool | `false` | Use the raw URL path (not decoded) for route matching. |
+
+### ConcurrencySettings[​](#concurrencysettings "Direct link to ConcurrencySettings")
+
+| Field                  | Type     | Default | Description                                                                        |
+| ---------------------- | -------- | ------- | ---------------------------------------------------------------------------------- |
+| `max_requests`         | int      | `0`     | Maximum concurrent requests. `0` disables the limit.                               |
+| `max_connections`      | int      | `0`     | Target maximum open TCP connections. `0` disables connection pressure management.  |
+| `overload_status_code` | int      | `503`   | HTTP status code returned when `max_requests` is reached.                          |
+| `retry_after`          | duration | `0`     | Value for the `Retry-After` response header when overloaded. `0` omits the header. |
+
+See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure.md) for detailed behaviour.
+
 ### ConnectionLifeCycleAdvisorSettings[​](#connectionlifecycleadvisorsettings "Direct link to ConnectionLifeCycleAdvisorSettings")
 
-| Field                          | Type     | Default | Description                                 |
-| ------------------------------ | -------- | ------- | ------------------------------------------- |
-| `enabled`                      | bool     | `true`  | Enable connection lifecycle management.     |
-| `max_connection_age`           | duration | `1m`    | Max connection age before close.            |
-| `max_connection_request_count` | int      | `0`     | Max requests per connection (0 = disabled). |
+| Field               | Type     | Default | Description                                                                            |
+| ------------------- | -------- | ------- | -------------------------------------------------------------------------------------- |
+| `enabled`           | bool     | `true`  | Enable connection lifecycle management.                                                |
+| `max_age`           | duration | `1m`    | Max connection age before signalling close. `0` disables age-based closing.            |
+| `max_request_count` | int      | `0`     | Max requests per connection before signalling close. `0` disables count-based closing. |
+
+See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure.md) for detailed behaviour.
+
+### ChaosSettings[​](#chaossettings "Direct link to ChaosSettings")
+
+| Field           | Type                      | Default | Description                   |
+| --------------- | ------------------------- | ------- | ----------------------------- |
+| `enabled`       | bool                      | `false` | Enable chaos middleware.      |
+| `reject`        | ChaosRejectSettings       | -       | Random HTTP error responses.  |
+| `delay`         | ChaosDelaySettings        | -       | Random pre-processing delays. |
+| `drop`          | ChaosDropSettings         | -       | Random TCP connection drops.  |
+| `slow_response` | ChaosSlowResponseSettings | -       | Random trickle responses.     |
+| `truncate`      | ChaosTruncateSettings     | -       | Random response truncation.   |
+
+### ChaosRejectSettings[​](#chaosrejectsettings "Direct link to ChaosRejectSettings")
+
+| Field          | Type      | Default                     | Description                         |
+| -------------- | --------- | --------------------------- | ----------------------------------- |
+| `percent`      | int       | `3`                         | Probability (0–100) of rejection.   |
+| `status_codes` | int array | `[499, 500, 502, 503, 504]` | Status codes to randomly pick from. |
+
+### ChaosDelaySettings[​](#chaosdelaysettings "Direct link to ChaosDelaySettings")
+
+| Field          | Type     | Default | Description                   |
+| -------------- | -------- | ------- | ----------------------------- |
+| `percent`      | int      | `3`     | Probability (0–100) of delay. |
+| `min_duration` | duration | `0`     | Minimum delay.                |
+| `max_duration` | duration | `60s`   | Maximum delay.                |
+
+### ChaosDropSettings[​](#chaosdropsettings "Direct link to ChaosDropSettings")
+
+| Field     | Type | Default | Description                             |
+| --------- | ---- | ------- | --------------------------------------- |
+| `percent` | int  | `3`     | Probability (0–100) of connection drop. |
+
+### ChaosSlowResponseSettings[​](#chaosslowresponsesettings "Direct link to ChaosSlowResponseSettings")
+
+| Field        | Type     | Default | Description                                |
+| ------------ | -------- | ------- | ------------------------------------------ |
+| `percent`    | int      | `3`     | Probability (0–100) of throttled response. |
+| `delay`      | duration | `1s`    | Pause between chunks.                      |
+| `chunk_size` | int      | `64`    | Bytes per chunk.                           |
+
+### ChaosTruncateSettings[​](#chaostruncatesettings "Direct link to ChaosTruncateSettings")
+
+| Field       | Type | Default | Description                         |
+| ----------- | ---- | ------- | ----------------------------------- |
+| `percent`   | int  | `3`     | Probability (0–100) of truncation.  |
+| `max_bytes` | int  | `512`   | Maximum body bytes before dropping. |
+
+See the [Chaos middleware how-to](/docs/how-to/http-server/chaos-middleware.md) for usage examples and safety notes.
 
 
 ---

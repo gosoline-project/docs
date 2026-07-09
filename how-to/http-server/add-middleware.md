@@ -15,8 +15,10 @@ Every httpserver automatically includes these middleware, applied in order:
 7. **Recovery** — Catches panics and returns 500 errors
 8. **Location** — Extracts location information
 9. **Connection lifecycle** — Manages connection age and request count limits
+10. **Concurrency** — Limits concurrent requests
+11. **Chaos** — Randomly introduces failures for resilience testing (disabled by default)
 
-You don't need to configure these — they are enabled by default.
+You don't need to configure these — they are enabled by default (except chaos, which is opt-in).
 
 ## Request body size limit[​](#request-body-size-limit "Direct link to Request body size limit")
 

@@ -325,16 +325,20 @@ Register custom field validators for use in `binding` tags.
 
 Config key: `httpserver.<name>`
 
-| Field            | Type                | Default     | Description                                                          |
-| ---------------- | ------------------- | ----------- | -------------------------------------------------------------------- |
-| `port`           | string              | `"8080"`    | Listening port. Use `"0"` for random port.                           |
-| `mode`           | string              | `"release"` | Gin mode: `debug`, `release`, `test`.                                |
-| `compression`    | CompressionSettings | -           | Gzip configuration.                                                  |
-| `cors`           | CorsSettings        | -           | CORS middleware configuration.                                       |
-| `timeout`        | TimeoutSettings     | -           | IO timeouts.                                                         |
-| `logging`        | LoggingSettings     | -           | Request logging configuration.                                       |
-| `router`         | RouterSettings      | -           | Router configuration.                                                |
-| `max_body_bytes` | int                 | `10485760`  | Maximum incoming request body size in bytes. `0` disables the limit. |
+| Field                  | Type                               | Default     | Description                                                          |
+| ---------------------- | ---------------------------------- | ----------- | -------------------------------------------------------------------- |
+| `port`                 | string                             | `"8080"`    | Listening port. Use `"0"` for random port.                           |
+| `mode`                 | string                             | `"release"` | Gin mode: `debug`, `release`, `test`.                                |
+| `compression`          | CompressionSettings                | -           | Gzip configuration.                                                  |
+| `cors`                 | CorsSettings                       | -           | CORS middleware configuration.                                       |
+| `timeout`              | TimeoutSettings                    | -           | IO timeouts.                                                         |
+| `logging`              | LoggingSettings                    | -           | Request logging configuration.                                       |
+| `errors`               | ErrorsSettings                     | -           | Error response privacy configuration.                                |
+| `router`               | RouterSettings                     | -           | Router configuration.                                                |
+| `max_body_bytes`       | int                                | `10485760`  | Maximum incoming request body size in bytes. `0` disables the limit. |
+| `concurrency`          | ConcurrencySettings                | -           | Request and connection pressure limits.                              |
+| `connection_lifecycle` | ConnectionLifeCycleAdvisorSettings | -           | Connection age and request count limits.                             |
+| `chaos`                | ChaosSettings                      | -           | Chaos middleware for resilience testing.                             |
 
 ### TimeoutSettings[​](#timeoutsettings "Direct link to TimeoutSettings")
 
@@ -380,10 +384,84 @@ The origin pattern is anchored internally. For example, `https://example\.com` a
 | `request_body_base64` | bool         | `false` | Base64-encode request body in logs.                                      |
 | `request_headers`     | string array | `[]`    | Header names to include in logs. Only the configured headers are logged. |
 
+### ErrorsSettings[​](#errorssettings "Direct link to ErrorsSettings")
+
+| Field     | Type   | Default     | Description                                                                          |
+| --------- | ------ | ----------- | ------------------------------------------------------------------------------------ |
+| `privacy` | string | `"private"` | `"private"` hides internal error details for 5xx responses. `"public"` exposes them. |
+
+### RouterSettings[​](#routersettings "Direct link to RouterSettings")
+
+| Field          | Type | Default | Description                                            |
+| -------------- | ---- | ------- | ------------------------------------------------------ |
+| `use_raw_path` | bool | `false` | Use the raw URL path (not decoded) for route matching. |
+
+### ConcurrencySettings[​](#concurrencysettings "Direct link to ConcurrencySettings")
+
+| Field                  | Type     | Default | Description                                                                        |
+| ---------------------- | -------- | ------- | ---------------------------------------------------------------------------------- |
+| `max_requests`         | int      | `0`     | Maximum concurrent requests. `0` disables the limit.                               |
+| `max_connections`      | int      | `0`     | Target maximum open TCP connections. `0` disables connection pressure management.  |
+| `overload_status_code` | int      | `503`   | HTTP status code returned when `max_requests` is reached.                          |
+| `retry_after`          | duration | `0`     | Value for the `Retry-After` response header when overloaded. `0` omits the header. |
+
+See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure.md) for detailed behaviour.
+
 ### ConnectionLifeCycleAdvisorSettings[​](#connectionlifecycleadvisorsettings "Direct link to ConnectionLifeCycleAdvisorSettings")
 
-| Field                          | Type     | Default | Description                                 |
-| ------------------------------ | -------- | ------- | ------------------------------------------- |
-| `enabled`                      | bool     | `true`  | Enable connection lifecycle management.     |
-| `max_connection_age`           | duration | `1m`    | Max connection age before close.            |
-| `max_connection_request_count` | int      | `0`     | Max requests per connection (0 = disabled). |
+| Field               | Type     | Default | Description                                                                            |
+| ------------------- | -------- | ------- | -------------------------------------------------------------------------------------- |
+| `enabled`           | bool     | `true`  | Enable connection lifecycle management.                                                |
+| `max_age`           | duration | `1m`    | Max connection age before signalling close. `0` disables age-based closing.            |
+| `max_request_count` | int      | `0`     | Max requests per connection before signalling close. `0` disables count-based closing. |
+
+See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure.md) for detailed behaviour.
+
+### ChaosSettings[​](#chaossettings "Direct link to ChaosSettings")
+
+| Field           | Type                      | Default | Description                   |
+| --------------- | ------------------------- | ------- | ----------------------------- |
+| `enabled`       | bool                      | `false` | Enable chaos middleware.      |
+| `reject`        | ChaosRejectSettings       | -       | Random HTTP error responses.  |
+| `delay`         | ChaosDelaySettings        | -       | Random pre-processing delays. |
+| `drop`          | ChaosDropSettings         | -       | Random TCP connection drops.  |
+| `slow_response` | ChaosSlowResponseSettings | -       | Random trickle responses.     |
+| `truncate`      | ChaosTruncateSettings     | -       | Random response truncation.   |
+
+### ChaosRejectSettings[​](#chaosrejectsettings "Direct link to ChaosRejectSettings")
+
+| Field          | Type      | Default                     | Description                         |
+| -------------- | --------- | --------------------------- | ----------------------------------- |
+| `percent`      | int       | `3`                         | Probability (0–100) of rejection.   |
+| `status_codes` | int array | `[499, 500, 502, 503, 504]` | Status codes to randomly pick from. |
+
+### ChaosDelaySettings[​](#chaosdelaysettings "Direct link to ChaosDelaySettings")
+
+| Field          | Type     | Default | Description                   |
+| -------------- | -------- | ------- | ----------------------------- |
+| `percent`      | int      | `3`     | Probability (0–100) of delay. |
+| `min_duration` | duration | `0`     | Minimum delay.                |
+| `max_duration` | duration | `60s`   | Maximum delay.                |
+
+### ChaosDropSettings[​](#chaosdropsettings "Direct link to ChaosDropSettings")
+
+| Field     | Type | Default | Description                             |
+| --------- | ---- | ------- | --------------------------------------- |
+| `percent` | int  | `3`     | Probability (0–100) of connection drop. |
+
+### ChaosSlowResponseSettings[​](#chaosslowresponsesettings "Direct link to ChaosSlowResponseSettings")
+
+| Field        | Type     | Default | Description                                |
+| ------------ | -------- | ------- | ------------------------------------------ |
+| `percent`    | int      | `3`     | Probability (0–100) of throttled response. |
+| `delay`      | duration | `1s`    | Pause between chunks.                      |
+| `chunk_size` | int      | `64`    | Bytes per chunk.                           |
+
+### ChaosTruncateSettings[​](#chaostruncatesettings "Direct link to ChaosTruncateSettings")
+
+| Field       | Type | Default | Description                         |
+| ----------- | ---- | ------- | ----------------------------------- |
+| `percent`   | int  | `3`     | Probability (0–100) of truncation.  |
+| `max_bytes` | int  | `512`   | Maximum body bytes before dropping. |
+
+See the [Chaos middleware how-to](/docs/how-to/http-server/chaos-middleware.md) for usage examples and safety notes.
