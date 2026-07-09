@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkgosoline_docs=self.webpackChunkgosoline_docs||[]).push([["3220"],{1912(o){o.exports=JSON.parse('{"blogBasePath":"/docs/pr-1/blog","blogTitle":"Gosoline Blog","authorsListPath":"/docs/pr-1/blog/authors"}')}}]);
