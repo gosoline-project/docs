@@ -1,0 +1,467 @@
+# httpserver package
+
+Package `httpserver` provides a modular HTTP server built on [Gin](https://gin-gonic.com/) and the gosoline kernel. It offers structured request binding, typed responses, middleware, SSE streaming, and dependency-injected handler registration.
+
+```
+import "github.com/gosoline-project/httpserver"
+```
+
+## Application helpers[​](#application-helpers "Direct link to Application helpers")
+
+### [RunDefaultServer()](https://github.com/gosoline-project/httpserver/blob/main/application_run.go)[​](#rundefaultserver "Direct link to rundefaultserver")
+
+#### Usage[​](#usage "Direct link to Usage")
+
+```
+httpserver.RunDefaultServer(func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+
+    router.GET("/ping", handler)
+
+    return nil
+
+})
+```
+
+#### Description[​](#description "Direct link to Description")
+
+Runs a single HTTP server named `"default"`, reading configuration from `httpserver.default`. This is the simplest way to start a server.
+
+### [RunServers()](https://github.com/gosoline-project/httpserver/blob/main/application_run.go)[​](#runservers "Direct link to runservers")
+
+#### Usage[​](#usage-1 "Direct link to Usage")
+
+```
+httpserver.RunServers(map[string]httpserver.RouterFactory{
+
+    "public": publicDefiner,
+
+    "admin":  adminDefiner,
+
+})
+```
+
+#### Description[​](#description-1 "Direct link to Description")
+
+Runs multiple named HTTP servers. Each server reads its configuration from `httpserver.<name>`.
+
+## Server construction[​](#server-construction "Direct link to Server construction")
+
+### [NewServer()](https://github.com/gosoline-project/httpserver/blob/main/server_module.go)[​](#newserver "Direct link to newserver")
+
+#### Usage[​](#usage-2 "Direct link to Usage")
+
+```
+application.WithModuleFactory("http", httpserver.NewServer("default", myRouterFactory))
+```
+
+#### Description[​](#description-2 "Direct link to Description")
+
+Creates a `kernel.ModuleFactory` for an HTTP server. The server is registered as a kernel module and runs at the Service stage. The `name` parameter determines both the config key (`httpserver.<name>`) and the module name (`httpserver-<name>`).
+
+## Router[​](#router "Direct link to Router")
+
+### [RouterFactory](https://github.com/gosoline-project/httpserver/blob/main/router.go)[​](#routerfactory "Direct link to routerfactory")
+
+```
+type RouterFactory func(ctx context.Context, config cfg.Config, logger log.Logger, router *Router) error
+```
+
+Implement this function to define your routes. Return an error to prevent the server from starting.
+
+### Router methods[​](#router-methods "Direct link to Router methods")
+
+#### [Handle()](https://github.com/gosoline-project/httpserver/blob/main/router.go)[​](#handle "Direct link to handle")
+
+```
+router.Handle(httpMethod, relativePath, handlers...)
+```
+
+Registers a route for the given HTTP method and path.
+
+#### [GET() / POST() / PUT() / DELETE() / PATCH() / OPTIONS()](https://github.com/gosoline-project/httpserver/blob/main/router.go)[​](#get--post--put--delete--patch--options "Direct link to get--post--put--delete--patch--options")
+
+```
+router.GET("/users", handler)
+
+router.POST("/users", handler)
+```
+
+Convenience methods for registering routes with specific HTTP methods.
+
+#### [Group()](https://github.com/gosoline-project/httpserver/blob/main/router.go)[​](#group "Direct link to group")
+
+```
+api := router.Group("/api")
+
+api.GET("/users", handler)
+```
+
+Creates a route group with a common path prefix. Groups can be nested.
+
+#### [Use()](https://github.com/gosoline-project/httpserver/blob/main/router.go)[​](#use "Direct link to use")
+
+```
+router.Use(middlewareFunc)
+```
+
+Adds middleware to the router or group.
+
+#### [UseFactory()](https://github.com/gosoline-project/httpserver/blob/main/router.go)[​](#usefactory "Direct link to usefactory")
+
+```
+router.UseFactory(func(ctx context.Context, config cfg.Config, logger log.Logger, settings *httpserver.Settings) (gin.HandlerFunc, error) {
+
+    // create middleware with access to config, logger, and server settings
+
+})
+```
+
+Adds a middleware factory that is resolved lazily when the router is built. `settings.Name` contains the server name used for server-scoped configuration.
+
+#### [HandleWith()](https://github.com/gosoline-project/httpserver/blob/main/router.go)[​](#handlewith "Direct link to handlewith")
+
+```
+router.Group("/api").HandleWith(httpserver.With(NewHandler, func(r *httpserver.Router, h *Handler) {
+
+    r.GET("/items", httpserver.Bind(h.ListItems))
+
+}))
+```
+
+Registers routes using a `RegisterFactoryFunc` (typically created with `With()`).
+
+## Handler registration[​](#handler-registration "Direct link to Handler registration")
+
+### [With\[H\]()](https://github.com/gosoline-project/httpserver/blob/main/with.go)[​](#withh "Direct link to withh")
+
+#### Usage[​](#usage-3 "Direct link to Usage")
+
+```
+router.HandleWith(httpserver.With(NewMyHandler, func(r *httpserver.Router, h *MyHandler) {
+
+    r.GET("/items", httpserver.Bind(h.ListItems))
+
+    r.POST("/items", httpserver.Bind(h.CreateItem))
+
+}))
+```
+
+#### Description[​](#description-3 "Direct link to Description")
+
+Generic function that creates a handler instance via the factory function, then calls the registration function with both a sub-router and the handler. This is the primary pattern for dependency-injected route registration.
+
+The handler factory must have this signature:
+
+```
+func NewMyHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*MyHandler, error)
+```
+
+## Request binding[​](#request-binding "Direct link to Request binding")
+
+### Bind functions[​](#bind-functions "Direct link to Bind functions")
+
+| Function      | Handler signature                            | Use case                       |
+| ------------- | -------------------------------------------- | ------------------------------ |
+| `Bind[I]`     | `(ctx, *I) (Response, error)`                | Bind request to input struct   |
+| `BindR[I]`    | `(ctx, *http.Request, *I) (Response, error)` | Bind with raw request access   |
+| `BindN`       | `(ctx) (Response, error)`                    | No input binding               |
+| `BindNR`      | `(ctx, *http.Request) (Response, error)`     | No input, with raw request     |
+| `BindSse[I]`  | `(ctx, *I, *SseWriter) error`                | SSE with input binding         |
+| `BindSseR[I]` | `(ctx, *http.Request, *I, *SseWriter) error` | SSE with input + raw request   |
+| `BindSseN`    | `(ctx, *SseWriter) error`                    | SSE with no input              |
+| `BindSseNR`   | `(ctx, *http.Request, *SseWriter) error`     | SSE with raw request, no input |
+
+### Binding tags[​](#binding-tags "Direct link to Binding tags")
+
+Input structs use standard tags to specify the data source:
+
+| Tag       | Source                    | Example                    |
+| --------- | ------------------------- | -------------------------- |
+| `uri`     | Path parameters           | `uri:"id"`                 |
+| `json`    | JSON body                 | `json:"name"`              |
+| `form`    | Query string or form body | `form:"limit"`             |
+| `xml`     | XML body                  | `xml:"item"`               |
+| `yaml`    | YAML body                 | `yaml:"config"`            |
+| `header`  | HTTP headers              | `header:"X-Request-Id"`    |
+| `binding` | Validation rules          | `binding:"required,email"` |
+
+Binding and validation failures return `400 Bad Request`. Validation bind failures are logged at warning level, not error level, with field, tag, invalid value, and parameter details; invalid values are truncated before logging.
+
+## Responses[​](#responses "Direct link to Responses")
+
+### Response constructors[​](#response-constructors "Direct link to Response constructors")
+
+| Constructor                                                           | Description                                         |
+| --------------------------------------------------------------------- | --------------------------------------------------- |
+| `NewJsonResponse[T](body T, opts ...ResponseOption) *jsonResponse[T]` | JSON response with `Content-Type: application/json` |
+| `NewTextResponse(text string, opts ...ResponseOption) *response`      | Plain text response                                 |
+| `NewStatusResponse(statusCode int, opts ...ResponseOption) *response` | Status-only response (no body)                      |
+| `NewResponse(opts ...ResponseOption) *response`                       | Base response constructor                           |
+
+### Response options[​](#response-options "Direct link to Response options")
+
+| Option                             | Description              |
+| ---------------------------------- | ------------------------ |
+| `WithStatusCode(code int)`         | Set the HTTP status code |
+| `WithHeader(key, value string)`    | Add a single header      |
+| `WithHeaders(headers http.Header)` | Merge multiple headers   |
+| `WithBody(body []byte)`            | Set raw response body    |
+
+## SSE[​](#sse "Direct link to SSE")
+
+### [SseWriter](https://github.com/gosoline-project/httpserver/blob/main/sse_writer.go)[​](#ssewriter "Direct link to ssewriter")
+
+#### Methods[​](#methods "Direct link to Methods")
+
+| Method                            | Description                         |
+| --------------------------------- | ----------------------------------- |
+| `Send(data string) error`         | Send a simple SSE data event        |
+| `SendEvent(event SseEvent) error` | Send a structured SSE event         |
+| `Close()`                         | Close the writer and stop heartbeat |
+
+### SseEvent[​](#sseevent "Direct link to SseEvent")
+
+| Field   | Type   | Description               |
+| ------- | ------ | ------------------------- |
+| `Event` | string | Event type name           |
+| `Data`  | string | Event payload             |
+| `Id`    | string | Event ID for reconnection |
+| `Retry` | int    | Reconnection hint (ms)    |
+
+## Error handling[​](#error-handling "Direct link to Error handling")
+
+### [WithErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#witherrorhandler "Direct link to witherrorhandler")
+
+```
+httpserver.WithErrorHandler(func(statusCode int, err error) httpserver.Response {
+
+    return httpserver.NewJsonResponse(
+
+        map[string]any{"error": err.Error()},
+
+        httpserver.WithStatusCode(statusCode),
+
+    )
+
+})
+```
+
+Sets a custom global error handler. By default, 4xx responses return `{"err":"<message>"}` and 5xx responses return `{"err":"internal server error"}`. Set `httpserver.<name>.errors.privacy` to `public` to expose 5xx error messages.
+
+### [GetErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#geterrorhandler "Direct link to geterrorhandler")
+
+```
+return httpserver.GetErrorHandler()(http.StatusBadRequest, err), nil
+```
+
+Returns the current error handler, useful for returning client errors with specific status codes.
+
+Use `NewErrorWithStatus(statusCode, err)` when middleware attaches an error to the Gin context and the response should use a status other than 500.
+
+## Middleware[​](#middleware "Direct link to Middleware")
+
+### [Cors()](https://github.com/gosoline-project/httpserver/blob/main/cors.go)[​](#cors "Direct link to cors")
+
+```
+corsMiddleware, err := httpserver.Cors(config, "default")
+```
+
+Creates a CORS middleware from `httpserver.<name>.cors` settings.
+
+### [CorsFactory()](https://github.com/gosoline-project/httpserver/blob/main/cors.go)[​](#corsfactory "Direct link to corsfactory")
+
+```
+router.UseFactory(httpserver.CorsFactory)
+```
+
+Creates CORS middleware as a settings-aware middleware factory. The factory uses `settings.Name`, so reusable route setup automatically reads the CORS settings for the current named server.
+
+### [CreateEmbeddedStaticServe()](https://github.com/gosoline-project/httpserver/blob/main/middleware_embedded_static_serve.go)[​](#createembeddedstaticserve "Direct link to createembeddedstaticserve")
+
+```
+router.UseFactory(httpserver.CreateEmbeddedStaticServe(fs, "public", "/api"))
+```
+
+Creates a middleware that serves embedded static files with SPA fallback.
+
+### Built-in middleware[​](#built-in-middleware "Direct link to Built-in middleware")
+
+The following middleware is automatically applied to every server:
+
+| Middleware           | Purpose                        |
+| -------------------- | ------------------------------ |
+| Sampling             | Apply sampling decisions       |
+| Metric               | Record request metrics         |
+| Logging              | Log requests (fingers-crossed) |
+| Compression          | Gzip compression               |
+| Max body size        | Limit incoming request bodies  |
+| Error                | Catch and format errors        |
+| Recovery             | Panic recovery                 |
+| Connection lifecycle | Manage connection age          |
+
+## Validation[​](#validation "Direct link to Validation")
+
+### [AddCustomValidators()](https://github.com/gosoline-project/httpserver/blob/main/custom_validators.go)[​](#addcustomvalidators "Direct link to addcustomvalidators")
+
+```
+httpserver.AddCustomValidators([]httpserver.CustomValidator{
+
+    {Name: "phone", Validator: validatePhone},
+
+})
+```
+
+Register custom field validators for use in `binding` tags.
+
+### Related functions[​](#related-functions "Direct link to Related functions")
+
+* `AddStructValidators([]StructValidator)` — Register whole-struct validators
+* `AddCustomTypeFuncs([]CustomTypeFunc)` — Register custom type functions
+* `AddValidateAlias([]ValidateAlias)` — Register validation tag aliases
+
+## Configuration[​](#configuration "Direct link to Configuration")
+
+### Settings[​](#settings "Direct link to Settings")
+
+Config key: `httpserver.<name>`
+
+| Field                  | Type                               | Default     | Description                                                          |
+| ---------------------- | ---------------------------------- | ----------- | -------------------------------------------------------------------- |
+| `port`                 | string                             | `"8080"`    | Listening port. Use `"0"` for random port.                           |
+| `mode`                 | string                             | `"release"` | Gin mode: `debug`, `release`, `test`.                                |
+| `compression`          | CompressionSettings                | -           | Gzip configuration.                                                  |
+| `cors`                 | CorsSettings                       | -           | CORS middleware configuration.                                       |
+| `timeout`              | TimeoutSettings                    | -           | IO timeouts.                                                         |
+| `logging`              | LoggingSettings                    | -           | Request logging configuration.                                       |
+| `errors`               | ErrorsSettings                     | -           | Error response privacy configuration.                                |
+| `router`               | RouterSettings                     | -           | Router configuration.                                                |
+| `max_body_bytes`       | int                                | `10485760`  | Maximum incoming request body size in bytes. `0` disables the limit. |
+| `concurrency`          | ConcurrencySettings                | -           | Request and connection pressure limits.                              |
+| `connection_lifecycle` | ConnectionLifeCycleAdvisorSettings | -           | Connection age and request count limits.                             |
+| `chaos`                | ChaosSettings                      | -           | Chaos middleware for resilience testing.                             |
+
+### TimeoutSettings[​](#timeoutsettings "Direct link to TimeoutSettings")
+
+| Field      | Type     | Default | Description                                      |
+| ---------- | -------- | ------- | ------------------------------------------------ |
+| `read`     | duration | `60s`   | Max duration for reading entire request. Min 1s. |
+| `write`    | duration | `60s`   | Max duration for writing response. Min 1s.       |
+| `idle`     | duration | `60s`   | Max idle time for keep-alive. Min 1s.            |
+| `drain`    | duration | `0s`    | Wait time before graceful shutdown.              |
+| `shutdown` | duration | `60s`   | Max time for graceful shutdown. Min 1s.          |
+
+### CompressionSettings[​](#compressionsettings "Direct link to CompressionSettings")
+
+| Field           | Type                       | Default     | Description                                             |
+| --------------- | -------------------------- | ----------- | ------------------------------------------------------- |
+| `level`         | string                     | `"default"` | `"none"`, `"default"`, `"fast"`, `"best"`, `"0"`-`"9"`. |
+| `decompression` | bool                       | `true`      | Decompress gzip request bodies.                         |
+| `exclude`       | CompressionExcludeSettings | -           | Paths/extensions to exclude.                            |
+
+### CompressionExcludeSettings[​](#compressionexcludesettings "Direct link to CompressionExcludeSettings")
+
+| Field       | Type         | Description                 |
+| ----------- | ------------ | --------------------------- |
+| `extension` | string array | File extensions to exclude. |
+| `path`      | string array | Exact paths to exclude.     |
+| `pathRegex` | string array | Regex patterns to exclude.  |
+
+### CorsSettings[​](#corssettings "Direct link to CorsSettings")
+
+| Field                    | Type         | Description                                                 |
+| ------------------------ | ------------ | ----------------------------------------------------------- |
+| `allowed_origin_pattern` | string       | Regular expression matched against the full `Origin` value. |
+| `allowed_headers`        | string array | Allowed request headers for CORS requests.                  |
+| `allowed_methods`        | string array | Allowed HTTP methods for CORS requests.                     |
+
+The origin pattern is anchored internally. For example, `https://example\.com` allows `https://example.com`, but not `https://example.com.evil.com`.
+
+### LoggingSettings[​](#loggingsettings "Direct link to LoggingSettings")
+
+| Field                 | Type         | Default | Description                                                              |
+| --------------------- | ------------ | ------- | ------------------------------------------------------------------------ |
+| `request_body`        | bool         | `false` | Log request bodies.                                                      |
+| `request_body_base64` | bool         | `false` | Base64-encode request body in logs.                                      |
+| `request_headers`     | string array | `[]`    | Header names to include in logs. Only the configured headers are logged. |
+
+### ErrorsSettings[​](#errorssettings "Direct link to ErrorsSettings")
+
+| Field     | Type   | Default     | Description                                                                          |
+| --------- | ------ | ----------- | ------------------------------------------------------------------------------------ |
+| `privacy` | string | `"private"` | `"private"` hides internal error details for 5xx responses. `"public"` exposes them. |
+
+### RouterSettings[​](#routersettings "Direct link to RouterSettings")
+
+| Field          | Type | Default | Description                                            |
+| -------------- | ---- | ------- | ------------------------------------------------------ |
+| `use_raw_path` | bool | `false` | Use the raw URL path (not decoded) for route matching. |
+
+### ConcurrencySettings[​](#concurrencysettings "Direct link to ConcurrencySettings")
+
+| Field                  | Type     | Default | Description                                                                        |
+| ---------------------- | -------- | ------- | ---------------------------------------------------------------------------------- |
+| `max_requests`         | int      | `0`     | Maximum concurrent requests. `0` disables the limit.                               |
+| `max_connections`      | int      | `0`     | Target maximum open TCP connections. `0` disables connection pressure management.  |
+| `overload_status_code` | int      | `503`   | HTTP status code returned when `max_requests` is reached.                          |
+| `retry_after`          | duration | `0`     | Value for the `Retry-After` response header when overloaded. `0` omits the header. |
+
+See [Concurrency and connection pressure](/docs/pr-1/how-to/http-server/concurrency-and-connection-pressure.md) for detailed behaviour.
+
+### ConnectionLifeCycleAdvisorSettings[​](#connectionlifecycleadvisorsettings "Direct link to ConnectionLifeCycleAdvisorSettings")
+
+| Field               | Type     | Default | Description                                                                            |
+| ------------------- | -------- | ------- | -------------------------------------------------------------------------------------- |
+| `enabled`           | bool     | `true`  | Enable connection lifecycle management.                                                |
+| `max_age`           | duration | `1m`    | Max connection age before signalling close. `0` disables age-based closing.            |
+| `max_request_count` | int      | `0`     | Max requests per connection before signalling close. `0` disables count-based closing. |
+
+See [Concurrency and connection pressure](/docs/pr-1/how-to/http-server/concurrency-and-connection-pressure.md) for detailed behaviour.
+
+### ChaosSettings[​](#chaossettings "Direct link to ChaosSettings")
+
+| Field           | Type                      | Default | Description                   |
+| --------------- | ------------------------- | ------- | ----------------------------- |
+| `enabled`       | bool                      | `false` | Enable chaos middleware.      |
+| `reject`        | ChaosRejectSettings       | -       | Random HTTP error responses.  |
+| `delay`         | ChaosDelaySettings        | -       | Random pre-processing delays. |
+| `drop`          | ChaosDropSettings         | -       | Random TCP connection drops.  |
+| `slow_response` | ChaosSlowResponseSettings | -       | Random trickle responses.     |
+| `truncate`      | ChaosTruncateSettings     | -       | Random response truncation.   |
+
+### ChaosRejectSettings[​](#chaosrejectsettings "Direct link to ChaosRejectSettings")
+
+| Field          | Type      | Default                     | Description                         |
+| -------------- | --------- | --------------------------- | ----------------------------------- |
+| `percent`      | int       | `3`                         | Probability (0–100) of rejection.   |
+| `status_codes` | int array | `[499, 500, 502, 503, 504]` | Status codes to randomly pick from. |
+
+### ChaosDelaySettings[​](#chaosdelaysettings "Direct link to ChaosDelaySettings")
+
+| Field          | Type     | Default | Description                   |
+| -------------- | -------- | ------- | ----------------------------- |
+| `percent`      | int      | `3`     | Probability (0–100) of delay. |
+| `min_duration` | duration | `0`     | Minimum delay.                |
+| `max_duration` | duration | `60s`   | Maximum delay.                |
+
+### ChaosDropSettings[​](#chaosdropsettings "Direct link to ChaosDropSettings")
+
+| Field     | Type | Default | Description                             |
+| --------- | ---- | ------- | --------------------------------------- |
+| `percent` | int  | `3`     | Probability (0–100) of connection drop. |
+
+### ChaosSlowResponseSettings[​](#chaosslowresponsesettings "Direct link to ChaosSlowResponseSettings")
+
+| Field        | Type     | Default | Description                                |
+| ------------ | -------- | ------- | ------------------------------------------ |
+| `percent`    | int      | `3`     | Probability (0–100) of throttled response. |
+| `delay`      | duration | `1s`    | Pause between chunks.                      |
+| `chunk_size` | int      | `64`    | Bytes per chunk.                           |
+
+### ChaosTruncateSettings[​](#chaostruncatesettings "Direct link to ChaosTruncateSettings")
+
+| Field       | Type | Default | Description                         |
+| ----------- | ---- | ------- | ----------------------------------- |
+| `percent`   | int  | `3`     | Probability (0–100) of truncation.  |
+| `max_bytes` | int  | `512`   | Maximum body bytes before dropping. |
+
+See the [Chaos middleware how-to](/docs/pr-1/how-to/http-server/chaos-middleware.md) for usage examples and safety notes.
