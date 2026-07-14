@@ -1,0 +1,22 @@
+app:
+  env: dev
+  name: order-producer-daemon
+
+stream:
+  producer:
+    orders:
+      output: orders
+      encoding: application/json
+      daemon:
+        enabled: true
+        interval: 1s
+        buffer_size: 2
+        runner_count: 1
+        batch_size: 2
+        aggregation_size: 3
+
+  output:
+    orders:
+      type: file
+      filename: orders.jsonl
+      mode: append

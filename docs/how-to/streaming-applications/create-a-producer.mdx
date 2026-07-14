@@ -1,0 +1,99 @@
+---
+sidebar_position: 2
+title: Create a producer
+---
+
+import CodeBlock from '@theme/CodeBlock';
+import Main from "!!raw-loader!./src/producer/main.go";
+import Config from "!!raw-loader!./src/producer/config.dist.yml";
+
+A `stream.Producer` turns Go values into stream messages and writes them to a configured output. The producer owns encoding and compression, so application code works with domain models instead of serialized messages.
+
+## Define the producer
+
+Create the producer in your module factory and retain the `stream.Producer` interface:
+
+```go
+func newModule(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.Module, error) {
+    producer, err := stream.NewProducer(ctx, config, logger, "orders")
+    if err != nil {
+        return nil, fmt.Errorf("create orders producer: %w", err)
+    }
+
+    return &producerModule{producer: producer}, nil
+}
+```
+
+The name `orders` resolves configuration below `stream.producer.orders`. If that section does not specify `output`, it also selects `stream.output.orders`.
+
+## Write models
+
+Use `WriteOne` for one model and `Write` for a slice:
+
+```go
+if err := producer.WriteOne(ctx, OrderCreated{
+    Id:    "order-1001",
+    Total: 42.50,
+}); err != nil {
+    return fmt.Errorf("publish order: %w", err)
+}
+
+orders := []OrderCreated{
+    {Id: "order-1002", Total: 18.75},
+    {Id: "order-1003", Total: 91.20},
+}
+if err := producer.Write(ctx, orders); err != nil {
+    return fmt.Errorf("publish orders: %w", err)
+}
+```
+
+Both methods accept optional message attributes after the model argument:
+
+```go
+err := producer.WriteOne(ctx, order, map[string]string{
+    "tenant": "acme",
+})
+```
+
+Attributes carry transport metadata and application routing information. Transport-specific helpers or constants should be used where available, such as Kafka keys or Kinesis partition keys.
+
+## Configure encoding and output
+
+The complete example uses a file output so it runs without external infrastructure:
+
+<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{Config}</CodeBlock>
+
+The producer defaults to JSON. Set `stream.producer.<name>.encoding` when a consumer expects another supported encoding. Compression is also configured on the producer; some transports, notably Kafka, handle it natively.
+
+## Complete example
+
+This application publishes one order and then a batch of two orders:
+
+<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+
+Run it from `docs/docs/how-to/streaming-applications/src/producer`:
+
+```bash
+rm -f orders.jsonl
+go run .
+cat orders.jsonl
+```
+
+The file contains one stream message per line. Replace only the output configuration to publish the same models to SQS:
+
+```yaml
+stream:
+  output:
+    orders:
+      type: sqs
+      queue_id: orders
+```
+
+## Producer or output?
+
+Prefer `Producer` for application events. Use `Output` directly only when the data is already represented as a `stream.WritableMessage`, for example when forwarding an encoded message without decoding it.
+
+## What's next?
+
+- [Create a consumer](./create-a-consumer) to process the produced models
+- [Use the producer daemon](./use-the-producer-daemon) to buffer, batch, or aggregate writes

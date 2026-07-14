@@ -1,0 +1,15 @@
+app:
+  env: dev
+  name: order-producer
+
+stream:
+  producer:
+    orders:
+      output: orders
+      encoding: application/json
+
+  output:
+    orders:
+      type: file
+      filename: orders.jsonl
+      mode: append

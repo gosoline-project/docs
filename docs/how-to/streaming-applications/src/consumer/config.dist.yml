@@ -1,0 +1,15 @@
+app:
+  env: dev
+  name: order-consumer
+
+stream:
+  consumer:
+    default:
+      input: orders
+      encoding: application/json
+
+  input:
+    orders:
+      type: file
+      filename: events.jsonl
+      blocking: false

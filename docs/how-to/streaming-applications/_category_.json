@@ -1,0 +1,8 @@
+{
+  "label": "Streaming applications",
+  "position": 5,
+  "link": {
+    "type": "generated-index",
+    "description": "Learn how to build streaming applications with gosoline inputs, outputs, producers, consumers, and producer daemons."
+  }
+}
