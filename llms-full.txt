@@ -16,6 +16,7 @@
 - [HTTP Server](/category/http-server.md): Learn how to build HTTP services with the gosoline httpserver package.
 - [Migrations](/category/migrations.md): Guides for migrating between gosoline versions:
 - [Reference](/category/reference.md): Here, you can look up implementation details about gosoline:
+- [Streaming applications](/category/streaming-applications.md): Learn how to build streaming applications with gosoline inputs, outputs, producers, consumers, and producer daemons.
 - [Testing](/category/testing.md): Testing is an important responsibility for developing working code. With these tutorials, you'll write your first tests with gosoline:
 - [The Application](/fundamentals/application.md): Every gosoline application depends on these same three concerns. Configuration provides the values and settings an application needs. Logging makes its behavior visible during development and operation. Execution coordinates the runtime lifecycle of the application and its modules.
 - [Naming Patterns](/fundamentals/naming-patterns.md): Gosoline uses a unified, configuration-driven approach for naming infrastructure resources like SQS queues, SNS topics, DynamoDB tables, and more. This system ensures consistent, predictable resource names across your entire application ecosystem.
@@ -43,6 +44,10 @@
 - [Sampling & fingers-crossed](/how-to/logging/sampling-and-fingers-crossed.md): Gosoline supports log sampling and "fingers-crossed" logging to help you manage log volume without losing critical debug information when errors occur.
 - [Use loggers](/how-to/logging/use-loggers.md): With gosoline, there are multiple ways to configure and use a logger.
 - [Use sampling](/how-to/sampling/use-sampling.md): The smpl package helps you make a consistent sampling decision (sampled vs. not sampled) and store it in a context.Context. Other gosoline packages can then use that decision to change behavior (e.g. reduce log volume).
+- [Create a consumer](/how-to/streaming-applications/create-a-consumer.md): A consumer connects a configured input to your callback. Gosoline owns polling, decoding, acknowledgement, retries, health checks, metrics, tracing, and graceful shutdown; your callback owns the business operation.
+- [Create a producer](/how-to/streaming-applications/create-a-producer.md): A stream.Producer turns Go values into stream messages and writes them to a configured output. The producer owns encoding and compression, so application code works with domain models instead of serialized messages.
+- [Understand inputs and outputs](/how-to/streaming-applications/understand-inputs-and-outputs.md): The stream package separates your application logic from the system carrying its messages. A streaming application typically has this flow:
+- [Use the producer daemon](/how-to/streaming-applications/use-the-producer-daemon.md): The producer daemon is a background module placed between a Producer and its output. It can buffer writes, combine messages into transport batches, aggregate several stream messages into one message, compress aggregates, and write through several background runners.
 - [Build a CLI tool](/how-to/use-cli.md): The pkg/cli package lets you build multi-command CLI tools that run inside the gosoline application lifecycle, giving each command access to the same config, logger, and kernel modules as any other gosoline application.
 - [Implement health checks](/how-to/write-health-checks.md): You can check the health of a running gosoline application.
 - [Migrating to Identity and Naming Patterns](/migrations/app-identity-and-naming-patterns.md): This guide details how to migrate your gosoline application to the new Identity system and dynamic resource naming.
@@ -1225,6 +1230,13 @@ This combo is a good fit for Go services because it leans into Go’s strengths:
 ## [📄️Naming patterns](/docs/reference/naming-patterns.md)
 
 [Gosoline uses naming patterns to generate consistent names for resources (SQS queues, SNS topics, DynamoDB tables, Kafka topics, Redis keys, metric namespaces, tracing service names, ...).](/docs/reference/naming-patterns.md)
+
+
+---
+
+## [📄️Understand inputs and outputs](/docs/how-to/streaming-applications/understand-inputs-and-outputs.md)
+
+[The stream package separates your application logic from the system carrying its messages. A streaming application typically has this flow:](/docs/how-to/streaming-applications/understand-inputs-and-outputs.md)
 
 
 ---
@@ -12128,6 +12140,960 @@ smpl.AddStrategy("my-strategy", func(ctx context.Context, config cfg.Config) (sm
 * **"It always says sampled"**: if `sampling.enabled` is `false` or no decision is stored, `smplctx.IsSampled(ctx)` returns `true` by default.
 * **"My strategy does nothing"**: some strategies only apply if required data exists on the context (e.g. `tracing` needs a trace in the context).
 * **"I called Decide but later code doesn't see it"**: ensure you propagate the returned context (`ctx = newCtx`).
+
+
+---
+
+# Create a consumer
+
+A consumer connects a configured input to your callback. Gosoline owns polling, decoding, acknowledgement, retries, health checks, metrics, tracing, and graceful shutdown; your callback owns the business operation.
+
+For a first walkthrough, see [Create a consumer](/docs/getting-started/create-a-consumer.md). This guide focuses on the current typed API and operational behavior.
+
+## Implement a typed callback[​](#implement-a-typed-callback "Direct link to Implement a typed callback")
+
+Define the expected message body and implement `stream.ConsumerCallback[M]`:
+
+```
+type OrderCreated struct {
+
+    Id    string  `json:"id"`
+
+    Total float64 `json:"total"`
+
+}
+
+
+
+func (c *consumer) Consume(ctx context.Context, order OrderCreated, attributes map[string]string) (bool, error) {
+
+    c.logger.Info(ctx, "received order %s with total %.2f", order.Id, order.Total)
+
+
+
+    return true, nil
+
+}
+```
+
+The boolean controls acknowledgement:
+
+| Return       | Meaning                                                                    |
+| ------------ | -------------------------------------------------------------------------- |
+| `true, nil`  | Processing succeeded; acknowledge the message                              |
+| `false, nil` | Processing did not complete; do not acknowledge and retry where configured |
+| `false, err` | Processing failed; record the error and retry where configured             |
+
+Only return `true` after the business operation is complete. The transport determines how an unacknowledged message is redelivered. When the input has no native retry mechanism, configure the consumer retry handler.
+
+## Run the consumer[​](#run-the-consumer "Direct link to Run the consumer")
+
+For one callback named `default`, use `application.RunConsumer`:
+
+```
+application.RunConsumer(newConsumer,
+
+    application.WithConfigFile("config.dist.yml", "yml"),
+
+)
+```
+
+The generic type is inferred from the factory's `stream.ConsumerCallback[OrderCreated]` return type.
+
+For several consumers accepting the same model, use `application.RunConsumers` with a `stream.ConsumerCallbackMap[M]`. Each map key must have a matching `stream.consumer.<name>` configuration. Prefer separate applications when callbacks process unrelated model types; use untyped consumers only when message attributes genuinely select among several models.
+
+## Connect the consumer to an input[​](#connect-the-consumer-to-an-input "Direct link to Connect the consumer to an input")
+
+The example maps consumer `default` to input `orders`:
+
+config.dist.yml
+
+```
+app:
+
+  env: dev
+
+  name: order-consumer
+
+
+
+stream:
+
+  consumer:
+
+    default:
+
+      input: orders
+
+      encoding: application/json
+
+
+
+  input:
+
+    orders:
+
+      type: file
+
+      filename: events.jsonl
+
+      blocking: false
+```
+
+The file input expects one serialized `stream.Message` per line, not a bare domain object:
+
+events.jsonl
+
+```
+{"body":"{\"id\":\"order-1001\",\"total\":42.5}"}
+
+{"body":"{\"id\":\"order-1002\",\"total\":18.75}"}
+```
+
+For SQS, only the input section changes:
+
+```
+stream:
+
+  consumer:
+
+    default:
+
+      input: orders
+
+      retry:
+
+        enabled: true
+
+
+
+  input:
+
+    orders:
+
+      type: sqs
+
+      queue_id: orders
+```
+
+## Complete example[​](#complete-example "Direct link to Complete example")
+
+main.go
+
+```
+package main
+
+
+
+import (
+
+	"context"
+
+
+
+	"github.com/justtrackio/gosoline/pkg/application"
+
+	"github.com/justtrackio/gosoline/pkg/cfg"
+
+	"github.com/justtrackio/gosoline/pkg/log"
+
+	"github.com/justtrackio/gosoline/pkg/stream"
+
+)
+
+
+
+type OrderCreated struct {
+
+	Id    string  `json:"id"`
+
+	Total float64 `json:"total"`
+
+}
+
+
+
+type consumer struct {
+
+	logger log.Logger
+
+}
+
+
+
+func main() {
+
+	application.RunConsumer(newConsumer,
+
+		application.WithConfigFile("config.dist.yml", "yml"),
+
+	)
+
+}
+
+
+
+func newConsumer(_ context.Context, _ cfg.Config, logger log.Logger) (stream.ConsumerCallback[OrderCreated], error) {
+
+	return &consumer{logger: logger}, nil
+
+}
+
+
+
+func (c *consumer) Consume(ctx context.Context, order OrderCreated, _ map[string]string) (bool, error) {
+
+	c.logger.Info(ctx, "received order %s with total %.2f", order.Id, order.Total)
+
+
+
+	return true, nil
+
+}
+```
+
+Run it from `docs/docs/how-to/streaming-applications/src/consumer`:
+
+```
+go run .
+```
+
+The non-blocking file input closes after both records are consumed, so the example application exits by itself.
+
+## Concurrency and batches[​](#concurrency-and-batches "Direct link to Concurrency and batches")
+
+`stream.consumer.<name>.runner_count` controls concurrent processing for a normal consumer. Increase it only when callback operations are safe to run concurrently and message ordering is not required.
+
+Use `application.RunBatchConsumer` or `RunBatchConsumers` when the callback should receive batches. Batch consumers have separate callback interfaces and settings; they are not equivalent to increasing `runner_count`.
+
+## Graceful processing[​](#graceful-processing "Direct link to Graceful processing")
+
+The consumer derives a delayed cancellation context for each callback. `consume_grace_time` gives in-flight processing a short grace period after shutdown begins. `acknowledge_grace_time` and retry grace settings similarly allow final acknowledgement or retry writes. Keep callback work bounded and always pass its context to downstream calls.
+
+## What's next?[​](#whats-next "Direct link to What's next?")
+
+* [Test your consumer](/docs/getting-started/testing/test-your-consumer.md)
+* [Use the producer daemon](/docs/how-to/streaming-applications/use-the-producer-daemon.md)
+
+
+---
+
+# Create a producer
+
+A `stream.Producer` turns Go values into stream messages and writes them to a configured output. The producer owns encoding and compression, so application code works with domain models instead of serialized messages.
+
+## Define the producer[​](#define-the-producer "Direct link to Define the producer")
+
+Create the producer in your module factory and retain the `stream.Producer` interface:
+
+```
+func newModule(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.Module, error) {
+
+    producer, err := stream.NewProducer(ctx, config, logger, "orders")
+
+    if err != nil {
+
+        return nil, fmt.Errorf("create orders producer: %w", err)
+
+    }
+
+
+
+    return &producerModule{producer: producer}, nil
+
+}
+```
+
+The name `orders` resolves configuration below `stream.producer.orders`. If that section does not specify `output`, it also selects `stream.output.orders`.
+
+## Write models[​](#write-models "Direct link to Write models")
+
+Use `WriteOne` for one model and `Write` for a slice:
+
+```
+if err := producer.WriteOne(ctx, OrderCreated{
+
+    Id:    "order-1001",
+
+    Total: 42.50,
+
+}); err != nil {
+
+    return fmt.Errorf("publish order: %w", err)
+
+}
+
+
+
+orders := []OrderCreated{
+
+    {Id: "order-1002", Total: 18.75},
+
+    {Id: "order-1003", Total: 91.20},
+
+}
+
+if err := producer.Write(ctx, orders); err != nil {
+
+    return fmt.Errorf("publish orders: %w", err)
+
+}
+```
+
+Both methods accept optional message attributes after the model argument:
+
+```
+err := producer.WriteOne(ctx, order, map[string]string{
+
+    "tenant": "acme",
+
+})
+```
+
+Attributes carry transport metadata and application routing information. Transport-specific helpers or constants should be used where available, such as Kafka keys or Kinesis partition keys.
+
+## Configure encoding and output[​](#configure-encoding-and-output "Direct link to Configure encoding and output")
+
+The complete example uses a file output so it runs without external infrastructure:
+
+config.dist.yml
+
+```
+app:
+
+  env: dev
+
+  name: order-producer
+
+
+
+stream:
+
+  producer:
+
+    orders:
+
+      output: orders
+
+      encoding: application/json
+
+
+
+  output:
+
+    orders:
+
+      type: file
+
+      filename: orders.jsonl
+
+      mode: append
+```
+
+The producer defaults to JSON. Set `stream.producer.<name>.encoding` when a consumer expects another supported encoding. Compression is also configured on the producer; some transports, notably Kafka, handle it natively.
+
+## Complete example[​](#complete-example "Direct link to Complete example")
+
+This application publishes one order and then a batch of two orders:
+
+main.go
+
+```
+package main
+
+
+
+import (
+
+	"context"
+
+	"fmt"
+
+
+
+	"github.com/justtrackio/gosoline/pkg/application"
+
+	"github.com/justtrackio/gosoline/pkg/cfg"
+
+	"github.com/justtrackio/gosoline/pkg/kernel"
+
+	"github.com/justtrackio/gosoline/pkg/log"
+
+	"github.com/justtrackio/gosoline/pkg/stream"
+
+)
+
+
+
+type OrderCreated struct {
+
+	Id    string  `json:"id"`
+
+	Total float64 `json:"total"`
+
+}
+
+
+
+type producerModule struct {
+
+	producer stream.Producer
+
+}
+
+
+
+func main() {
+
+	application.RunModule("producer", newModule,
+
+		application.WithConfigFile("config.dist.yml", "yml"),
+
+	)
+
+}
+
+
+
+func newModule(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.Module, error) {
+
+	producer, err := stream.NewProducer(ctx, config, logger, "orders")
+
+	if err != nil {
+
+		return nil, fmt.Errorf("create orders producer: %w", err)
+
+	}
+
+
+
+	return &producerModule{producer: producer}, nil
+
+}
+
+
+
+func (m *producerModule) Run(ctx context.Context) error {
+
+	if err := m.producer.WriteOne(ctx, OrderCreated{
+
+		Id:    "order-1001",
+
+		Total: 42.50,
+
+	}); err != nil {
+
+		return fmt.Errorf("publish order: %w", err)
+
+	}
+
+
+
+	orders := []OrderCreated{
+
+		{Id: "order-1002", Total: 18.75},
+
+		{Id: "order-1003", Total: 91.20},
+
+	}
+
+
+
+	if err := m.producer.Write(ctx, orders); err != nil {
+
+		return fmt.Errorf("publish orders: %w", err)
+
+	}
+
+
+
+	return nil
+
+}
+```
+
+Run it from `docs/docs/how-to/streaming-applications/src/producer`:
+
+```
+rm -f orders.jsonl
+
+go run .
+
+cat orders.jsonl
+```
+
+The file contains one stream message per line. Replace only the output configuration to publish the same models to SQS:
+
+```
+stream:
+
+  output:
+
+    orders:
+
+      type: sqs
+
+      queue_id: orders
+```
+
+## Producer or output?[​](#producer-or-output "Direct link to Producer or output?")
+
+Prefer `Producer` for application events. Use `Output` directly only when the data is already represented as a `stream.WritableMessage`, for example when forwarding an encoded message without decoding it.
+
+## What's next?[​](#whats-next "Direct link to What's next?")
+
+* [Create a consumer](/docs/how-to/streaming-applications/create-a-consumer.md) to process the produced models
+* [Use the producer daemon](/docs/how-to/streaming-applications/use-the-producer-daemon.md) to buffer, batch, or aggregate writes
+
+
+---
+
+# Understand inputs and outputs
+
+The `stream` package separates your application logic from the system carrying its messages. A streaming application typically has this flow:
+
+```
+model -> Producer -> Output -> queue, topic, or stream -> Input -> Consumer -> callback
+```
+
+* An **output** writes encoded messages to a transport.
+* A **producer** encodes Go values and delegates to an output.
+* An **input** reads messages from a transport.
+* A **consumer** decodes those messages, calls your callback, and handles acknowledgement, retries, health checks, metrics, and tracing.
+
+Most applications should use `Producer` and a typed consumer rather than operate an `Input` or `Output` directly.
+
+## Name each component[​](#name-each-component "Direct link to Name each component")
+
+Inputs, outputs, producers, and consumers are configured independently and connected by name:
+
+```
+stream:
+
+  input:
+
+    orders:
+
+      type: sqs
+
+      queue_id: orders
+
+
+
+  consumer:
+
+    orders:
+
+      input: orders
+
+
+
+  output:
+
+    notifications:
+
+      type: sns
+
+      topic_id: notifications
+
+
+
+  producer:
+
+    notifications:
+
+      output: notifications
+
+      encoding: application/json
+```
+
+`stream.consumer.orders.input` selects the input named `orders`. `stream.producer.notifications.output` selects the output named `notifications`. When omitted, both links default to the component's own name.
+
+This indirection lets you change transports without changing application code. A producer named `orders` is created the same way whether its configured output is a file, SQS queue, SNS topic, Kinesis stream, Kafka topic, or Redis list.
+
+## Supported transports[​](#supported-transports "Direct link to Supported transports")
+
+| Type       | Input | Output | Typical use                                               |
+| ---------- | ----- | ------ | --------------------------------------------------------- |
+| `sqs`      | Yes   | Yes    | Work queues with acknowledgement and redelivery           |
+| `sns`      | Yes   | Yes    | Fan-out through an SNS topic and managed SQS subscription |
+| `kinesis`  | Yes   | Yes    | Partitioned event streams                                 |
+| `kafka`    | Yes   | Yes    | Kafka topics and consumer groups                          |
+| `redis`    | Yes   | Yes    | Redis lists                                               |
+| `file`     | Yes   | Yes    | Local development and simple fixtures                     |
+| `inMemory` | Yes   | Yes    | Tests in the same process                                 |
+| `multiple` | No    | Yes    | Fan-out to several configured outputs                     |
+| `noop`     | No    | Yes    | Discard messages intentionally                            |
+
+Each transport has additional settings such as `queue_id`, `topic_id`, `stream_name`, or `key`. The component name is still the stable link used by producers and consumers.
+
+## Input and output interfaces[​](#input-and-output-interfaces "Direct link to Input and output interfaces")
+
+An input exposes a channel of `*stream.Message` and lifecycle methods:
+
+```
+type Input interface {
+
+    Run(ctx context.Context) error
+
+    Stop(ctx context.Context)
+
+    Data() <-chan *Message
+
+    IsHealthy() bool
+
+}
+```
+
+The consumer owns this lifecycle. It runs the configured input, decodes its messages, and acknowledges them when the transport supports acknowledgement.
+
+An output accepts values that already implement `WritableMessage`:
+
+```
+type Output interface {
+
+    WriteOne(ctx context.Context, msg WritableMessage) error
+
+    Write(ctx context.Context, batch []WritableMessage) error
+
+}
+```
+
+Use `stream.NewConfigurableOutput` when you already have encoded stream messages or are building infrastructure. For ordinary domain events, use `stream.NewProducer`; it provides encoding, compression, tracing, schema options, and optional producer-daemon integration.
+
+## Production transports[​](#production-transports "Direct link to Production transports")
+
+Here are minimal output configurations. Resource identity fields such as `application`, `env`, and `tags` are optional and default from `app`.
+
+```
+stream:
+
+  output:
+
+    jobs:
+
+      type: sqs
+
+      queue_id: jobs
+
+
+
+    events:
+
+      type: sns
+
+      topic_id: events
+
+
+
+    records:
+
+      type: kinesis
+
+      stream_name: records
+
+
+
+    audit:
+
+      type: kafka
+
+      topic_id: audit
+
+
+
+    cache_updates:
+
+      type: redis
+
+      server_name: default
+
+      key: cache-updates
+```
+
+Input configuration follows the same naming pattern. For example:
+
+```
+stream:
+
+  input:
+
+    jobs:
+
+      type: sqs
+
+      queue_id: jobs
+
+
+
+    records:
+
+      type: kinesis
+
+      application: record-producer
+
+      stream_name: records
+
+
+
+    audit:
+
+      type: kafka
+
+      topic_id: audit
+
+      group_id: audit-worker
+```
+
+For Kafka-specific behavior and schema registry configuration, see the [Kafka guides](/docs/how-to/kafka/general.md).
+
+## What's next?[​](#whats-next "Direct link to What's next?")
+
+* [Create a producer](/docs/how-to/streaming-applications/create-a-producer.md)
+* [Create a consumer](/docs/how-to/streaming-applications/create-a-consumer.md)
+* [Use the producer daemon](/docs/how-to/streaming-applications/use-the-producer-daemon.md)
+
+
+---
+
+# Use the producer daemon
+
+The producer daemon is a background module placed between a `Producer` and its output. It can buffer writes, combine messages into transport batches, aggregate several stream messages into one message, compress aggregates, and write through several background runners.
+
+Use it when fewer, larger transport requests improve throughput or cost. Do not enable it when each call must be durably written before `WriteOne` returns: a daemon write confirms that the message entered the in-process buffer, not that the remote transport accepted it.
+
+## Enable and register the daemon[​](#enable-and-register-the-daemon "Direct link to Enable and register the daemon")
+
+Enable the daemon for a named producer:
+
+```
+stream:
+
+  producer:
+
+    orders:
+
+      daemon:
+
+        enabled: true
+```
+
+Also register producer daemons with the application:
+
+```
+application.RunModule("producer", newModule,
+
+    application.WithConfigFile("config.dist.yml", "yml"),
+
+    application.WithProducerDaemon,
+
+)
+```
+
+`stream.NewProducer` detects `daemon.enabled` and writes through the shared daemon automatically. Do not construct or write to a producer daemon directly.
+
+## Configure buffering and batching[​](#configure-buffering-and-batching "Direct link to Configure buffering and batching")
+
+config.dist.yml
+
+```
+app:
+
+  env: dev
+
+  name: order-producer-daemon
+
+
+
+stream:
+
+  producer:
+
+    orders:
+
+      output: orders
+
+      encoding: application/json
+
+      daemon:
+
+        enabled: true
+
+        interval: 1s
+
+        buffer_size: 2
+
+        runner_count: 1
+
+        batch_size: 2
+
+        aggregation_size: 3
+
+
+
+  output:
+
+    orders:
+
+      type: file
+
+      filename: orders.jsonl
+
+      mode: append
+```
+
+The main settings are:
+
+| Setting                  | Default  | Purpose                                                                 |
+| ------------------------ | -------- | ----------------------------------------------------------------------- |
+| `interval`               | `1m`     | Flush incomplete aggregates and batches after inactivity                |
+| `buffer_size`            | `10`     | Number of completed batches allowed in the in-process output channel    |
+| `runner_count`           | `10`     | Background writers draining completed batches                           |
+| `batch_size`             | `10`     | Maximum messages in one output call                                     |
+| `batch_max_size`         | `258048` | Maximum total bytes in one output batch; `0` disables this daemon limit |
+| `aggregation_size`       | `1`      | Stream messages combined into one aggregate message                     |
+| `aggregation_max_size`   | `65536`  | Maximum aggregate bytes; `0` disables this daemon limit                 |
+| `partition_bucket_count` | `128`    | Aggregation buckets for partitioned outputs                             |
+| `message_attributes`     | none     | Attributes added to emitted messages                                    |
+
+Batching and aggregation are different:
+
+* **Batching** sends several messages in one output API call.
+* **Aggregation** serializes several stream messages into one transport message. Gosoline consumers detect and unpack these aggregates.
+
+Leave `aggregation_size` at `1` when a non-Gosoline consumer reads the output or when the transport does not support Gosoline aggregate messages.
+
+## Complete example[​](#complete-example "Direct link to Complete example")
+
+The example queues five orders. With `aggregation_size: 3`, the daemon emits one aggregate after the third order and flushes the remaining aggregate during shutdown:
+
+main.go
+
+```
+package main
+
+
+
+import (
+
+	"context"
+
+	"fmt"
+
+
+
+	"github.com/justtrackio/gosoline/pkg/application"
+
+	"github.com/justtrackio/gosoline/pkg/cfg"
+
+	"github.com/justtrackio/gosoline/pkg/kernel"
+
+	"github.com/justtrackio/gosoline/pkg/log"
+
+	"github.com/justtrackio/gosoline/pkg/stream"
+
+)
+
+
+
+type OrderCreated struct {
+
+	Id string `json:"id"`
+
+}
+
+
+
+type producerModule struct {
+
+	producer stream.Producer
+
+}
+
+
+
+func main() {
+
+	application.RunModule("producer", newModule,
+
+		application.WithConfigFile("config.dist.yml", "yml"),
+
+		application.WithProducerDaemon,
+
+	)
+
+}
+
+
+
+func newModule(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.Module, error) {
+
+	producer, err := stream.NewProducer(ctx, config, logger, "orders")
+
+	if err != nil {
+
+		return nil, fmt.Errorf("create orders producer: %w", err)
+
+	}
+
+
+
+	return &producerModule{producer: producer}, nil
+
+}
+
+
+
+func (m *producerModule) Run(ctx context.Context) error {
+
+	for i := 1; i <= 5; i++ {
+
+		order := OrderCreated{Id: fmt.Sprintf("order-%04d", i)}
+
+		if err := m.producer.WriteOne(ctx, order); err != nil {
+
+			return fmt.Errorf("publish order: %w", err)
+
+		}
+
+	}
+
+
+
+	return nil
+
+}
+```
+
+Run it from `docs/docs/how-to/streaming-applications/src/producer-daemon`:
+
+```
+rm -f orders.jsonl
+
+go run .
+
+cat orders.jsonl
+```
+
+The file output makes the lifecycle visible without requiring a queue. In production, replace it with an SQS, SNS, Kinesis, Kafka, or Redis output.
+
+## Backpressure and errors[​](#backpressure-and-errors "Direct link to Backpressure and errors")
+
+When all background runners are busy and the output channel reaches `buffer_size`, producer writes block until capacity becomes available. This is intentional backpressure; size the buffer and runner count for expected traffic instead of making the buffer unbounded.
+
+Remote output errors happen in a background runner after the producer call has returned. The daemon logs these errors and emits metrics including message count, batch size, aggregate size, and idle duration. Monitor daemon logs and metrics because callers cannot receive asynchronous output failures.
+
+On graceful kernel shutdown, the daemon flushes pending aggregates and batches before closing its output workers. Abrupt process termination can still lose buffered messages.
+
+## Transport limitations[​](#transport-limitations "Direct link to Transport limitations")
+
+Output capabilities can reduce configured batch and message sizes automatically. For partitioned outputs such as Kinesis, the daemon uses partition buckets so messages with the same partition key remain assigned consistently enough for shard processing.
+
+Kafka does not support Gosoline aggregation in the producer daemon. Kafka's own producer performs batching and compression, and its `max_batch_size` and `max_batch_bytes` settings override daemon batch limits. See [general Kafka usage](/docs/how-to/kafka/general.md#producer-daemon-usage).
+
+## Choosing settings[​](#choosing-settings "Direct link to Choosing settings")
+
+Start with aggregation disabled and a short interval. Enable aggregation only after confirming every consumer understands Gosoline aggregate messages. Tune using output request rate, message size, queue latency, daemon metrics, and shutdown requirements rather than increasing all limits together.
 
 
 ---

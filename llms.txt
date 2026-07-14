@@ -16,6 +16,7 @@
 - [HTTP Server](/category/http-server.md): Learn how to build HTTP services with the gosoline httpserver package.
 - [Migrations](/category/migrations.md): Guides for migrating between gosoline versions:
 - [Reference](/category/reference.md): Here, you can look up implementation details about gosoline:
+- [Streaming applications](/category/streaming-applications.md): Learn how to build streaming applications with gosoline inputs, outputs, producers, consumers, and producer daemons.
 - [Testing](/category/testing.md): Testing is an important responsibility for developing working code. With these tutorials, you'll write your first tests with gosoline:
 - [The Application](/fundamentals/application.md): Every gosoline application depends on these same three concerns. Configuration provides the values and settings an application needs. Logging makes its behavior visible during development and operation. Execution coordinates the runtime lifecycle of the application and its modules.
 - [Naming Patterns](/fundamentals/naming-patterns.md): Gosoline uses a unified, configuration-driven approach for naming infrastructure resources like SQS queues, SNS topics, DynamoDB tables, and more. This system ensures consistent, predictable resource names across your entire application ecosystem.
@@ -43,6 +44,10 @@
 - [Sampling & fingers-crossed](/how-to/logging/sampling-and-fingers-crossed.md): Gosoline supports log sampling and "fingers-crossed" logging to help you manage log volume without losing critical debug information when errors occur.
 - [Use loggers](/how-to/logging/use-loggers.md): With gosoline, there are multiple ways to configure and use a logger.
 - [Use sampling](/how-to/sampling/use-sampling.md): The smpl package helps you make a consistent sampling decision (sampled vs. not sampled) and store it in a context.Context. Other gosoline packages can then use that decision to change behavior (e.g. reduce log volume).
+- [Create a consumer](/how-to/streaming-applications/create-a-consumer.md): A consumer connects a configured input to your callback. Gosoline owns polling, decoding, acknowledgement, retries, health checks, metrics, tracing, and graceful shutdown; your callback owns the business operation.
+- [Create a producer](/how-to/streaming-applications/create-a-producer.md): A stream.Producer turns Go values into stream messages and writes them to a configured output. The producer owns encoding and compression, so application code works with domain models instead of serialized messages.
+- [Understand inputs and outputs](/how-to/streaming-applications/understand-inputs-and-outputs.md): The stream package separates your application logic from the system carrying its messages. A streaming application typically has this flow:
+- [Use the producer daemon](/how-to/streaming-applications/use-the-producer-daemon.md): The producer daemon is a background module placed between a Producer and its output. It can buffer writes, combine messages into transport batches, aggregate several stream messages into one message, compress aggregates, and write through several background runners.
 - [Build a CLI tool](/how-to/use-cli.md): The pkg/cli package lets you build multi-command CLI tools that run inside the gosoline application lifecycle, giving each command access to the same config, logger, and kernel modules as any other gosoline application.
 - [Implement health checks](/how-to/write-health-checks.md): You can check the health of a running gosoline application.
 - [Migrating to Identity and Naming Patterns](/migrations/app-identity-and-naming-patterns.md): This guide details how to migrate your gosoline application to the new Identity system and dynamic resource naming.
