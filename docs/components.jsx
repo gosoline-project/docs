@@ -71,7 +71,7 @@ export function PrimaryUseCases() {
                     Build REST web services with HTTP handling, caching, OAuth, and much more.
                 </CardContent>
                 <CardActions>
-                    <Button size="small" href={useBaseUrl("/category/http-server")}>Get started</Button>
+                    <Button size="small" href={useBaseUrl("/category/http-server/")}>Get started</Button>
                 </CardActions>
             </Card>
         </Grid>
@@ -83,7 +83,7 @@ export function PrimaryUseCases() {
                     Process asynchronous messages from Kafka, Redis, or any other queuing or streaming system.
                 </CardContent>
                 <CardActions>
-                    <Button size="small" href={useBaseUrl("/quickstart/create-a-consumer")}>Get started</Button>
+                    <Button size="small" href={useBaseUrl("/getting-started/create-a-consumer/")}>Get started</Button>
                 </CardActions>
             </Card>
         </Grid>
@@ -95,7 +95,7 @@ export function PrimaryUseCases() {
                     Implement a kernel module with which you can do anything, using gosoline's logging, configuration, and other solutions.
                 </CardContent>
                 <CardActions>
-                    <Button size="small" href={useBaseUrl("/quickstart/create-an-application")}>Get started</Button>
+                    <Button size="small" href={useBaseUrl("/getting-started/create-an-application/")}>Get started</Button>
                 </CardActions>
             </Card>
         </Grid>
