@@ -405,7 +405,7 @@ The origin pattern is anchored internally. For example, `https://example\.com` a
 | `overload_status_code` | int      | `503`   | HTTP status code returned when `max_requests` is reached.                          |
 | `retry_after`          | duration | `0`     | Value for the `Retry-After` response header when overloaded. `0` omits the header. |
 
-See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure.md) for detailed behaviour.
+See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure/.md) for detailed behaviour.
 
 ### ConnectionLifeCycleAdvisorSettings[​](#connectionlifecycleadvisorsettings "Direct link to ConnectionLifeCycleAdvisorSettings")
 
@@ -415,7 +415,7 @@ See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-a
 | `max_age`           | duration | `1m`    | Max connection age before signalling close. `0` disables age-based closing.            |
 | `max_request_count` | int      | `0`     | Max requests per connection before signalling close. `0` disables count-based closing. |
 
-See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure.md) for detailed behaviour.
+See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure/.md) for detailed behaviour.
 
 ### ChaosSettings[​](#chaossettings "Direct link to ChaosSettings")
 
@@ -464,4 +464,4 @@ See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-a
 | `percent`   | int  | `3`     | Probability (0–100) of truncation.  |
 | `max_bytes` | int  | `512`   | Maximum body bytes before dropping. |
 
-See the [Chaos middleware how-to](/docs/how-to/http-server/chaos-middleware.md) for usage examples and safety notes.
+See the [Chaos middleware how-to](/docs/how-to/http-server/chaos-middleware/.md) for usage examples and safety notes.

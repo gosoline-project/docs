@@ -1,6 +1,6 @@
 # sqlh - SQL HTTP Handlers
 
-The `sqlh` package exposes database entities as REST API endpoints. Built on top of [`sqlr`](/docs/how-to/databases-sql/sqlr.md) and [`sqlc`](/docs/how-to/databases-sql/sqlc.md), it provides automatic CRUD handler generation, a transformer pattern for input/output mapping, repository customization hooks, and transaction middleware for wrapping HTTP requests in database transactions.
+The `sqlh` package exposes database entities as REST API endpoints. Built on top of [`sqlr`](/docs/how-to/databases-sql/sqlr/.md) and [`sqlc`](/docs/how-to/databases-sql/sqlc/.md), it provides automatic CRUD handler generation, a transformer pattern for input/output mapping, repository customization hooks, and transaction middleware for wrapping HTTP requests in database transactions.
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
@@ -60,7 +60,7 @@ sqlc:
       path: migrations
 ```
 
-The HTTP server configuration is described in the httpserver documentation. The database configuration follows the same format described in the [sqlc documentation](/docs/how-to/databases-sql/sqlc.md#configuration).
+The HTTP server configuration is described in the httpserver documentation. The database configuration follows the same format described in the [sqlc documentation](/docs/how-to/databases-sql/sqlc/.md#configuration).
 
 ## CRUD Handlers[​](#crud-handlers "Direct link to CRUD Handlers")
 
@@ -68,7 +68,7 @@ The `WithCrudHandlers` function generates a complete set of REST endpoints for a
 
 ### Defining Entities[​](#defining-entities "Direct link to Defining Entities")
 
-Entities use the same `sqlr.Entity` base struct described in the [sqlr documentation](/docs/how-to/databases-sql/sqlr.md#defining-entities):
+Entities use the same `sqlr.Entity` base struct described in the [sqlr documentation](/docs/how-to/databases-sql/sqlr/.md#defining-entities):
 
 main.go
 
@@ -243,7 +243,7 @@ All generated CRUD handlers follow the same high-level pattern: bind input, dele
 | `HandleUpdate` | Loads the existing entity via `repo.Read()`, applies `TransformUpdateInput`, persists via `repo.Update()`, then renders the entity returned by `Update()`                     |
 | `HandleDelete` | Deletes the entity via `repo.Delete()` and returns `204 No Content`                                                                                                           |
 
-The update flow is slightly different from the others: `HandleUpdate` renders the rehydrated entity returned by `sqlr.Update()` rather than issuing a separate follow-up `Read()` call. That means post-update preloads configured on the update builder are reflected directly in the HTTP response. See [`sqlr` Update with Post-Update Preloading](/docs/how-to/databases-sql/sqlr.md#update-with-post-update-preloading) for the underlying repository behavior.
+The update flow is slightly different from the others: `HandleUpdate` renders the rehydrated entity returned by `sqlr.Update()` rather than issuing a separate follow-up `Read()` call. That means post-update preloads configured on the update builder are reflected directly in the HTTP response. See [`sqlr` Update with Post-Update Preloading](/docs/how-to/databases-sql/sqlr/.md#update-with-post-update-preloading) for the underlying repository behavior.
 
 ### Query with JSON Filter[​](#query-with-json-filter "Direct link to Query with JSON Filter")
 
@@ -265,7 +265,7 @@ The query endpoint accepts a JSON body with a `filter` field that maps to `sqlc.
 }
 ```
 
-The filter is converted to an `sqlc.Expression` and applied as a WHERE condition on the query. See the [sqlc JSON filter documentation](/docs/how-to/databases-sql/sqlc.md) for the full filter syntax.
+The filter is converted to an `sqlc.Expression` and applied as a WHERE condition on the query. See the [sqlc JSON filter documentation](/docs/how-to/databases-sql/sqlc/.md) for the full filter syntax.
 
 ### Association Tags[​](#association-tags "Direct link to Association Tags")
 
@@ -292,17 +292,17 @@ Supported directives are:
 | `preload` | `create`, `read`, `query`, `update` | Adds `Preload()` to the matching CRUD builder; on `create` and `update`, it configures the post-write reload used for the returned entity |
 | `sync`    | `create`, `update`, `delete`        | Calls `SyncAssociation()` for the association while persisting or cleaning up the entity                                                  |
 
-`sqlh` tags are additive to the association behavior already defined by `sqlr`. The relationship itself must still be declared via an explicit `sqlr` relationship tag or discovered through [`sqlr` auto-detected relationships](/docs/how-to/databases-sql/sqlr.md#auto-detected-relationships); the `sqlh` tag only adds CRUD-specific preload and sync behavior on top. `db:"-"` remains optional for relationship fields. In particular, `sqlh` preload phases are merged with any preload behavior already configured in `sqlr`, rather than replacing it.
+`sqlh` tags are additive to the association behavior already defined by `sqlr`. The relationship itself must still be declared via an explicit `sqlr` relationship tag or discovered through [`sqlr` auto-detected relationships](/docs/how-to/databases-sql/sqlr/.md#auto-detected-relationships); the `sqlh` tag only adds CRUD-specific preload and sync behavior on top. `db:"-"` remains optional for relationship fields. In particular, `sqlh` preload phases are merged with any preload behavior already configured in `sqlr`, rather than replacing it.
 
-For creates, `sqlh:"preload:create"` is applied to the underlying `sqlr.Create()` builder, so the entity returned by the create handler is reloaded with those relations already hydrated. This follows the same post-create preload behavior described in [`sqlr` Create with Post-Create Preloading](/docs/how-to/databases-sql/sqlr.md#create-with-post-create-preloading).
+For creates, `sqlh:"preload:create"` is applied to the underlying `sqlr.Create()` builder, so the entity returned by the create handler is reloaded with those relations already hydrated. This follows the same post-create preload behavior described in [`sqlr` Create with Post-Create Preloading](/docs/how-to/databases-sql/sqlr/.md#create-with-post-create-preloading).
 
-For updates, `sqlh:"preload:update"` is applied to the underlying `sqlr.Update()` builder, so the entity returned by the update handler is reloaded with those relations already hydrated. This follows the same post-update preload behavior described in [`sqlr` Update with Post-Update Preloading](/docs/how-to/databases-sql/sqlr.md#update-with-post-update-preloading).
+For updates, `sqlh:"preload:update"` is applied to the underlying `sqlr.Update()` builder, so the entity returned by the update handler is reloaded with those relations already hydrated. This follows the same post-update preload behavior described in [`sqlr` Update with Post-Update Preloading](/docs/how-to/databases-sql/sqlr/.md#update-with-post-update-preloading).
 
-For delete operations, `sync:delete` configures the association cleanup passed to the underlying `sqlr.Delete()` call, following the same cleanup semantics described in [`sqlr` Delete with Association Cleanup](/docs/how-to/databases-sql/sqlr.md#delete-with-association-cleanup).
+For delete operations, `sync:delete` configures the association cleanup passed to the underlying `sqlr.Delete()` call, following the same cleanup semantics described in [`sqlr` Delete with Association Cleanup](/docs/how-to/databases-sql/sqlr/.md#delete-with-association-cleanup).
 
-Tags are only valid on association fields recognised by [`sqlr` relationships](/docs/how-to/databases-sql/sqlr.md#relationships); using them on scalar fields causes startup to fail with an error. Tagged associations are traversed recursively, so nested paths such as `Child.Nested` are picked up automatically when the related entity also declares `sqlh` tags.
+Tags are only valid on association fields recognised by [`sqlr` relationships](/docs/how-to/databases-sql/sqlr/.md#relationships); using them on scalar fields causes startup to fail with an error. Tagged associations are traversed recursively, so nested paths such as `Child.Nested` are picked up automatically when the related entity also declares `sqlh` tags.
 
-For the underlying `sqlr` behavior behind these options, see [Read with Association Loading](/docs/how-to/databases-sql/sqlr.md#read-with-association-loading), [Eager Loading with Preload](/docs/how-to/databases-sql/sqlr.md#eager-loading-with-preload), [Create with Selective Association Persistence](/docs/how-to/databases-sql/sqlr.md#create-with-selective-association-persistence), [Create with Post-Create Preloading](/docs/how-to/databases-sql/sqlr.md#create-with-post-create-preloading), [Update with Association Sync](/docs/how-to/databases-sql/sqlr.md#update-with-association-sync), and [Delete with Association Cleanup](/docs/how-to/databases-sql/sqlr.md#delete-with-association-cleanup).
+For the underlying `sqlr` behavior behind these options, see [Read with Association Loading](/docs/how-to/databases-sql/sqlr/.md#read-with-association-loading), [Eager Loading with Preload](/docs/how-to/databases-sql/sqlr/.md#eager-loading-with-preload), [Create with Selective Association Persistence](/docs/how-to/databases-sql/sqlr/.md#create-with-selective-association-persistence), [Create with Post-Create Preloading](/docs/how-to/databases-sql/sqlr/.md#create-with-post-create-preloading), [Update with Association Sync](/docs/how-to/databases-sql/sqlr/.md#update-with-association-sync), and [Delete with Association Cleanup](/docs/how-to/databases-sql/sqlr/.md#delete-with-association-cleanup).
 
 ### Wiring into the Application[​](#wiring-into-the-application "Direct link to Wiring into the Application")
 

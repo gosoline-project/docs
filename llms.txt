@@ -6,10 +6,13 @@
 ## docs
 
 - [Gosoline Blog](/blog.md): Articles and announcements from the gosoline project
+- [Archive](/blog/archive.md): Archive
+- [Authors](/blog/authors.md)
 - [gosoline goes modular: smaller packages, better APIs](/blog/gosoline-goes-modular.md): gosoline has grown into a mature application framework that powers production backend systems. It provides the building blocks teams need to run services reliably: application lifecycle management, configuration handling, logging, metrics, tracing, and integrations for many common infrastructure components.
 - [Identity & Naming Patterns: Flexible, Configuration-Driven Resource Naming](/blog/identity-and-naming-patterns.md): Managing cloud resources across multiple environments, teams, and services is hard enough without fighting your own naming conventions. Gosoline's old AppId model locked you into a fixed project/family/group hierarchy — useful in practice, but inflexible by design. This release replaces it with a tag-based Identity system and a unified naming pattern engine that gives you full control over how every resource is named, from a single config file.
 - [Introducing the Standalone HTTP Server Package](/blog/introducing-httpserver-package.md): The HTTP server has always been one of the most commonly used parts of gosoline. Most services need a way to expose APIs, register routes, bind requests, return structured responses, and plug into the application lifecycle.
 - [Log Sampling in Go: Less Noise, More Debuggability](/blog/sampling-fingers-crossed-logging.md): High-traffic services have a logging problem: the more successful traffic you handle, the more you pay to store and query logs that rarely matter. But if you turn logging down, you lose the context you need when something does break.
+- [Search the documentation](/search.md)
 - [Fundamentals](/category/fundamentals.md): Learn the fundamental concepts and core principles of gosoline:
 - [Getting started](/category/getting-started.md): Here, you'll find tutorials to help you get started quickly with gosoline:
 - [How-to guides](/category/how-to-guides.md): Here, you'll learn how to do common tasks with gosoline:

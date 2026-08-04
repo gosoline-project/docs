@@ -268,7 +268,7 @@ With Gosoline, you can initialize specific fields that you can use with a `Logge
 
 info
 
-Read more about appending and mutating context fields in our [log package reference](/docs/reference/package-log.md#appendcontextfields).
+Read more about appending and mutating context fields in our [log package reference](/docs/reference/package-log/.md#appendcontextfields).
 
 ## Use your new function[​](#use-your-new-function "Direct link to Use your new function")
 

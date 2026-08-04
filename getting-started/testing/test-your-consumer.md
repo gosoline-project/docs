@@ -527,4 +527,4 @@ You're done! You created your first integration test with gosoline.
 
 Check out these resources to learn more about testing and creating consumers with gosoline:
 
-* [Create a consumer](/docs/getting-started/create-a-consumer.md)
+* [Create a consumer](/docs/getting-started/create-a-consumer/.md)

@@ -195,10 +195,10 @@ stream:
       group_id: audit-worker
 ```
 
-For Kafka-specific behavior and schema registry configuration, see the [Kafka guides](/docs/how-to/kafka/general.md).
+For Kafka-specific behavior and schema registry configuration, see the [Kafka guides](/docs/how-to/kafka/general/.md).
 
 ## What's next?[​](#whats-next "Direct link to What's next?")
 
-* [Create a producer](/docs/how-to/streaming-applications/create-a-producer.md)
-* [Create a consumer](/docs/how-to/streaming-applications/create-a-consumer.md)
-* [Use the producer daemon](/docs/how-to/streaming-applications/use-the-producer-daemon.md)
+* [Create a producer](/docs/how-to/streaming-applications/create-a-producer/.md)
+* [Create a consumer](/docs/how-to/streaming-applications/create-a-consumer/.md)
+* [Use the producer daemon](/docs/how-to/streaming-applications/use-the-producer-daemon/.md)

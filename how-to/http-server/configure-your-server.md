@@ -64,18 +64,18 @@ application.WithModuleFactory("http-admin", httpserver.NewServer("admin", adminD
 
 ### Settings[​](#settings "Direct link to Settings")
 
-| Field            | Type                | Default     | Description                                                                                                                                                    |
-| ---------------- | ------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `compression`    | CompressionSettings | -           | Gzip compression settings.                                                                                                                                     |
-| `concurrency`    | ConcurrencySettings | -           | Concurrent request and connection pressure limits. See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure.md). |
-| `cors`           | CorsSettings        | -           | CORS middleware settings.                                                                                                                                      |
-| `errors`         | ErrorsSettings      | -           | Error response privacy settings.                                                                                                                               |
-| `logging`        | LoggingSettings     | -           | Request logging settings.                                                                                                                                      |
-| `max_body_bytes` | int                 | `10485760`  | Maximum incoming request body size in bytes. `0` disables the limit.                                                                                           |
-| `mode`           | string              | `"release"` | Gin mode: `debug`, `release`, or `test`.                                                                                                                       |
-| `port`           | string              | `"8080"`    | Port the server listens on. Use `"0"` for a random port (useful in tests).                                                                                     |
-| `router`         | RouterSettings      | -           | Gin router settings.                                                                                                                                           |
-| `timeout`        | TimeoutSettings     | -           | IO timeout settings.                                                                                                                                           |
+| Field            | Type                | Default     | Description                                                                                                                                                     |
+| ---------------- | ------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `compression`    | CompressionSettings | -           | Gzip compression settings.                                                                                                                                      |
+| `concurrency`    | ConcurrencySettings | -           | Concurrent request and connection pressure limits. See [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure/.md). |
+| `cors`           | CorsSettings        | -           | CORS middleware settings.                                                                                                                                       |
+| `errors`         | ErrorsSettings      | -           | Error response privacy settings.                                                                                                                                |
+| `logging`        | LoggingSettings     | -           | Request logging settings.                                                                                                                                       |
+| `max_body_bytes` | int                 | `10485760`  | Maximum incoming request body size in bytes. `0` disables the limit.                                                                                            |
+| `mode`           | string              | `"release"` | Gin mode: `debug`, `release`, or `test`.                                                                                                                        |
+| `port`           | string              | `"8080"`    | Port the server listens on. Use `"0"` for a random port (useful in tests).                                                                                      |
+| `router`         | RouterSettings      | -           | Gin router settings.                                                                                                                                            |
+| `timeout`        | TimeoutSettings     | -           | IO timeout settings.                                                                                                                                            |
 
 ### Compression settings[​](#compression-settings "Direct link to Compression settings")
 
@@ -121,7 +121,7 @@ httpserver:
 
 caution
 
-Always exclude SSE endpoints from compression. Gzip buffering will break real-time streaming. See [Stream with SSE](/docs/how-to/http-server/stream-with-sse.md) for details.
+Always exclude SSE endpoints from compression. Gzip buffering will break real-time streaming. See [Stream with SSE](/docs/how-to/http-server/stream-with-sse/.md) for details.
 
 ### CORS settings[​](#cors-settings "Direct link to CORS settings")
 
@@ -313,7 +313,7 @@ httpserver:
     port: 8080
 ```
 
-The main server automatically registers a `/health` endpoint. Unhealthy modules are returned as `"unhealthy"`; underlying error messages are logged but not exposed in the HTTP response. For a separate health check server, the health check module is available separately. See [Write health checks](/docs/how-to/write-health-checks.md) for details.
+The main server automatically registers a `/health` endpoint. Unhealthy modules are returned as `"unhealthy"`; underlying error messages are logged but not exposed in the HTTP response. For a separate health check server, the health check module is available separately. See [Write health checks](/docs/how-to/write-health-checks/.md) for details.
 
 ## Profiling[​](#profiling "Direct link to Profiling")
 
@@ -364,4 +364,4 @@ httpserver:
 | `max_age`           | duration | `1m`    | Maximum age of a connection before it is closed.               |
 | `max_request_count` | int      | `0`     | Maximum number of requests per connection. `0` means disabled. |
 
-For full details on connection lifecycle, connection pressure management, and concurrent request limiting, see [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure.md).
+For full details on connection lifecycle, connection pressure management, and concurrent request limiting, see [Concurrency and connection pressure](/docs/how-to/http-server/concurrency-and-connection-pressure/.md).

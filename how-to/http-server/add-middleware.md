@@ -200,7 +200,7 @@ router.Use(cors.Default())
 router.UseFactory(httpserver.CreateEmbeddedStaticServe(publicFs, "public", "/api"))
 ```
 
-See [Serve a frontend](/docs/how-to/http-server/serve-a-frontend.md) for full details.
+See [Serve a frontend](/docs/how-to/http-server/serve-a-frontend/.md) for full details.
 
 ## Complete example[​](#complete-example "Direct link to Complete example")
 

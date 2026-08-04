@@ -1,4 +1,4 @@
-## [gosoline goes modular: smaller packages, better APIs](/docs/blog/gosoline-goes-modular.md)
+## [gosoline goes modular: smaller packages, better APIs](/docs/blog/gosoline-goes-modular/.md)
 
 June 11, 2026 ·
 
@@ -14,8 +14,8 @@ gosoline has grown into a mature application framework that powers production ba
 
 **Tags:**
 
-* [gosoline](/docs/blog/tags/gosoline)
-* [modularization](/docs/blog/tags/modularization)
-* [framework](/docs/blog/tags/framework)
+* [gosoline](/docs/blog/tags/gosoline/)
+* [modularization](/docs/blog/tags/modularization/)
+* [framework](/docs/blog/tags/framework/)
 
-[**Read more**](/docs/blog/gosoline-goes-modular.md)
+[**Read more**](/docs/blog/gosoline-goes-modular/.md)

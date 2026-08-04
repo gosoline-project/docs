@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkgosoline_docs=self.webpackChunkgosoline_docs||[]).push([["5237"],{8897(s){s.exports=JSON.parse('{"authors":[{"name":"Jan Kamieth","url":"https://github.com/j4k4","imageURL":"https://avatars.githubusercontent.com/u/783502?s=400&v=4","key":"jaka","page":null,"count":4}]}')}}]);

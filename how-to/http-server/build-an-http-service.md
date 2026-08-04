@@ -759,8 +759,8 @@ curl http://localhost:8088/api/users/health
 
 ## What's next?[​](#whats-next "Direct link to What's next?")
 
-* [Stream with Server-Sent Events](/docs/how-to/http-server/stream-with-sse.md) — push real-time updates to clients
-* [Serve a frontend](/docs/how-to/http-server/serve-a-frontend.md) — embed and serve a SPA from your Go binary
-* [Configure your server](/docs/how-to/http-server/configure-your-server.md) — timeouts, compression, multiple servers
-* [Add middleware](/docs/how-to/http-server/add-middleware.md) — custom middleware, CORS
-* [Real-world example](/docs/how-to/http-server/real-world-example.md) — patterns from production applications
+* [Stream with Server-Sent Events](/docs/how-to/http-server/stream-with-sse/.md) — push real-time updates to clients
+* [Serve a frontend](/docs/how-to/http-server/serve-a-frontend/.md) — embed and serve a SPA from your Go binary
+* [Configure your server](/docs/how-to/http-server/configure-your-server/.md) — timeouts, compression, multiple servers
+* [Add middleware](/docs/how-to/http-server/add-middleware/.md) — custom middleware, CORS
+* [Real-world example](/docs/how-to/http-server/real-world-example/.md) — patterns from production applications

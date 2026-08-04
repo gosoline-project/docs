@@ -379,8 +379,8 @@ This combo is a good fit for Go services because it leans into Go’s strengths:
 
 **Tags:**
 
-* [logging](/docs/blog/tags/logging)
-* [sampling](/docs/blog/tags/sampling)
-* [observability](/docs/blog/tags/observability)
+* [logging](/docs/blog/tags/logging/)
+* [sampling](/docs/blog/tags/sampling/)
+* [observability](/docs/blog/tags/observability/)
 
 [Edit this page](https://github.com/gosoline-project/docs/tree/main/blog/2026-01-15-sampling-fingers-crossed-logging.md)

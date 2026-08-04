@@ -2,7 +2,7 @@
 
 A consumer connects a configured input to your callback. Gosoline owns polling, decoding, acknowledgement, retries, health checks, metrics, tracing, and graceful shutdown; your callback owns the business operation.
 
-For a first walkthrough, see [Create a consumer](/docs/getting-started/create-a-consumer.md). This guide focuses on the current typed API and operational behavior.
+For a first walkthrough, see [Create a consumer](/docs/getting-started/create-a-consumer/.md). This guide focuses on the current typed API and operational behavior.
 
 ## Implement a typed callback[​](#implement-a-typed-callback "Direct link to Implement a typed callback")
 
@@ -226,5 +226,5 @@ The consumer derives a delayed cancellation context for each callback. `consume_
 
 ## What's next?[​](#whats-next "Direct link to What's next?")
 
-* [Test your consumer](/docs/getting-started/testing/test-your-consumer.md)
-* [Use the producer daemon](/docs/how-to/streaming-applications/use-the-producer-daemon.md)
+* [Test your consumer](/docs/getting-started/testing/test-your-consumer/.md)
+* [Use the producer daemon](/docs/how-to/streaming-applications/use-the-producer-daemon/.md)

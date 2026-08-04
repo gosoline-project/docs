@@ -4,7 +4,7 @@ The `smpl` package helps you make a consistent sampling decision (sampled vs. no
 
 info
 
-This guide focuses only on the sampling packages. If you want to see how sampling interacts with buffering logs on errors, read: [Sampling & fingers-crossed](/docs/how-to/logging/sampling-and-fingers-crossed.md).
+This guide focuses only on the sampling packages. If you want to see how sampling interacts with buffering logs on errors, read: [Sampling & fingers-crossed](/docs/how-to/logging/sampling-and-fingers-crossed/.md).
 
 ## Concepts[​](#concepts "Direct link to Concepts")
 

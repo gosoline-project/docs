@@ -231,7 +231,7 @@ On graceful kernel shutdown, the daemon flushes pending aggregates and batches b
 
 Output capabilities can reduce configured batch and message sizes automatically. For partitioned outputs such as Kinesis, the daemon uses partition buckets so messages with the same partition key remain assigned consistently enough for shard processing.
 
-Kafka does not support Gosoline aggregation in the producer daemon. Kafka's own producer performs batching and compression, and its `max_batch_size` and `max_batch_bytes` settings override daemon batch limits. See [general Kafka usage](/docs/how-to/kafka/general.md#producer-daemon-usage).
+Kafka does not support Gosoline aggregation in the producer daemon. Kafka's own producer performs batching and compression, and its `max_batch_size` and `max_batch_bytes` settings override daemon batch limits. See [general Kafka usage](/docs/how-to/kafka/general/.md#producer-daemon-usage).
 
 ## Choosing settings[​](#choosing-settings "Direct link to Choosing settings")
 

@@ -309,13 +309,13 @@ The standalone `httpserver` package is part of the broader direction for gosolin
 
 Existing applications do not need to migrate immediately. The old package remains available for now, but new applications should prefer the standalone module.
 
-For the full API overview, see the [HTTP server package reference](/docs/reference/package-httpserver.md).<br /><!-- -->For step-by-step migration details, see the [HTTP server package migration guide](/docs/migrations/httpserver-package.md).
+For the full API overview, see the [HTTP server package reference](/docs/reference/package-httpserver/.md).<br /><!-- -->For step-by-step migration details, see the [HTTP server package migration guide](/docs/migrations/httpserver-package/.md).
 
 **Tags:**
 
-* [gosoline](/docs/blog/tags/gosoline)
-* [httpserver](/docs/blog/tags/httpserver)
-* [framework](/docs/blog/tags/framework)
-* [migration](/docs/blog/tags/migration)
+* [gosoline](/docs/blog/tags/gosoline/)
+* [httpserver](/docs/blog/tags/httpserver/)
+* [framework](/docs/blog/tags/framework/)
+* [migration](/docs/blog/tags/migration/)
 
 [Edit this page](https://github.com/gosoline-project/docs/tree/main/blog/2026-06-11-introducing-httpserver-package.md)

@@ -81,8 +81,8 @@ This is an important step for gosoline. It keeps the framework useful for large 
 
 **Tags:**
 
-* [gosoline](/docs/blog/tags/gosoline)
-* [modularization](/docs/blog/tags/modularization)
-* [framework](/docs/blog/tags/framework)
+* [gosoline](/docs/blog/tags/gosoline/)
+* [modularization](/docs/blog/tags/modularization/)
+* [framework](/docs/blog/tags/framework/)
 
 [Edit this page](https://github.com/gosoline-project/docs/tree/main/blog/2026-06-11-gosoline-goes-modular.md)

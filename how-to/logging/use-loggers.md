@@ -216,5 +216,5 @@ In this guide, you've learned multiple ways to implement a logger with gosoline.
 
 Check out these resources to learn more about logging with gosoline:
 
-* [Implement a log handler](/docs/how-to/logging/implement-a-log-handler.md)
-* [API reference for the log package](/docs/reference/package-log.md)
+* [Implement a log handler](/docs/how-to/logging/implement-a-log-handler/.md)
+* [API reference for the log package](/docs/reference/package-log/.md)

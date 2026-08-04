@@ -1,6 +1,6 @@
 # sqlr - SQL Repository
 
-The `sqlr` package provides a generic, type-safe repository layer built on top of [`sqlc`](/docs/how-to/databases-sql/sqlc.md). It offers CRUD operations, relationship management, eager loading via joins and preloads, and transaction support — all using Go generics for compile-time type safety.
+The `sqlr` package provides a generic, type-safe repository layer built on top of [`sqlc`](/docs/how-to/databases-sql/sqlc/.md). It offers CRUD operations, relationship management, eager loading via joins and preloads, and transaction support — all using Go generics for compile-time type safety.
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
@@ -18,7 +18,7 @@ import "github.com/gosoline-project/sqlr"
 
 ## Configuration[​](#configuration "Direct link to Configuration")
 
-The `sqlr` package uses `sqlc` under the hood for database connections. Configure your database using the same `sqlc` configuration key described in the [sqlc documentation](/docs/how-to/databases-sql/sqlc.md#configuration):
+The `sqlr` package uses `sqlc` under the hood for database connections. Configure your database using the same `sqlc` configuration key described in the [sqlc documentation](/docs/how-to/databases-sql/sqlc/.md#configuration):
 
 config.dist.yml
 
@@ -1194,7 +1194,7 @@ The `QueryBuilderSelect` supports:
 | `GroupBy(cols...)`             | Sets the GROUP BY clause                          |
 | `Having(condition, params...)` | Adds a HAVING condition                           |
 
-WHERE conditions use the same `sqlc.Col()` expression API from the [`sqlc` package](/docs/how-to/databases-sql/sqlc.md):
+WHERE conditions use the same `sqlc.Col()` expression API from the [`sqlc` package](/docs/how-to/databases-sql/sqlc/.md):
 
 ```
 qb.Where(sqlc.Col("status").Eq("published"))
@@ -1612,4 +1612,4 @@ Associations follow the normal `Create()` behavior described above. If your fixt
 
 The built-in `sqlr` fixture writer uses the `default` sqlc client name. If you define multiple fixture sets without embedding them as associations, make sure their factory order still respects your foreign-key dependencies.
 
-For more details about gosoline fixture loading, grouping, purge behavior, and named fixture references, see the [fixtures package reference](/docs/reference/package-fixtures.md).
+For more details about gosoline fixture loading, grouping, purge behavior, and named fixture references, see the [fixtures package reference](/docs/reference/package-fixtures/.md).

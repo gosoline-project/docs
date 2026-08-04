@@ -161,7 +161,7 @@ Unknown placeholders in naming patterns now return an error at startup. A typo l
 
 ### Full pattern reference[​](#full-pattern-reference "Direct link to Full pattern reference")
 
-For a complete list of all configurable patterns across every service, see the [Naming Patterns reference](/docs/reference/naming-patterns.md) and [Naming Patterns fundamentals](/docs/fundamentals/naming-patterns.md).
+For a complete list of all configurable patterns across every service, see the [Naming Patterns reference](/docs/reference/naming-patterns/.md) and [Naming Patterns fundamentals](/docs/fundamentals/naming-patterns/.md).
 
 ***
 
@@ -266,7 +266,7 @@ A few things to be aware of:
 * If `domain_pattern` is not configured, calling `modelId.String()` will return an error.
 * When parsing a canonical model ID string back, each placeholder matches non-dot characters, and the model name is everything after the final dot. This means using non-dot delimiters (e.g. `{app.tags.project}-{app.env}`) is valid, but the last `.` in the full string always marks the boundary before the model name.
 
-See the [Naming Patterns reference](/docs/reference/naming-patterns.md#modelid-domain-pattern-canonical-ids) for the full rules and examples.
+See the [Naming Patterns reference](/docs/reference/naming-patterns/.md#modelid-domain-pattern-canonical-ids) for the full rules and examples.
 
 ### Removed packages[​](#removed-packages "Direct link to Removed packages")
 
@@ -277,13 +277,13 @@ See the [Naming Patterns reference](/docs/reference/naming-patterns.md#modelid-d
 
 ## Migration quick start[​](#migration-quick-start "Direct link to Migration quick start")
 
-For full step-by-step instructions covering stream input/output config, `mdlsub` publishers, Go code changes, and per-service pattern updates, see the [migration guide](/docs/migrations/app-identity-and-naming-patterns.md).
+For full step-by-step instructions covering stream input/output config, `mdlsub` publishers, Go code changes, and per-service pattern updates, see the [migration guide](/docs/migrations/app-identity-and-naming-patterns/.md).
 
 **Tags:**
 
-* [identity](/docs/blog/tags/identity)
-* [naming](/docs/blog/tags/naming)
-* [configuration](/docs/blog/tags/configuration)
-* [breaking-changes](/docs/blog/tags/breaking-changes)
+* [identity](/docs/blog/tags/identity/)
+* [naming](/docs/blog/tags/naming/)
+* [configuration](/docs/blog/tags/configuration/)
+* [breaking-changes](/docs/blog/tags/breaking-changes/)
 
 [Edit this page](https://github.com/gosoline-project/docs/tree/main/blog/2026-02-19-identity-and-naming-patterns.md)

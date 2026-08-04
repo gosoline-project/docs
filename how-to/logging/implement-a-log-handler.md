@@ -166,7 +166,7 @@ type MyCustomHandler struct {
 }
 ```
 
-This handler struct stores the log `channel`. To use your handler, you must implement the required methods of the [`Handler`](/docs/reference/package-log.md#handler) interface.
+This handler struct stores the log `channel`. To use your handler, you must implement the required methods of the [`Handler`](/docs/reference/package-log/.md#handler) interface.
 
 ### Implement the `ChannelLevel` method[​](#implement-the-channellevel-method "Direct link to implement-the-channellevel-method")
 
@@ -282,5 +282,5 @@ That's it! In this guide, you:
 
 Check out these resources to learn more about logging with gosoline:
 
-* [Use loggers](/docs/how-to/logging/use-loggers.md)
-* [API reference for the log package](/docs/reference/package-log.md)
+* [Use loggers](/docs/how-to/logging/use-loggers/.md)
+* [API reference for the log package](/docs/reference/package-log/.md)

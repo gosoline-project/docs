@@ -262,5 +262,5 @@ Prefer `Producer` for application events. Use `Output` directly only when the da
 
 ## What's next?[​](#whats-next "Direct link to What's next?")
 
-* [Create a consumer](/docs/how-to/streaming-applications/create-a-consumer.md) to process the produced models
-* [Use the producer daemon](/docs/how-to/streaming-applications/use-the-producer-daemon.md) to buffer, batch, or aggregate writes
+* [Create a consumer](/docs/how-to/streaming-applications/create-a-consumer/.md) to process the produced models
+* [Use the producer daemon](/docs/how-to/streaming-applications/use-the-producer-daemon/.md) to buffer, batch, or aggregate writes

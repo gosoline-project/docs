@@ -136,8 +136,8 @@ import (
 
 Here, you declared the package as `main`. Then, you imported the `context` module along with three gosoline dependencies:
 
-* [`cfg`](/docs/reference/package-cfg.md)
-* [`log`](/docs/reference/package-log.md)
+* [`cfg`](/docs/reference/package-cfg/.md)
+* [`log`](/docs/reference/package-log/.md)
 * `stream`
 
 ### Implement your data structs[​](#implement-your-data-structs "Direct link to Implement your data structs")

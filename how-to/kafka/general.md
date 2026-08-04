@@ -30,4 +30,4 @@ Batching will still be done by the producer daemon, but it will use the `max_bat
 
 You can optionally use the Kafka schema registry.
 
-Check this guide for more details on the schema registry usage: [How to use the Kafka Schema Registry](/docs/how-to/kafka/use-schema-registry.md)
+Check this guide for more details on the schema registry usage: [How to use the Kafka Schema Registry](/docs/how-to/kafka/use-schema-registry/.md)

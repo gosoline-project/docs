@@ -334,5 +334,5 @@ In this guide, you've learned multiple ways to load configurations into your app
 
 Check out these resources to learn more about configurations and gosoline:
 
-* [Configure a logger with gosoline](/docs/how-to/logging/use-loggers.md#implement-a-logger-with-an-app-configuration)
-* [API reference for the cfg package](/docs/reference/package-cfg.md)
+* [Configure a logger with gosoline](/docs/how-to/logging/use-loggers/.md#implement-a-logger-with-an-app-configuration)
+* [API reference for the cfg package](/docs/reference/package-cfg/.md)

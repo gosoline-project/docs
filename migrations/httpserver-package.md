@@ -1159,7 +1159,7 @@ router.Group("/api").Use(auth.NewChainHandler(authenticators))
 
 The old Google auth helper was not ported to the standalone module. If you used `NewConfigGoogleHandler` or `NewConfigGoogleAuthenticator`, keep that logic in application-owned middleware or an application-owned auth package.
 
-See [Authenticate requests](/docs/how-to/http-server/authentication.md) for the full standalone auth guide.
+See [Authenticate requests](/docs/how-to/http-server/authentication/.md) for the full standalone auth guide.
 
 ## 12. Review Configuration[​](#12-review-configuration "Direct link to 12. Review Configuration")
 

@@ -10,20 +10,20 @@ HTTP Server
 
 Build REST web services with HTTP handling, caching, OAuth, and much more.
 
-[Get started](/docs/category/http-server.md)
+[Get started](/docs/category/http-server/.md)
 
 Message Queues
 
 Process asynchronous messages from Kafka, Redis, or any other queuing or streaming system.
 
-[Get started](/docs/quickstart/create-a-consumer)
+[Get started](/docs/getting-started/create-a-consumer/.md)
 
 Kernel Module
 
 Implement a kernel module with which you can do anything, using gosoline's logging, configuration, and other solutions.
 
-[Get started](/docs/quickstart/create-an-application)
+[Get started](/docs/getting-started/create-an-application/.md)
 
 <br />
 
-Want to skip the guided walkthroughs and get straight to the information? Check out our [API reference docs](/docs/category/reference.md).
+Want to skip the guided walkthroughs and get straight to the information? Check out our [API reference docs](/docs/category/reference/.md).
