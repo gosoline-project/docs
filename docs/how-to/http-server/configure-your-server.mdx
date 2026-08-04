@@ -56,7 +56,7 @@ application.WithModuleFactory("http-admin", httpserver.NewServer("admin", adminD
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `compression` | CompressionSettings | - | Gzip compression settings. |
-| `concurrency` | ConcurrencySettings | - | Concurrent request and connection pressure limits. See [Concurrency and connection pressure](./concurrency-and-connection-pressure). |
+| `concurrency` | ConcurrencySettings | - | Concurrent request and connection pressure limits. See [Concurrency and connection pressure](/how-to/http-server/concurrency-and-connection-pressure/). |
 | `cors` | CorsSettings | - | CORS middleware settings. |
 | `errors` | ErrorsSettings | - | Error response privacy settings. |
 | `logging` | LoggingSettings | - | Request logging settings. |
@@ -98,7 +98,7 @@ httpserver:
 | `pathRegex` | string array | Regex patterns to exclude (e.g., `\.json$`). |
 
 :::caution
-Always exclude SSE endpoints from compression. Gzip buffering will break real-time streaming. See [Stream with SSE](./stream-with-sse) for details.
+Always exclude SSE endpoints from compression. Gzip buffering will break real-time streaming. See [Stream with SSE](/how-to/http-server/stream-with-sse/) for details.
 :::
 
 ### CORS settings
@@ -248,7 +248,7 @@ httpserver:
     port: 8080
 ```
 
-The main server automatically registers a `/health` endpoint. Unhealthy modules are returned as `"unhealthy"`; underlying error messages are logged but not exposed in the HTTP response. For a separate health check server, the health check module is available separately. See [Write health checks](../write-health-checks) for details.
+The main server automatically registers a `/health` endpoint. Unhealthy modules are returned as `"unhealthy"`; underlying error messages are logged but not exposed in the HTTP response. For a separate health check server, the health check module is available separately. See [Write health checks](/how-to/write-health-checks/) for details.
 
 ## Profiling
 
@@ -291,4 +291,4 @@ httpserver:
 | `max_age` | duration | `1m` | Maximum age of a connection before it is closed. |
 | `max_request_count` | int | `0` | Maximum number of requests per connection. `0` means disabled. |
 
-For full details on connection lifecycle, connection pressure management, and concurrent request limiting, see [Concurrency and connection pressure](./concurrency-and-connection-pressure).
+For full details on connection lifecycle, connection pressure management, and concurrent request limiting, see [Concurrency and connection pressure](/how-to/http-server/concurrency-and-connection-pressure/).
