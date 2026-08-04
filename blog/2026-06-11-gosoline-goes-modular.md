@@ -44,7 +44,7 @@ The first extracted packages focus on HTTP services and SQL support:
 
 You can find the HTTP server documentation here:
 
-https://gosoline-project.github.io/docs/how-to/http-server/build-an-http-service
+https://gosoline-project.github.io/docs/how-to/http-server/build-an-http-service/
 
 The SQL package documentation is available here:
 

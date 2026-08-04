@@ -124,7 +124,7 @@ const config = {
       navbar: {
         title: 'Gosoline',
         logo: {
-          alt: 'justtrack Logo',
+          alt: 'Gosoline logo',
           src: 'img/logo-transparent.png',
         },
         items: [
@@ -191,7 +191,7 @@ const config = {
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} justtrack`,
+        copyright: `Copyright © ${new Date().getFullYear()} Gosoline`,
       },
       prism: {
         theme: lightCodeTheme,
