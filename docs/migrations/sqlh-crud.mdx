@@ -1,0 +1,194 @@
+---
+sidebar_position: 3
+title: SQLH CRUD
+---
+
+import AgentInstructions from "!!raw-loader!./src/sqlh-migration-agent-instructions.txt";
+import { CopyToClipboardButton } from '../components.jsx';
+
+# Migrating an Existing Service to SQLH CRUD
+
+This guide explains how to move an existing entity API to the typed SQLH CRUD API. It uses the migration in `experiment-service` branch `300-migrate-experiment-service-to-sqlh` as the reference pattern.
+
+SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations. The migration must preserve the public API. It must not replace domain rules with generic CRUD behavior.
+
+## 1. Review the Current API
+
+Before you change code, record the current behavior:
+
+- HTTP paths and methods
+- Request and response schemas
+- Authentication and authorization rules
+- Validation errors and status codes
+- Soft-delete and not-found behavior
+- Association create, update, patch, and delete rules
+- List filters, joins, ordering, grouping, and pagination
+- Event publication and post-commit behavior
+- Transaction rollback behavior
+
+Add parity tests for this behavior. The `experiment-service` migration added CRUD, PATCH, HTTP protocol, and transaction failure tests before it removed the old handlers.
+
+## 2. Replace the Persistence Model
+
+Replace the old repository model with SQLR entities:
+
+1. Embed `sqlr.Entity[K]`, or implement the `sqlr.Entitier[K]` methods when the existing timestamp behavior must stay unchanged.
+2. Add `db` tags for existing column names.
+3. Implement `TableName()` when the existing table name does not follow SQLR naming rules.
+4. Declare relations with `sqlr` tags.
+5. Add `preload` and `sync` behavior with `sqlh` tags.
+
+Use SQLR tags for relation shape and SQLH tags for CRUD phases:
+
+```go
+type Experiment struct {
+    ExperimentEntity
+
+    App           *App            `db:"-" sqlr:"belongsTo:app_id;preload" sqlh:"preload:create,read,query,update"`
+    Filters       []*Filter       `db:"-" sqlr:"foreignKey:experiment_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
+    Segmentations []*Segmentation `db:"-" sqlr:"foreignKey:experiment_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
+}
+```
+
+Add `sqlh:"sync:update"` to every relation that PUT or PATCH must persist. Without this tag, a mapper can change the entity graph, but SQLR does not synchronize that relation.
+
+## 3. Build the SQLR Repository
+
+Construct the repository from the configured SQLC client:
+
+```go
+client, err := sqlc.ProvideClient(ctx, config, logger, "default")
+if err != nil {
+    return nil, err
+}
+
+reader, err := sqlr.NewRepositoryWithInterfaces[uint, model.Experiment](client, sqlr.DefaultSettings())
+```
+
+Keep domain queries and background transitions in an application repository. Apply an active-row scope to normal reads when the service uses soft deletion. Provide a separate method for consumers that must read deleted rows.
+
+Use explicit transactions for background state transitions. Use `ForUpdate()` when a transition must lock the root row before it updates related rows.
+
+## 4. Define Typed SQLH Callbacks
+
+Create a typed update input that embeds `sqlh.InputById[Id]`. Then define the CRUD callbacks:
+
+- `CreateInput` checks authorization and validation, then maps the request to a new entity.
+- `UpdateInput` checks authorization against the loaded entity, applies the complete input, and validates domain state.
+- `PatchInputFromEntity` maps the stored entity to a complete update input.
+- `Output` checks read authorization and maps the entity to the public response.
+- `Identity` loads the entity by the public key when the route does not use the SQL primary key.
+- `DeleteScope` limits rows that normal operations can see.
+- `Delete` implements soft deletion or another domain-specific delete strategy.
+
+A typical definition looks like this:
+
+```go
+type ExperimentUpdateInput struct {
+    sqlh.InputById[string]
+    types.PutExperimentInput
+}
+
+func newDefinition(...) (experimentDefinition, error) {
+    return experimentDefinition{
+        CreateInput:              operations.createInput,
+        UpdateInput:              operations.updateInput,
+        PatchInputFromEntity:     operations.patchInputFromEntity,
+        PatchAssociationTriggers: map[string]string{"status": "Segmentations"},
+        Output:                   operations.output,
+        DeleteOutput:             operations.output,
+        Identity:                 identityByPublicId,
+        Delete:                   operations.delete,
+        DeleteScope:              repository.Active,
+    }, nil
+}
+```
+
+Keep authorization, validation, state transitions, and event decisions in these callbacks. SQLH supplies the transaction, repository, identity lookup, association policy, and output flow.
+
+## 5. Preserve JSON Merge Patch Behavior
+
+SQLH PATCH uses JSON Merge Patch. It loads the entity, builds a complete update input, merges the request document, and calls the same update callback as PUT.
+
+The complete input must preserve all values that an omitted field should keep. Arrays replace the full relation. An array item with an ID updates the existing child. An item without an ID creates a child. A child that is missing from the replacement array is removed when SQLR association synchronization is enabled.
+
+Use `PatchAssociationTriggers` when a scalar field changes a relation indirectly. In the reference migration, `status` changed segmentation states, so the definition selected `Segmentations` when a patch contained `status`.
+
+Test these cases:
+
+- Omitted scalar fields
+- Explicit `null`
+- Empty relation arrays
+- Existing child IDs
+- New child values
+- Removed child values
+- Status transitions that change associations
+- Required-field validation
+
+## 6. Preserve List Compatibility
+
+Embed `sqlh.ListInput` in a service-specific list input. Implement an adapter when the old API has another filter format:
+
+```go
+type ListInput struct {
+    sqlh.ListInput
+
+    legacyQuery  bool
+    legacyFilter *sqlc.Expression
+}
+```
+
+Translate the old filter format to SQLC expressions. Preserve joins, grouping, ordering, and pagination. Reject mixed filter dialects when the old and native formats cannot be combined.
+
+Apply the same scope to the row query and the count query. Apply row-only modifiers and pagination only to the row query. SQLH returns `ListOutput` with `results` and `total`.
+
+## 7. Keep Existing Routes
+
+`WithCrudHandlers` creates standard `/v{version}` routes. Use `NewCrudHandler` and manual registration when the existing API has different paths or response behavior.
+
+The reference migration kept:
+
+- `POST /v0/experiment`
+- `POST /v0/experiments`
+- `GET /v0/experiments/:id`
+- `PUT /v0/experiments/:id`
+- `PATCH /v0/experiments/:id`
+- `DELETE /v0/experiments/:id`
+
+It used `handler.Delete` instead of `DeleteNoContent` because the existing delete endpoint returned the deleted entity.
+
+## 8. Preserve Transactions and Events
+
+SQLH commits only after the operation and output mapping succeed. Any association or output error rolls back the complete operation.
+
+Keep event publication after commit. The reference migration moved event publication to CDC and loaded the aggregate from SQLR when a change event arrived. If the service uses another event path, preserve its ordering and retry behavior.
+
+Set `clientFoundRows` when unchanged updates must count as matched rows. Without it, MySQL can report zero affected rows for a valid update that writes the same values. SQLR can then return `ErrNotFound` and the HTTP API can return the wrong status.
+
+## 9. Validate the Migration
+
+Run tests that cover:
+
+- CRUD parity and route behavior
+- Authentication and authorization
+- JSON Merge Patch semantics
+- Relation synchronization and preloads
+- Native and legacy list filters
+- Soft-delete visibility and delete responses
+- Not-found behavior
+- Transaction rollback after root and child write failures
+- Background transitions and row locks
+- CDC or other post-commit event publication
+- Generated API and OpenAPI artifacts
+
+For the full operational prompt, copy the instructions below. The prompt contains a search map, an ordered migration procedure, API mappings, validation checks, and stop conditions.
+
+<CopyToClipboardButton text={AgentInstructions} label="Copy AI migration instructions" />
+
+## See Also
+
+- [sqlh - SQL HTTP Handlers](/how-to/databases-sql/sqlh)
+- [sqlr - SQL Repository](/how-to/databases-sql/sqlr)
+- [SQLH CRUD redesign](https://github.com/gosoline-project/sqlh/pull/7)
+- [SQLR SELECT FOR UPDATE](https://github.com/gosoline-project/sqlr/pull/1)
+- [SQLC SELECT FOR UPDATE](https://github.com/gosoline-project/sqlc/pull/2)
