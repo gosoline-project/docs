@@ -45,26 +45,29 @@ The `sqlr` package provides an ORM-like experience built on top of `sqlc`. It us
 - Loading related entities through relationships
 
 **Key capabilities:**
-- Generic Repository pattern with Create, Read, Update, Delete, Query operations
+- Generic Repository pattern with Create, Read, Update, Delete, Query, and Count operations
 - Entity definition with struct tags for schema mapping
 - Relationship support: HasOne, HasMany, BelongsTo, ManyToMany
 - Eager loading via Preload for related entities
 - Join support for HasOne, HasMany, BelongsTo relations
+- Row locking with `ForUpdate()` inside transactions
 - Transaction-aware repository variant
 
 ## sqlh - SQL HTTP Handlers
 
-The `sqlh` package exposes repository CRUD operations through HTTP endpoints. It integrates with the gosoline HTTP server.
+The `sqlh` package provides typed, transaction-aware CRUD handlers for SQLR entities. It integrates with the gosoline HTTP server.
 
 **When to use sqlh:**
 - Building REST APIs for entity management
-- Need quick CRUD endpoints without boilerplate
-- Want consistent API patterns across entities
+- Need CRUD endpoints without repetitive transaction and repository code
+- Need JSON Merge Patch, server-owned filters, or custom identity and delete behavior
 
 **Key capabilities:**
-- Automatic CRUD handler generation for entities
-- Transformer pattern for input/output mapping
-- JSON filter support for query endpoints
+- Typed CRUD definitions with create, update, patch, list, and delete operations
+- Automatic transactions with commit and rollback behavior
+- JSON Merge Patch with selective association synchronization
+- Typed list results with shared query and count scopes
+- Force filters for authorization and tenant restrictions
 - Integration with gosoline HTTP server routing
 
 ## Choosing the Right Layer

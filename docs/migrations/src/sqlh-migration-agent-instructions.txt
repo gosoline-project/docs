@@ -1,0 +1,502 @@
+Migrate the service from its current custom CRUD handlers to the typed, transaction-aware SQLH API from github.com/gosoline-project/sqlh, as redesigned in PR #7.
+
+Preserve the public API and domain behavior. Do not replace domain rules with generic CRUD behavior. Keep existing routes, request fields, response bodies, status codes, authorization, validation, soft-delete rules, association behavior, list filter behavior, event ordering, and transaction guarantees unless the service explicitly requires a change.
+
+Target dependencies:
+
+- github.com/gosoline-project/httpserver at the version used by the service
+- github.com/gosoline-project/sqlc at v0.4.0 or a compatible release
+- github.com/gosoline-project/sqlr at v0.9.0 or a compatible release
+- github.com/gosoline-project/sqlh at the release that contains the CRUD redesign
+
+Do not use the removed SQLH APIs:
+
+- Transformer
+- JsonResultsTransformer
+- WithTx
+- BindTx
+- BindTxN
+- BindTxR
+- BindTxNR
+- builder-aware transformer interfaces
+
+Use these SQLH APIs instead:
+
+- CrudDefinition
+- NewCrudDefinition
+- SimpleCrudDefinition
+- NewCrudHandler
+- WithCrudHandlers
+- InputById
+- ListInput and ListOutput
+- ForceFilters
+- Identity, DeleteScope, Delete, DeleteOutput
+- Query and Count callbacks
+- PatchInputFromEntity
+- PatchAssociations and PatchAssociationTriggers
+- WithClientName
+- WithRepositorySettings
+- WithRepositoryTxFactory
+- TxRunner for custom typed operations
+
+## Safety and discovery rules
+
+First inspect the repository and its local instructions. Do not make a global import replacement. Classify each handler, repository, model, route, and event path before changing it.
+
+Create parity tests before removing old handlers when the service does not already have equivalent coverage. Record the current behavior of every route, including error responses and association changes.
+
+Do not change unrelated application code. Stop and ask for guidance when a route behavior, event ordering rule, or authorization rule is ambiguous and tests or callers cannot resolve it.
+
+## Scope discovery
+
+Find all of the following:
+
+- Existing CRUD handlers for create, list, read, update, patch, and delete.
+- Route registration for every CRUD endpoint.
+- Request DTOs and response DTOs.
+- Repository interfaces and implementations used by HTTP handlers and background jobs.
+- Model structs and database metadata.
+- Existing relationship and association mapping code.
+- Existing soft-delete scopes and delete strategies.
+- Existing list filters, joins, group-by clauses, order clauses, and pagination rules.
+- Authentication and authorization checks.
+- Validation calls and status-code wrappers.
+- Event publication, outbox, CDC, or post-commit callbacks.
+- Transaction helpers and rollback tests.
+- Generated OpenAPI sources and generated Go types.
+- SQL configuration, migration paths, and connection parameters.
+- Tests for unchanged updates and not-found behavior.
+
+Find old SQLH or custom handler patterns:
+
+- Transformer and JsonResultsTransformer implementations.
+- WithTx middleware.
+- BindTx, BindTxN, BindTxR, and BindTxNR.
+- Handlers that load an entity, authorize it, apply a DTO, save it, and render a response.
+- Handlers that use pointer presence checks for PATCH.
+- Handler code that manually creates and deletes child entities.
+- Repository factories that return sqlr.Repository instead of sqlr.RepositoryTx.
+- Custom list inputs that do not implement the SQLH ListInputSource phases.
+
+## Reference migration
+
+Use the experiment-service migration branch named 300-migrate-experiment-service-to-sqlh as a design reference. Do not copy its business rules without checking the target service.
+
+The important reference files are:
+
+- internal/gateway-management/api/handlers/experiment/facade.go
+- internal/gateway-management/api/handlers/experiment/mapping.go
+- internal/gateway-management/api/handlers/experiment/list_input.go
+- internal/pkg/experiment/model/model.go
+- internal/pkg/experiment/repository/repository.go
+- internal/gateway-management/api/api.go
+- cmd/gateway-management/config.dist.yml
+- test/gateway-management/experiment/gateway_test.go
+- test/gateway-management/experiment/behavior_test.go
+- test/gateway-management/experiment/http_protocol_test.go
+- test/gateway-management/experiment/transaction_failure_test.go
+- internal/entity-publisher/consumer.go
+
+The reference migration made these design choices:
+
+- It replaced five custom handlers with one typed sqlh.CrudHandler.
+- It kept application authorization and domain validation in CRUD callbacks.
+- It embedded sqlh.InputById[string] in the update input because routes use public IDs.
+- It loaded entities by public ID with a custom Identity callback.
+- It applied the supplied SQLH scope in the custom identity query.
+- It used repository.Active as DeleteScope to hide soft-deleted rows.
+- It used a custom Delete callback to mark the root row deleted and omit child association updates.
+- It assigned the normal output mapper to DeleteOutput because DELETE returns the deleted entity.
+- It used sqlh relation tags for preloads and association synchronization.
+- It used PatchInputFromEntity to preserve omitted PUT and PATCH fields.
+- It used PatchAssociationTriggers to select Segmentations when a status field changed them.
+- It adapted both a native SQLC filter format and a legacy filter format into SQLC expressions.
+- It registered routes manually because the existing paths and delete response did not match WithCrudHandlers defaults.
+- It moved database configuration from db to sqlc.default.
+- It enabled clientFoundRows because unchanged updates must count as matched rows.
+- It kept background transitions in an application repository with explicit transactions.
+- It moved event publication to CDC and loaded the aggregate after the database commit.
+
+## Migration order
+
+Complete the migration in small, reviewable steps.
+
+1. Add parity tests for routes, response bodies, status codes, validation, authorization, filters, associations, and transaction failures.
+2. Add compatible sqlc, sqlr, and sqlh dependencies.
+3. Replace the old persistence model with SQLR entities.
+4. Preserve table names, column names, primary keys, timestamps, and nullable fields.
+5. Declare SQLR relationships and add SQLH preload and sync tags.
+6. Build a transaction-aware SQLR repository from the same SQL client that SQLH will use.
+7. Preserve non-HTTP readers, background jobs, state transitions, and event consumers.
+8. Define the typed SQLH CRUD aliases and request input types.
+9. Implement create, update, patch-input, and output callbacks.
+10. Add a custom Identity callback when the public route ID is not the SQL primary key.
+11. Add DeleteScope and a custom Delete strategy for soft deletion or other domain behavior.
+12. Add PatchAssociations or PatchAssociationTriggers when SQLH cannot infer the association mapping.
+13. Add a custom ListInput when the service has legacy filters or query modifiers.
+14. Register standard SQLH routes or manually register existing routes with httpserver.Bind.
+15. Move configuration to sqlc and set clientFoundRows when unchanged updates must succeed.
+16. Move event publication to the chosen post-commit path.
+17. Remove old handlers and removed SQLH APIs only after parity tests pass.
+18. Regenerate generated types, mocks, OpenAPI artifacts, and other derived files.
+19. Run unit, integration, HTTP protocol, rollback, and event tests.
+
+## Model migration
+
+Create SQLR entities that satisfy sqlr.Entitier[K]. Use sqlr.Entity[K] when SQLR should manage IDs and timestamps.
+
+When the existing service owns timestamps or uses a special primary key type, implement the Entitier methods explicitly:
+
+- GetId
+- SetId
+- GetCreatedAt
+- GetUpdatedAt
+
+Implement TableName when the existing table name does not match SQLR naming rules.
+
+Use explicit db tags for existing columns. Do not rename database columns to match Go field names during this migration.
+
+Declare relationships with SQLR tags:
+
+- belongsTo:column for a foreign key on the current entity.
+- foreignKey:column for HasOne or HasMany relations.
+- many2many:table for many-to-many relations.
+- preload for SQLR-level default preloads.
+- sync:create, sync:update, or sync:delete for SQLR-level defaults.
+
+Add SQLH tags only to relation fields:
+
+- sqlh:"preload:create,read,query,update"
+- sqlh:"sync:create,update,delete"
+- Combine directives with a semicolon.
+- Combine phases with a comma.
+- Do not put sqlh tags on scalar or embedded fields.
+
+SQLH validates these tags during handler creation. A tag on a scalar field or an unknown phase must fail at startup.
+
+Add sync:update to every relation that PUT or PATCH must persist. A mapper can update the in-memory relation without SQLR persistence when this tag is missing.
+
+## CRUD definition
+
+Define an update input that exposes the route identity:
+
+    type UpdateInput struct {
+        sqlh.InputById[string]
+        RequestUpdateInput
+    }
+
+Use the route key type instead of string when routes use numeric IDs.
+
+Create a definition with these callbacks:
+
+    definition := sqlh.NewCrudDefinition(
+        operations.createInput,
+        operations.updateInput,
+        operations.patchInputFromEntity,
+        operations.output,
+    )
+
+For custom behavior, use a sqlh.CrudDefinition value directly.
+
+Implement CreateInput as follows:
+
+- Check create authorization.
+- Validate request fields and cross-field rules.
+- Create the root entity.
+- Create child entities and set their public IDs.
+- Set explicit status transitions only when the request asks for them.
+- Return validation.NewError or the service error expected by the HTTP error mapper.
+
+Implement UpdateInput as follows:
+
+- Check write authorization against the loaded entity.
+- Apply the complete update input to the root entity.
+- Resolve existing child entities by public ID.
+- Create children without an ID.
+- Preserve existing children when the input contains their IDs.
+- Remove children that are absent from the replacement array when association sync requires it.
+- Apply domain state transitions.
+- Run request and domain validation.
+- Update the timestamp when the domain owns that timestamp.
+
+Do not make UpdateInput treat PATCH as a partial input. SQLH gives it the complete merged update input.
+
+Implement PatchInputFromEntity as follows:
+
+- Load every writable scalar value.
+- Map every existing child to the update DTO.
+- Keep each child public ID in the DTO.
+- Copy values that an omitted PATCH field must preserve.
+- Return an input that embeds the route identity.
+
+Use the complete input to preserve omitted fields. Do not rebuild it from zero values.
+
+Implement Output as follows:
+
+- Check read authorization.
+- Map the SQLR aggregate to the existing public response.
+- Keep public IDs and response field names stable.
+- Return a typed response value, not httpserver.Response.
+
+Assign DeleteOutput when DELETE must return the deleted entity:
+
+    definition.DeleteOutput = definition.Output
+
+The standard WithCrudHandlers delete route uses DeleteNoContent and returns 204. Use handler.Delete for an existing delete response body.
+
+## Custom identity
+
+Use CrudDefinition.Identity when the public ID differs from the SQL primary key.
+
+The callback receives:
+
+- context.Context
+- sqlr.TTx
+- sqlr.RepositoryTx
+- the public route ID
+- a QueryScope
+- a builder callback with relation preloads and update locking
+
+The callback must:
+
+1. Query through the supplied transaction-aware repository.
+2. Add the public ID predicate.
+3. Apply the supplied scope.
+4. Apply the supplied builder callback.
+5. Return sqlr.ErrNotFound when no entity matches.
+6. Preserve relation preloads.
+
+The scope is required. It contains force filters, delete visibility, and other restrictions. Do not ignore it.
+
+The builder is required for SQLH relation loading. For update and PATCH lookups, SQLH also applies SELECT FOR UPDATE through the builder. Do not remove that lock unless the service has a reviewed concurrency design.
+
+## Delete scope and strategy
+
+Use DeleteScope to hide rows that the delete strategy no longer considers active:
+
+    definition.DeleteScope = func(qb *sqlr.QueryBuilderSelect) {
+        qb.Where(sqlc.Col("deleted_at").IsNull())
+    }
+
+Use Delete for a soft-delete mutation:
+
+- Check delete authorization.
+- Reject forbidden states with an HTTP status error.
+- Set DeletedAt and UpdatedAt.
+- Call RepositoryTx.Update with the active transaction.
+- Omit child association updates when soft deletion must retain children.
+- Copy the returned entity into the entity passed to the callback.
+
+The default scope applies to read, list, count, update, and delete operations. A CDC consumer or audit reader can use a separate repository method that intentionally bypasses the active scope.
+
+## Association and patch behavior
+
+SQLH derives direct patch association paths from JSON tags on the complete update input and SQLR relation names.
+
+Use PatchAssociations when the JSON path and relation path differ:
+
+    definition.PatchAssociations = map[string]string{
+        "filters": "Filters",
+    }
+
+Use PatchAssociationTriggers when a scalar path changes relation values:
+
+    definition.PatchAssociationTriggers = map[string]string{
+        "status": "Segmentations",
+    }
+
+A trigger only selects a relation for persistence. It does not change the value and does not change JSON Merge Patch null behavior.
+
+Only relations with sync:update are eligible for PATCH synchronization.
+
+Test all of these cases:
+
+- Omitted fields retain their stored values.
+- Explicit null clears a nullable field.
+- Null and empty arrays clear direct associations when the DTO permits it.
+- A child with an existing ID updates that child.
+- A child without an ID creates a child.
+- A missing child is deleted or unlinked according to SQLR relation semantics.
+- A scalar state transition updates the related association selected by a trigger.
+- A required null field returns the expected client error.
+
+Use a custom PatchOperation only when the default complete-input pipeline cannot represent the API. A custom PatchOperation replaces the complete default PATCH behavior.
+
+## List and count migration
+
+Embed sqlh.ListInput for standard SQLC JSON filters and pagination:
+
+    type ListInput struct {
+        sqlh.ListInput
+    }
+
+The standard input contains:
+
+- Filter sqlc.JsonFilter
+- Page.Limit
+- Page.Offset
+- server-owned ForceFilters
+
+A custom list input must implement ListInputSource:
+
+- ApplyFilters
+- ApplyQueryModifiers
+- ApplyPagination
+- ValidatePagination
+- GetForceFilters
+
+Use ApplyFilters for user filters and joins. Keep force filters in the embedded SQLH carrier. SQLH applies force filters through the query plan.
+
+Use ApplyQueryModifiers for ordering and grouping. Use ApplyPagination for limit and offset. Keep these phases separate so the count does not inherit row-only modifiers.
+
+When implementing custom Query and Count callbacks:
+
+1. Apply QueryPlan.ApplyBuilder.
+2. Apply QueryPlan.ApplyScope.
+3. For Query, apply ApplyQueryModifiers.
+4. For Query, apply ApplyPagination last.
+5. For Count, do not apply query modifiers or pagination.
+6. Use the same filter, force-filter, and delete scope for both operations.
+
+The standard ListOutput has Results and Total fields. Preserve any old response envelope when the service contract requires another shape by using a custom ListOperation and output mapping.
+
+When the service has a legacy filter dialect:
+
+- Detect legacy and native dialects before decoding.
+- Reject mixed dialects when they cannot be represented safely.
+- Translate legacy fields to SQLC columns.
+- Add joins for related filter dimensions.
+- Preserve legacy group-by and order behavior.
+- Preserve legacy LIMIT 0 behavior only when clients depend on it.
+- Reject unknown fields, operators, directions, and boolean values.
+- Test empty filters and empty result sets.
+
+## Transactions and custom operations
+
+Every default SQLH CRUD operation runs in one transaction. SQLH commits after the operation and output mapping succeed. It rolls back on operation errors and panics.
+
+The SQLR RepositoryTx must use the same sqlc.Client that SQLH uses to start transactions. This is required for prepared statements and consistent transaction behavior.
+
+Use sqlh.TxRunner for a custom typed operation:
+
+    runner, err := sqlh.NewTxRunner(ctx, config, logger, "default")
+    if err != nil {
+        return nil, err
+    }
+
+    handler := runner.InTransaction(func(ctx context.Context, tx sqlr.TTx, input *Input) (Output, error) {
+        // Use tx for all reads and writes.
+        return output, nil
+    })
+
+Register the returned handler with httpserver.Bind. Do not reintroduce request middleware that stores a transaction in Gin context.
+
+For a CrudDefinition operation override, use the active transaction and repository supplied to the callback. Keep all reads and writes in that transaction.
+
+## Configuration
+
+Move the database configuration to the sqlc key used by the handler:
+
+    sqlc:
+      default:
+        driver: mysql
+        uri:
+          host: 127.0.0.1
+          port: 3306
+          user: root
+          password: example
+          database: service
+        parameters:
+          clientFoundRows: true
+
+Set clientFoundRows when an unchanged update is valid and must not produce ErrNotFound. MySQL otherwise reports zero changed rows for an update that matches a row but writes the same values.
+
+Keep migration paths and reset behavior under sqlc.default.migrations. Update local and test configuration separately.
+
+## Routes and generated artifacts
+
+WithCrudHandlers registers:
+
+- POST /v{version}/{entity}
+- GET /v{version}/{entity}/:id
+- PUT /v{version}/{entity}/:id
+- PATCH /v{version}/{entity}/:id
+- DELETE /v{version}/{entity}/:id
+- POST /v{version}/{plural-entity}
+
+Use manual registration with NewCrudHandler when the old API has different paths, singular names, response bodies, or status codes.
+
+Preserve the old route definitions in the source of truth for generated API artifacts. Regenerate Go types and OpenAPI files after the migration. Do not edit generated files as the primary source.
+
+## Event publication
+
+Choose the post-commit event path before removing the old repository callbacks.
+
+If the service uses CDC:
+
+- Configure the changed tables.
+- Require full-row binlog data when the consumer needs the complete aggregate.
+- Validate configured table names.
+- Load the aggregate through a reader that can see active and deleted rows as required.
+- Map root soft deletes to delete events.
+- Handle hard-delete tombstones when the row cannot be reloaded.
+- Publish only after the database commit represented by the change event.
+
+If the service uses an outbox or another publisher, preserve its transaction boundary and retry behavior instead.
+
+## Tests and validation
+
+Run the repository's normal format, build, test, and lint commands.
+
+At minimum, run tests for:
+
+- CRUD route parity.
+- Authentication and authorization.
+- Create, PUT, PATCH, DELETE, and list responses.
+- Public-ID identity lookup.
+- Active and deleted scopes.
+- Soft-delete association retention.
+- PATCH omission, null, empty array, existing child, new child, and removed child behavior.
+- Native SQLC filters.
+- Legacy filters, joins, ordering, grouping, and pagination.
+- Count and list scope parity.
+- Unchanged updates with clientFoundRows.
+- SQLC and SQLR SELECT FOR UPDATE behavior.
+- Rollback after root write failure.
+- Rollback after child association failure.
+- Rollback after output mapping failure.
+- Background state transitions.
+- CDC or post-commit event publication.
+- Generated API artifacts.
+
+For SQLH update and patch lookups, verify that the generated query includes SELECT FOR UPDATE. SQLH applies the lock after tag-derived and custom update-read builders. DELETE locking is outside the update-locking change, so review delete concurrency separately.
+
+Check that no old API remains:
+
+- No Transformer or JsonResultsTransformer implementation remains unless it belongs to an unrelated package.
+- No WithTx or BindTx helper remains.
+- No handler constructs a transaction in Gin context.
+- No HTTP CRUD handler uses the non-transaction-aware sqlr.Repository for request mutations.
+- Every custom RepositoryTx implementation includes Count.
+- Every custom identity callback applies scope and builder.
+- Every update input implements GetId through InputById or an equivalent type.
+- Every PATCH definition has PatchInputFromEntity unless it provides a complete custom PatchOperation.
+- Every synchronized relation has the required sqlh sync tag.
+- Every list input implements all ListInputSource methods.
+- Query and Count use the same non-pagination scope.
+- Routes and response contracts remain unchanged.
+
+## Stop conditions
+
+Stop and ask for guidance if:
+
+- A route has ambiguous old behavior and no test or caller explains it.
+- A custom identity lookup cannot apply the SQLH scope or builder safely.
+- Existing PATCH behavior cannot be represented by complete-input merge patch without a domain decision.
+- A child association has conflicting create, update, delete, or public-ID semantics.
+- A custom repository cannot use the same SQL client as the SQLH transaction runner.
+- Event publication timing is unclear.
+- Generated API artifacts would change without an explicit API decision.
+- The migration requires unrelated refactoring.
+
+Finish by documenting any intentional behavior changes and the tests that prove them.
