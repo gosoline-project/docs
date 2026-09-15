@@ -1,4 +1,4 @@
-Migrate the service from its current custom CRUD handlers to the typed, transaction-aware SQLH API from github.com/gosoline-project/sqlh, as redesigned in PR #7.
+Migrate the service from its current custom CRUD handlers to the current typed, transaction-aware SQLH API from github.com/gosoline-project/sqlh.
 
 Preserve the public API and domain behavior. Do not replace domain rules with generic CRUD behavior. Keep existing routes, request fields, response bodies, status codes, authorization, validation, soft-delete rules, association behavior, list filter behavior, event ordering, and transaction guarantees unless the service explicitly requires a change.
 
