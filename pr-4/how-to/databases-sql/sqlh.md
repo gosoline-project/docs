@@ -2,7 +2,7 @@
 
 The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the current `httpserver`, `sqlc`, and `sqlr` APIs. Each CRUD operation runs in a database transaction and returns a typed value.
 
-See the [SQLH CRUD redesign](https://github.com/gosoline-project/sqlh/pull/7) for the API change from transformer interfaces and Gin transaction bindings to typed CRUD definitions.
+CRUD definitions use typed callbacks and transaction-aware repositories instead of transformer interfaces and request-scoped Gin transaction bindings.
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 

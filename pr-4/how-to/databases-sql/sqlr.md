@@ -1196,7 +1196,7 @@ The `QueryBuilderSelect` supports:
 | `Having(condition, params...)` | Adds a HAVING condition                                                                              |
 | `ForUpdate()`                  | Adds `FOR UPDATE` as the final SQL clause and locks selected rows until the current transaction ends |
 
-The SQLR locking and count support comes from [PR #1](https://github.com/gosoline-project/sqlr/pull/1). `ForUpdate()` mutates `QueryBuilderSelect` and returns the same builder. Use it with `RepositoryTx.Query()` inside a transaction when a read must protect the rows before a later write:
+`ForUpdate()` mutates `QueryBuilderSelect` and returns the same builder. Use it with `RepositoryTx.Query()` inside a transaction when a read must protect the rows before a later write:
 
 ```
 err := client.WithTx(ctx, func(tx sqlc.Tx) error {

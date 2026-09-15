@@ -214,6 +214,4 @@ Copy AI migration instructions
 
 * [sqlh - SQL HTTP Handlers](/docs/pr-4/how-to/databases-sql/sqlh/.md)
 * [sqlr - SQL Repository](/docs/pr-4/how-to/databases-sql/sqlr/.md)
-* [SQLH CRUD redesign](https://github.com/gosoline-project/sqlh/pull/7)
-* [SQLR SELECT FOR UPDATE](https://github.com/gosoline-project/sqlr/pull/1)
-* [SQLC SELECT FOR UPDATE](https://github.com/gosoline-project/sqlc/pull/2)
+* [sqlc - SQL Client](/docs/pr-4/how-to/databases-sql/sqlc/.md)

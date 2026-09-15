@@ -3616,7 +3616,7 @@ if err := rows.Err(); err != nil {
 
 ## SELECT FOR UPDATE[​](#select-for-update "Direct link to SELECT FOR UPDATE")
 
-SQLC added typed `SELECT FOR UPDATE` support in [PR #2](https://github.com/gosoline-project/sqlc/pull/2). Use `ForUpdate()` to add a `FOR UPDATE` clause to a SELECT query. The database holds the selected row locks until the current transaction ends. Outside a transaction, the database releases the locks when the statement ends.
+`ForUpdate()` adds a typed `FOR UPDATE` clause to a SELECT query. The database holds the selected row locks until the current transaction ends. Outside a transaction, the database releases the locks when the statement ends.
 
 `ForUpdate()` follows the immutable builder pattern. It returns a new builder and does not change the original query. SQLC writes the clause after `LIMIT` and `OFFSET`:
 
@@ -3990,7 +3990,7 @@ When creating a client from a wrapped handle, make sure the `QueryBuilderConfig`
 
 The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the current `httpserver`, `sqlc`, and `sqlr` APIs. Each CRUD operation runs in a database transaction and returns a typed value.
 
-See the [SQLH CRUD redesign](https://github.com/gosoline-project/sqlh/pull/7) for the API change from transformer interfaces and Gin transaction bindings to typed CRUD definitions.
+CRUD definitions use typed callbacks and transaction-aware repositories instead of transformer interfaces and request-scoped Gin transaction bindings.
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
@@ -6295,7 +6295,7 @@ The `QueryBuilderSelect` supports:
 | `Having(condition, params...)` | Adds a HAVING condition                                                                              |
 | `ForUpdate()`                  | Adds `FOR UPDATE` as the final SQL clause and locks selected rows until the current transaction ends |
 
-The SQLR locking and count support comes from [PR #1](https://github.com/gosoline-project/sqlr/pull/1). `ForUpdate()` mutates `QueryBuilderSelect` and returns the same builder. Use it with `RepositoryTx.Query()` inside a transaction when a read must protect the rows before a later write:
+`ForUpdate()` mutates `QueryBuilderSelect` and returns the same builder. Use it with `RepositoryTx.Query()` inside a transaction when a read must protect the rows before a later write:
 
 ```
 err := client.WithTx(ctx, func(tx sqlc.Tx) error {
@@ -17470,9 +17470,7 @@ Copy AI migration instructions
 
 * [sqlh - SQL HTTP Handlers](/docs/pr-4/how-to/databases-sql/sqlh/.md)
 * [sqlr - SQL Repository](/docs/pr-4/how-to/databases-sql/sqlr/.md)
-* [SQLH CRUD redesign](https://github.com/gosoline-project/sqlh/pull/7)
-* [SQLR SELECT FOR UPDATE](https://github.com/gosoline-project/sqlr/pull/1)
-* [SQLC SELECT FOR UPDATE](https://github.com/gosoline-project/sqlc/pull/2)
+* [sqlc - SQL Client](/docs/pr-4/how-to/databases-sql/sqlc/.md)
 
 
 ---

@@ -439,7 +439,7 @@ if err := rows.Err(); err != nil {
 
 ## SELECT FOR UPDATE[​](#select-for-update "Direct link to SELECT FOR UPDATE")
 
-SQLC added typed `SELECT FOR UPDATE` support in [PR #2](https://github.com/gosoline-project/sqlc/pull/2). Use `ForUpdate()` to add a `FOR UPDATE` clause to a SELECT query. The database holds the selected row locks until the current transaction ends. Outside a transaction, the database releases the locks when the statement ends.
+`ForUpdate()` adds a typed `FOR UPDATE` clause to a SELECT query. The database holds the selected row locks until the current transaction ends. Outside a transaction, the database releases the locks when the statement ends.
 
 `ForUpdate()` follows the immutable builder pattern. It returns a new builder and does not change the original query. SQLC writes the clause after `LIMIT` and `OFFSET`:
 
