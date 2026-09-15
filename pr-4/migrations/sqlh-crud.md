@@ -1,6 +1,6 @@
 # Migrating an Existing Service to SQLH CRUD
 
-This guide explains how to move an existing entity API to the typed SQLH CRUD API. It uses the migration in `experiment-service` branch `300-migrate-experiment-service-to-sqlh` as the reference pattern.
+This guide explains how to move an existing entity API to the typed SQLH CRUD API. Use it as a general migration pattern for services that must preserve an existing public API.
 
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations. The migration must preserve the public API. It must not replace domain rules with generic CRUD behavior.
 
@@ -18,7 +18,7 @@ Before you change code, record the current behavior:
 * Event publication and post-commit behavior
 * Transaction rollback behavior
 
-Add parity tests for this behavior. The `experiment-service` migration added CRUD, PATCH, HTTP protocol, and transaction failure tests before it removed the old handlers.
+Add parity tests for this behavior before you remove the old handlers.
 
 ## 2. Replace the Persistence Model[​](#2-replace-the-persistence-model "Direct link to 2. Replace the Persistence Model")
 
@@ -33,17 +33,17 @@ Replace the old repository model with SQLR entities:
 Use SQLR tags for relation shape and SQLH tags for CRUD phases:
 
 ```
-type Experiment struct {
+type Project struct {
 
-    ExperimentEntity
+    sqlr.Entity[uint]
 
 
 
-    App           *App            `db:"-" sqlr:"belongsTo:app_id;preload" sqlh:"preload:create,read,query,update"`
+    Owner  *Owner  `db:"-" sqlr:"belongsTo:owner_id;preload" sqlh:"preload:create,read,query,update"`
 
-    Filters       []*Filter       `db:"-" sqlr:"foreignKey:experiment_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
+    Rules  []*Rule  `db:"-" sqlr:"foreignKey:project_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
 
-    Segmentations []*Segmentation `db:"-" sqlr:"foreignKey:experiment_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
+    Labels []*Label `db:"-" sqlr:"foreignKey:project_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
 
 }
 ```
@@ -65,7 +65,7 @@ if err != nil {
 
 
 
-reader, err := sqlr.NewRepositoryWithInterfaces[uint, model.Experiment](client, sqlr.DefaultSettings())
+reader, err := sqlr.NewRepositoryWithInterfaces[uint, model.Project](client, sqlr.DefaultSettings())
 ```
 
 Keep domain queries and background transitions in an application repository. Apply an active-row scope to normal reads when the service uses soft deletion. Provide a separate method for consumers that must read deleted rows.
@@ -87,19 +87,19 @@ Create a typed update input that embeds `sqlh.InputById[Id]`. Then define the CR
 A typical definition looks like this:
 
 ```
-type ExperimentUpdateInput struct {
+type ProjectUpdateInput struct {
 
     sqlh.InputById[string]
 
-    types.PutExperimentInput
+    types.PutProjectInput
 
 }
 
 
 
-func newDefinition(...) (experimentDefinition, error) {
+func newDefinition(...) (projectDefinition, error) {
 
-    return experimentDefinition{
+    return projectDefinition{
 
         CreateInput:              operations.createInput,
 
@@ -107,7 +107,7 @@ func newDefinition(...) (experimentDefinition, error) {
 
         PatchInputFromEntity:     operations.patchInputFromEntity,
 
-        PatchAssociationTriggers: map[string]string{"status": "Segmentations"},
+        PatchAssociationTriggers: map[string]string{"state": "Labels"},
 
         Output:                   operations.output,
 
@@ -132,7 +132,7 @@ SQLH PATCH uses JSON Merge Patch. It loads the entity, builds a complete update 
 
 The complete input must preserve all values that an omitted field should keep. Arrays replace the full relation. An array item with an ID updates the existing child. An item without an ID creates a child. A child that is missing from the replacement array is removed when SQLR association synchronization is enabled.
 
-Use `PatchAssociationTriggers` when a scalar field changes a relation indirectly. In the reference migration, `status` changed segmentation states, so the definition selected `Segmentations` when a patch contained `status`.
+Use `PatchAssociationTriggers` when a scalar field changes a relation indirectly. For example, map a `state` field to a `Labels` relation when the patch changes state.
 
 Test these cases:
 
@@ -142,7 +142,7 @@ Test these cases:
 * Existing child IDs
 * New child values
 * Removed child values
-* Status transitions that change associations
+* State transitions that change associations
 * Required-field validation
 
 ## 6. Preserve List Compatibility[​](#6-preserve-list-compatibility "Direct link to 6. Preserve List Compatibility")
@@ -171,22 +171,22 @@ Apply the same scope to the row query and the count query. Apply row-only modifi
 
 `WithCrudHandlers` creates standard `/v{version}` routes. Use `NewCrudHandler` and manual registration when the existing API has different paths or response behavior.
 
-The reference migration kept:
+The migration must keep the existing routes. Use manual registration when paths or response behavior differ from the defaults. For example:
 
-* `POST /v0/experiment`
-* `POST /v0/experiments`
-* `GET /v0/experiments/:id`
-* `PUT /v0/experiments/:id`
-* `PATCH /v0/experiments/:id`
-* `DELETE /v0/experiments/:id`
+* `POST /v1/resource`
+* `POST /v1/resources`
+* `GET /v1/resources/:id`
+* `PUT /v1/resources/:id`
+* `PATCH /v1/resources/:id`
+* `DELETE /v1/resources/:id`
 
-It used `handler.Delete` instead of `DeleteNoContent` because the existing delete endpoint returned the deleted entity.
+Use `handler.Delete` instead of `DeleteNoContent` when the existing delete endpoint returns the deleted entity.
 
 ## 8. Preserve Transactions and Events[​](#8-preserve-transactions-and-events "Direct link to 8. Preserve Transactions and Events")
 
 SQLH commits only after the operation and output mapping succeed. Any association or output error rolls back the complete operation.
 
-Keep event publication after commit. The reference migration moved event publication to CDC and loaded the aggregate from SQLR when a change event arrived. If the service uses another event path, preserve its ordering and retry behavior.
+Keep event publication after commit. If the service uses CDC, load the aggregate after the database change event. If the service uses another event path, preserve its ordering and retry behavior.
 
 Set `clientFoundRows` when unchanged updates must count as matched rows. Without it, MySQL can report zero affected rows for a valid update that writes the same values. SQLR can then return `ErrNotFound` and the HTTP API can return the wrong status.
 

@@ -6,15 +6,15 @@ CRUD definitions use typed callbacks and transaction-aware repositories instead 
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
-Add the SQLH version that contains the CRUD redesign to your Go module:
+Add the SQLH version that provides the typed CRUD API to your Go module:
 
 ```
 go get github.com/gosoline-project/sqlh@v0.7.2-0.20260914134957-1ff7ba06abce
 ```
 
-This is the version used by the experiment-service migration reference. Replace it with the released SQLH version that contains the redesign when that release becomes available.
+Use the released SQLH version that provides this API when one is available.
 
-The redesign uses `github.com/gosoline-project/httpserver`, `github.com/gosoline-project/sqlc`, and `github.com/gosoline-project/sqlr`. Use compatible versions of all three packages. The examples use the `sqlc` `v0.4.0` and `sqlr` `v0.9.0` APIs.
+The typed API uses `github.com/gosoline-project/httpserver`, `github.com/gosoline-project/sqlc`, and `github.com/gosoline-project/sqlr`. Use compatible versions of all three packages. The examples use the `sqlc` `v0.4.0` and `sqlr` `v0.9.0` APIs.
 
 Then import the package:
 
@@ -367,9 +367,9 @@ For example, version `1` and entity name `author` produce `/v1/author` and `/v1/
 The default delete route uses `DeleteNoContent`. Use manual route registration with `handler.Delete` when the API must return the deleted entity:
 
 ```
-router.HandleWith(httpserver.With(experiment.NewHandler, func(router *httpserver.Router, handler *experiment.CrudHandler) {
+router.HandleWith(httpserver.With(resource.NewHandler, func(router *httpserver.Router, handler *resource.CrudHandler) {
 
-    router.DELETE("/v0/experiments/:id", httpserver.Bind(handler.Delete, httpserver.NoBodyBinding{}))
+    router.DELETE("/v1/resources/:id", httpserver.Bind(handler.Delete, httpserver.NoBodyBinding{}))
 
 }))
 ```
@@ -387,19 +387,19 @@ Use `NewCrudHandler` when an existing API has different paths, singular and plur
 ```
 func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
 
-    router.HandleWith(httpserver.With(experiment.NewHandler, func(router *httpserver.Router, handler *experiment.CrudHandler) {
+    router.HandleWith(httpserver.With(resource.NewHandler, func(router *httpserver.Router, handler *resource.CrudHandler) {
 
-        router.POST("/v0/experiment", httpserver.Bind(handler.Create))
+        router.POST("/v1/resource", httpserver.Bind(handler.Create))
 
-        router.POST("/v0/experiments", httpserver.Bind(handler.List))
+        router.POST("/v1/resources", httpserver.Bind(handler.List))
 
-        router.GET("/v0/experiments/:id", httpserver.Bind(handler.Read, httpserver.NoBodyBinding{}))
+        router.GET("/v1/resources/:id", httpserver.Bind(handler.Read, httpserver.NoBodyBinding{}))
 
-        router.PUT("/v0/experiments/:id", httpserver.Bind(handler.Update))
+        router.PUT("/v1/resources/:id", httpserver.Bind(handler.Update))
 
-        router.PATCH("/v0/experiments/:id", httpserver.Bind(handler.Patch))
+        router.PATCH("/v1/resources/:id", httpserver.Bind(handler.Patch))
 
-        router.DELETE("/v0/experiments/:id", httpserver.Bind(handler.Delete, httpserver.NoBodyBinding{}))
+        router.DELETE("/v1/resources/:id", httpserver.Bind(handler.Delete, httpserver.NoBodyBinding{}))
 
     }))
 
@@ -619,7 +619,7 @@ Use `PatchAssociationTriggers` when a scalar request field changes an associatio
 ```
 definition.PatchAssociationTriggers = map[string]string{
 
-    "status": "Segmentations",
+    "state": "Labels",
 
 }
 ```
@@ -741,17 +741,17 @@ Use the same filter adapter for query and count. Custom query callbacks must app
 SQLR tags define the relationship. SQLH tags add CRUD-specific preload and synchronization phases:
 
 ```
-type Experiment struct {
+type Project struct {
 
     sqlr.Entity[uint]
 
 
 
-    App           *App            `db:"-" sqlr:"belongsTo:app_id;preload" sqlh:"preload:create,read,query,update"`
+    Owner  *Owner  `db:"-" sqlr:"belongsTo:owner_id;preload" sqlh:"preload:create,read,query,update"`
 
-    Filters       []*Filter       `db:"-" sqlr:"foreignKey:experiment_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
+    Rules  []*Rule  `db:"-" sqlr:"foreignKey:project_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
 
-    Segmentations []*Segmentation `db:"-" sqlr:"foreignKey:experiment_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
+    Labels []*Label `db:"-" sqlr:"foreignKey:project_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
 
 }
 ```
@@ -763,7 +763,7 @@ Supported SQLH directives are:
 | `preload` | `create`, `read`, `query`, `update` | Loads the relation in the matching operation. Create and update preloads apply to the post-write entity reload. |
 | `sync`    | `create`, `update`, `delete`        | Selects the relation for association persistence or cleanup in the matching operation.                          |
 
-The relation path uses Go field names, such as `Segmentations` or `Posts.Comments`. SQLH traverses nested relations. A `sqlh` tag on a scalar or embedded field is invalid. The relation must exist in the SQLR schema.
+The relation path uses Go field names, such as `Labels` or `Posts.Comments`. SQLH traverses nested relations. A `sqlh` tag on a scalar or embedded field is invalid. The relation must exist in the SQLR schema.
 
 `sync:update` is required when PUT or PATCH must persist a relation. Without it, the mapper can change the in-memory graph, but SQLR does not reconcile the related rows.
 
@@ -778,7 +778,7 @@ definition.Identity = func(
 
     tx sqlr.TTx,
 
-    repository sqlr.RepositoryTx[uint, Experiment],
+    repository sqlr.RepositoryTx[uint, Project],
 
     publicID string,
 
@@ -786,13 +786,13 @@ definition.Identity = func(
 
     builder func(*sqlr.QueryBuilderSelect),
 
-) (*Experiment, error) {
+) (*Project, error) {
 
     var scopeErr error
 
     entities, err := repository.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
 
-        qb.Where(sqlc.Col("experiments", "public_id").Eq(publicID))
+        qb.Where(sqlc.Col("projects", "public_id").Eq(publicID))
 
         if scope != nil {
 
@@ -822,7 +822,7 @@ definition.Identity = func(
 
     if len(entities) == 0 {
 
-        return nil, fmt.Errorf("experiment %s: %w", publicID, sqlr.ErrNotFound)
+        return nil, fmt.Errorf("project %s: %w", publicID, sqlr.ErrNotFound)
 
     }
 
@@ -852,9 +852,9 @@ definition.Delete = func(
 
     tx sqlr.TTx,
 
-    repository sqlr.RepositoryTx[uint, Experiment],
+    repository sqlr.RepositoryTx[uint, Project],
 
-    entity *Experiment,
+    entity *Project,
 
 ) error {
 
@@ -868,7 +868,7 @@ definition.Delete = func(
 
     updated, err := repository.Update(tx, entity, func(qb *sqlr.QueryBuilderUpdate) {
 
-        qb.OmitAssociation("Filters", "Segmentations")
+        qb.OmitAssociation("Rules", "Labels")
 
     })
 

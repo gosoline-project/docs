@@ -68,7 +68,7 @@
 - [Implement health checks](/how-to/write-health-checks.md): You can check the health of a running gosoline application.
 - [Migrating to Identity and Naming Patterns](/migrations/app-identity-and-naming-patterns.md): This guide details how to migrate your gosoline application to the new Identity system and dynamic resource naming.
 - [Migrating to the Standalone HTTP Server Package](/migrations/httpserver-package.md): This guide explains how to migrate from the old github.com/justtrackio/gosoline/pkg/httpserver package directly to the standalone github.com/gosoline-project/httpserver module at v0.5.6.
-- [Migrating an Existing Service to SQLH CRUD](/migrations/sqlh-crud.md): This guide explains how to move an existing entity API to the typed SQLH CRUD API. It uses the migration in experiment-service branch 300-migrate-experiment-service-to-sqlh as the reference pattern.
+- [Migrating an Existing Service to SQLH CRUD](/migrations/sqlh-crud.md): This guide explains how to move an existing entity API to the typed SQLH CRUD API. Use it as a general migration pattern for services that must preserve an existing public API.
 - [Naming patterns](/reference/naming-patterns.md): Gosoline uses naming patterns to generate consistent names for resources (SQS queues, SNS topics, DynamoDB tables, Kafka topics, Redis keys, metric namespaces, tracing service names, ...).
 - [cfg package](/reference/package-cfg.md): With the cfg package, you can configure and use configurations in your gosoline project.
 - [Package cloud/aws](/reference/package-cloud_aws.md): The cloud/aws package
