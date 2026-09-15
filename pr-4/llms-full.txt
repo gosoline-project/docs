@@ -17340,45 +17340,91 @@ Create a typed update input that embeds `sqlh.InputById[Id]`. Then define the CR
 * `DeleteScope` limits rows that normal operations can see.
 * `Delete` implements soft deletion or another domain-specific delete strategy.
 
-A typical definition looks like this:
+### Use `SimpleCrudDefinition` for a static definition[​](#use-simplecruddefinition-for-a-static-definition "Direct link to use-simplecruddefinition-for-a-static-definition")
+
+Most services can create the definition during setup without application configuration or other startup dependencies. Use `NewCrudDefinition` for the standard four callbacks, then wrap the result with `SimpleCrudDefinition` when registering the handlers:
 
 ```
 type ProjectUpdateInput struct {
 
     sqlh.InputById[string]
 
-    types.PutProjectInput
+    Name string `json:"name" binding:"required"`
 
 }
 
 
 
-func newDefinition(...) (projectDefinition, error) {
+func NewProjectCrud() httpserver.RegisterFactoryFunc {
 
-    return projectDefinition{
+    definition := sqlh.NewCrudDefinition(
 
-        CreateInput:              operations.createInput,
+        operations.createInput,
 
-        UpdateInput:              operations.updateInput,
+        operations.updateInput,
 
-        PatchInputFromEntity:     operations.patchInputFromEntity,
+        operations.patchInputFromEntity,
 
-        PatchAssociationTriggers: map[string]string{"state": "Labels"},
+        operations.output,
 
-        Output:                   operations.output,
+    )
 
-        DeleteOutput:             operations.output,
 
-        Identity:                 identityByPublicId,
 
-        Delete:                   operations.delete,
+    return sqlh.WithCrudHandlers(
 
-        DeleteScope:              repository.Active,
+        1,
 
-    }, nil
+        "project",
+
+        sqlh.SimpleCrudDefinition(definition),
+
+    )
 
 }
 ```
+
+`CrudDefinition` stores the callbacks and optional behavior. `SimpleCrudDefinition` adapts a static definition to the factory shape expected by `WithCrudHandlers`; it does not remove any extension points.
+
+### Use a full `CrudDefinition` for custom behavior[​](#use-a-full-cruddefinition-for-custom-behavior "Direct link to use-a-full-cruddefinition-for-custom-behavior")
+
+Use the full definition when the migration needs fields beyond the four standard callbacks. Examples include a public-ID `Identity`, a `DeleteScope` and custom `Delete` strategy, custom `Query` or `Count` callbacks, patch association mappings, or complete operation overrides. Start with `NewCrudDefinition` and set the additional fields instead of writing a struct literal:
+
+```
+definition := sqlh.NewCrudDefinition(
+
+    operations.createInput,
+
+    operations.updateInput,
+
+    operations.patchInputFromEntity,
+
+    operations.output,
+
+)
+
+definition.Identity = identityByPublicID
+
+definition.DeleteScope = activeScope
+
+definition.Delete = operations.delete
+
+definition.DeleteOutput = definition.Output
+
+definition.PatchAssociationTriggers = map[string]string{
+
+    "state": "Labels",
+
+}
+
+
+
+// Use this wrapper when the definition is static.
+
+factory := sqlh.SimpleCrudDefinition(definition)
+```
+
+If building the definition requires `context.Context`, application configuration, a logger, or other startup dependencies, use a custom `CrudDefinitionFactory` instead of `SimpleCrudDefinition`. Return the definition from that factory and pass it to `NewCrudHandler` or `WithCrudHandlers`.
 
 Keep authorization, validation, state transitions, and event decisions in these callbacks. SQLH supplies the transaction, repository, identity lookup, association policy, and output flow.
 
