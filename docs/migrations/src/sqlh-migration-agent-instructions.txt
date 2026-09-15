@@ -78,44 +78,26 @@ Find old SQLH or custom handler patterns:
 - Repository factories that return sqlr.Repository instead of sqlr.RepositoryTx.
 - Custom list inputs that do not implement the SQLH ListInputSource phases.
 
-## Reference migration
+## Migration design
 
-Use the experiment-service migration branch named 300-migrate-experiment-service-to-sqlh as a design reference. Do not copy its business rules without checking the target service.
+Use these patterns when they match the target service:
 
-The important reference files are:
-
-- internal/gateway-management/api/handlers/experiment/facade.go
-- internal/gateway-management/api/handlers/experiment/mapping.go
-- internal/gateway-management/api/handlers/experiment/list_input.go
-- internal/pkg/experiment/model/model.go
-- internal/pkg/experiment/repository/repository.go
-- internal/gateway-management/api/api.go
-- cmd/gateway-management/config.dist.yml
-- test/gateway-management/experiment/gateway_test.go
-- test/gateway-management/experiment/behavior_test.go
-- test/gateway-management/experiment/http_protocol_test.go
-- test/gateway-management/experiment/transaction_failure_test.go
-- internal/entity-publisher/consumer.go
-
-The reference migration made these design choices:
-
-- It replaced five custom handlers with one typed sqlh.CrudHandler.
-- It kept application authorization and domain validation in CRUD callbacks.
-- It embedded sqlh.InputById[string] in the update input because routes use public IDs.
-- It loaded entities by public ID with a custom Identity callback.
-- It applied the supplied SQLH scope in the custom identity query.
-- It used repository.Active as DeleteScope to hide soft-deleted rows.
-- It used a custom Delete callback to mark the root row deleted and omit child association updates.
-- It assigned the normal output mapper to DeleteOutput because DELETE returns the deleted entity.
-- It used sqlh relation tags for preloads and association synchronization.
-- It used PatchInputFromEntity to preserve omitted PUT and PATCH fields.
-- It used PatchAssociationTriggers to select Segmentations when a status field changed them.
-- It adapted both a native SQLC filter format and a legacy filter format into SQLC expressions.
-- It registered routes manually because the existing paths and delete response did not match WithCrudHandlers defaults.
-- It moved database configuration from db to sqlc.default.
-- It enabled clientFoundRows because unchanged updates must count as matched rows.
-- It kept background transitions in an application repository with explicit transactions.
-- It moved event publication to CDC and loaded the aggregate after the database commit.
+- Replace repeated custom CRUD handlers with one typed `sqlh.CrudHandler`.
+- Keep application authorization and domain validation in CRUD callbacks.
+- Embed `sqlh.InputById[K]` in the update input when routes use public IDs.
+- Load entities by a public ID with a custom `Identity` callback when it differs from the SQL primary key.
+- Apply the supplied SQLH scope and builder in custom identity queries.
+- Use `DeleteScope` to hide soft-deleted rows from normal operations.
+- Use a custom `Delete` callback when deletion needs domain-specific behavior.
+- Assign `DeleteOutput` when DELETE must return the deleted entity.
+- Use SQLH relation tags for preloads and association synchronization.
+- Use `PatchInputFromEntity` to preserve omitted PUT and PATCH fields.
+- Use `PatchAssociationTriggers` when a scalar field selects a relation for PATCH synchronization.
+- Adapt legacy and native filter formats into SQLC expressions when both formats are supported.
+- Register routes manually when existing paths or response behavior differ from `WithCrudHandlers` defaults.
+- Enable `clientFoundRows` when unchanged updates must count as matched rows.
+- Keep background transitions in an application repository with explicit transactions.
+- Publish events after the database transaction commits.
 
 ## Migration order
 
@@ -296,13 +278,13 @@ SQLH derives direct patch association paths from JSON tags on the complete updat
 Use PatchAssociations when the JSON path and relation path differ:
 
     definition.PatchAssociations = map[string]string{
-        "filters": "Filters",
+        "rules": "Rules",
     }
 
 Use PatchAssociationTriggers when a scalar path changes relation values:
 
     definition.PatchAssociationTriggers = map[string]string{
-        "status": "Segmentations",
+        "state": "Labels",
     }
 
 A trigger only selects a relation for persistence. It does not change the value and does not change JSON Merge Patch null behavior.
