@@ -75,7 +75,7 @@ SQLH separates four concerns:
 | Patch mapping  | `PatchInputFromEntity` creates the complete input used by JSON Merge Patch. |
 | Output mapping | `Output` maps an entity to a typed response value.                          |
 
-The update input must expose the route identity. Embed `sqlh.InputById[K]` in the input type. The embedded `Id` field uses the `id` URI parameter and does not bind from JSON.
+The update input must expose the route identity. Embed `sqlh.InputById[Id]`, where `Id` is the public route key type. Its `Id` field binds from the `id` URI parameter, not JSON. The stored SQL key type `K` can differ when the definition supplies a custom `Identity`.
 
 ```
 type AuthorUpdateInput struct {
@@ -169,6 +169,14 @@ func (t *AuthorMapper) TransformCreateInput(_ context.Context, input *AuthorCrea
 
 
 func (t *AuthorMapper) TransformUpdateInput(_ context.Context, entity *Author, input *AuthorUpdateInput) (*Author, error) {
+
+  if err := binding.Validator.ValidateStruct(input); err != nil {
+
+    return nil, validation.NewError(err)
+
+  }
+
+
 
   entity.Name = input.Name
 
@@ -279,6 +287,14 @@ func (t *UserMapper) TransformCreateInput(_ context.Context, input *UserCreateIn
 
 
 func (t *UserMapper) TransformUpdateInput(_ context.Context, user *User, input *UserUpdateInput) (*User, error) {
+
+  if err := binding.Validator.ValidateStruct(input); err != nil {
+
+    return nil, validation.NewError(err)
+
+  }
+
+
 
   user.Name = input.Name
 
@@ -572,7 +588,31 @@ type AuthorOutput struct {
 }
 ```
 
-Use `binding` tags for request validation. The `Output` callback can return an entity, a response DTO, or another value that the HTTP server can render.
+HTTP binding validates `binding` tags on the bound request type. For PATCH, that type is `sqlh.PatchInput`, not the complete update input. Validate the merged input inside `UpdateInput` before changing the entity:
+
+```
+import (
+
+    "github.com/gin-gonic/gin/binding"
+
+    "github.com/justtrackio/gosoline/pkg/validation"
+
+)
+
+
+
+// Inside UpdateInput, before assigning entity fields:
+
+if err := binding.Validator.ValidateStruct(input); err != nil {
+
+    return nil, validation.NewError(err)
+
+}
+```
+
+This uses the same field and struct validators as Gin binding. `validation.NewError` makes the HTTP error mapper return 400. The examples use this check for both PUT and PATCH.
+
+The `Output` callback can return an entity, a response DTO, or another value that the HTTP server can render.
 
 The old `Transformer` and `JsonResultsTransformer` interfaces are removed. Replace their methods as follows:
 
@@ -583,7 +623,7 @@ The old `Transformer` and `JsonResultsTransformer` interfaces are removed. Repla
 | `TransformOutput` or `RenderEntityResponse` | `CrudDefinition.Output`               |
 | No old equivalent                           | `CrudDefinition.PatchInputFromEntity` |
 
-Use `NewCrudDefinition` for the standard callback set. Use a `CrudDefinition` value directly when you need custom list, identity, delete, or operation callbacks.
+Use `NewCrudDefinition` for the standard `sqlh.ListInput`. Set optional identity, delete, or operation callbacks on the returned definition. A custom list input needs an explicitly parameterized `CrudDefinition`, as shown below.
 
 ## JSON Merge Patch[​](#json-merge-patch "Direct link to JSON Merge Patch")
 
@@ -596,7 +636,11 @@ The default `PATCH` operation follows RFC 7396 JSON Merge Patch. It uses the sam
 5. SQLH synchronizes only associations selected by the original patch document.
 6. SQLH maps the result and commits the transaction.
 
-`PatchInputFromEntity` must populate every writable field that an omitted request field must preserve. An omitted scalar remains unchanged. An explicit JSON `null` clears a field when the input type permits it. An array replaces the complete array. A `null` or empty array clears a direct association.
+`PatchInputFromEntity` must populate every writable field that an omitted request field must preserve. An omitted scalar remains unchanged. Arrays replace the complete array.
+
+Explicit JSON `null` clears a pointer or nullable value. For non-nullable scalars, the merge produces the zero value. Reject forbidden values through request and domain validation.
+
+For selected HasMany or many-to-many relations, SQLH converts `null` and empty arrays into empty collections. Synchronization then deletes owned children or removes join links. A selected HasOne `null` clears its owned child. Clearing a nullable BelongsTo also requires the mapper to clear its foreign-key field. A nil target alone does not clear that key. An empty array is not valid for a pointer-shaped input.
 
 ```
 func (t *AuthorMapper) TransformPatchInputFromEntity(_ context.Context, author *Author) (*AuthorUpdateInput, error) {
@@ -712,16 +756,34 @@ SQLH applies force filters to list, count, identity, update, and delete lookups.
 
 ### Custom List Inputs[​](#custom-list-inputs "Direct link to Custom List Inputs")
 
-Embed `sqlh.ListInput` when the service needs extra filter syntax:
+Embed `sqlh.ListInput` to retain native filters, pagination, and force filters. Override `ApplyFilters` to interpret additional request fields:
 
 ```
-type ListInput struct {
+type AuthorListInput struct {
 
     sqlh.ListInput
 
+    Name string `json:"name,omitempty"`
+
+}
 
 
-    legacyQuery bool
+
+func (i AuthorListInput) ApplyFilters(qb *sqlr.QueryBuilderSelect) error {
+
+    if err := i.ListInput.ApplyFilters(qb); err != nil {
+
+        return err
+
+    }
+
+    if i.Name != "" {
+
+        qb.Where(sqlc.Col("name").Eq(i.Name))
+
+    }
+
+    return nil
 
 }
 ```
@@ -736,9 +798,90 @@ A custom list input must implement `ListInputSource`:
 
 Use the same filter adapter for query and count. Custom query callbacks must apply the query plan and scope, then query modifiers, then pagination. Custom count callbacks must apply the query plan and scope, but not query modifiers or pagination.
 
+`NewCrudDefinition` fixes its list input to `sqlh.ListInput`. Construct the definition explicitly for `AuthorListInput`. Use the entity value type `Author` for `E`: callback signatures already use `*E`.
+
+```
+type AuthorListHandler = sqlh.CrudHandler[
+
+    int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, AuthorListInput, AuthorOutput,
+
+]
+
+
+
+func NewAuthorListHandler() httpserver.HandlerFactory[AuthorListHandler] {
+
+    mapper := &AuthorMapper{}
+
+    definition := sqlh.CrudDefinition[
+
+        int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, AuthorListInput, AuthorOutput,
+
+    ]{
+
+        CreateInput:          mapper.TransformCreateInput,
+
+        UpdateInput:          mapper.TransformUpdateInput,
+
+        PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
+
+        Output:               mapper.TransformOutput,
+
+    }
+
+    return sqlh.NewCrudHandler(sqlh.SimpleCrudDefinition(definition))
+
+}
+```
+
+### Preserve a Legacy List Envelope[​](#preserve-a-legacy-list-envelope "Direct link to Preserve a Legacy List Envelope")
+
+`ListOperation` and `handler.List` always return `ListOutput[O]` with outer JSON fields `results` and `total`. An entity output mapper cannot change that envelope. Use a typed wrapper and manual registration for another response shape:
+
+```
+type LegacyAuthorListOutput struct {
+
+    Items []AuthorOutput `json:"items"`
+
+    Count int            `json:"count"`
+
+}
+
+
+
+func RegisterLegacyAuthorList(router *httpserver.Router, handler *AuthorListHandler) {
+
+    router.POST("/v1/authors", httpserver.Bind(func(ctx context.Context, input *AuthorListInput) (LegacyAuthorListOutput, error) {
+
+        result, err := handler.List(ctx, input)
+
+        if err != nil {
+
+            return LegacyAuthorListOutput{}, err
+
+        }
+
+        return LegacyAuthorListOutput{Items: result.Results, Count: result.Total}, nil
+
+    }))
+
+}
+```
+
+Register it with `router.HandleWith(httpserver.With(NewAuthorListHandler(), RegisterLegacyAuthorList))`. The wrapper runs after `handler.List` commits its transaction.
+
 ## SQLR and SQLH Relation Tags[​](#sqlr-and-sqlh-relation-tags "Direct link to SQLR and SQLH Relation Tags")
 
-SQLR tags define the relationship. SQLH tags add CRUD-specific preload and synchronization phases:
+Keep database mapping, relationship shape, HTTP input, and CRUD policy separate:
+
+| Tag                 | Purpose                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| `db:"column"`       | Maps an entity field to a database column. Use `db:"-"` on non-column relation fields.    |
+| `sqlr:"..."`        | Defines relationships and schema-wide preload or synchronization defaults.                |
+| `sqlh:"..."`        | Adds operation-specific preload and synchronization paths to SQLH's default builders.     |
+| `json:"field"`      | Defines the request field name and helps SQLH derive PATCH association paths.             |
+| `binding:"..."`     | Defines request validation. Validate the merged PATCH input explicitly.                   |
+| `uri:"id" json:"-"` | Binds the route identity without accepting it from JSON. `InputById` supplies these tags. |
 
 ```
 type Project struct {
@@ -747,25 +890,74 @@ type Project struct {
 
 
 
-    Owner  *Owner  `db:"-" sqlr:"belongsTo:owner_id;preload" sqlh:"preload:create,read,query,update"`
+    PublicID  string     `db:"public_id"`
 
-    Rules  []*Rule  `db:"-" sqlr:"foreignKey:project_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
+    DeletedAt *time.Time `db:"deleted_at"`
 
-    Labels []*Label `db:"-" sqlr:"foreignKey:project_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
+    OwnerID   *uint      `db:"owner_id"`
+
+
+
+    Owner  *Owner   `db:"-" sqlr:"belongsTo:owner_id" sqlh:"preload:read,query,update"`
+
+    Rules  []*Rule  `db:"-" sqlr:"foreignKey:project_id" sqlh:"preload:create,read,query,update;sync:create,update"`
+
+    Labels []*Label `db:"-" sqlr:"foreignKey:project_id" sqlh:"preload:create,read,query,update;sync:create,update"`
+
+    Tags   []*Tag   `db:"-" sqlr:"many2many:project_tags" sqlh:"preload:read,query,update;sync:update"`
 
 }
 ```
 
-Supported SQLH directives are:
+### SQLR Relationship Options[​](#sqlr-relationship-options "Direct link to SQLR Relationship Options")
 
-| Directive | Valid phases                        | Effect                                                                                                          |
-| --------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `preload` | `create`, `read`, `query`, `update` | Loads the relation in the matching operation. Create and update preloads apply to the post-write entity reload. |
-| `sync`    | `create`, `update`, `delete`        | Selects the relation for association persistence or cleanup in the matching operation.                          |
+Separate SQLR options with semicolons. Choose only the options that match the existing persistence contract.
 
-The relation path uses Go field names, such as `Labels` or `Posts.Comments`. SQLH traverses nested relations. A `sqlh` tag on a scalar or embedded field is invalid. The relation must exist in the SQLR schema.
+| Option                                   | Meaning                                                                                                        |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `belongsTo:owner_id`                     | The foreign key is on the current entity. Declare its matching `db` field, such as `OwnerID`.                  |
+| `foreignKey:project_id`                  | The foreign key is on the related HasOne or HasMany entity. Declare that column on the child.                  |
+| `many2many:project_tags`                 | Names the join table for a slice relation.                                                                     |
+| `parentKey:project_id;relatedKey:tag_id` | Overrides the parent and related join-column names for a many-to-many relation.                                |
+| `preload`                                | Enables schema-wide automatic relation loading, including repository calls outside SQLH.                       |
+| `sync:create,update,delete`              | Adds default association paths for the selected repository operations.                                         |
+| `syncMode:many2many`                     | Enables updates to existing many-to-many target rows. Requires a many-to-many relation and SQLR `sync:update`. |
 
-`sync:update` is required when PUT or PATCH must persist a relation. Without it, the mapper can change the in-memory graph, but SQLR does not reconcile the related rows.
+### SQLH Phases[​](#sqlh-phases "Direct link to SQLH Phases")
+
+Separate directives with semicolons and phases with commas. There is no `patch` phase: PATCH uses the update policy.
+
+| Directive | Phase                        | Effect                                                                      |
+| --------- | ---------------------------- | --------------------------------------------------------------------------- |
+| `preload` | `create`                     | Reloads the relation after insertion.                                       |
+| `preload` | `read`                       | Loads the relation for read and delete identity lookups.                    |
+| `preload` | `query`                      | Loads the relation for list results.                                        |
+| `preload` | `update`                     | Loads the relation before PUT/PATCH mapping and reloads it after the write. |
+| `sync`    | `create`, `update`, `delete` | Adds association paths for persistence or owned-association cleanup.        |
+
+SQLH traverses nested relation tags. Paths use Go field names, such as `Labels` or `Rules.Owner`, not column names or JSON names. Unknown directives, unsupported phases, and `sqlh` tags on scalar or embedded fields fail during handler construction.
+
+### Defaults and PATCH Selection[​](#defaults-and-patch-selection "Direct link to Defaults and PATCH Selection")
+
+SQLR Create persists populated associations by default. Delete cleans up owned HasOne and HasMany rows and many-to-many links, not shared target rows.
+
+Adding the first create or delete sync path changes that operation to selected-path mode. SQLR schema paths and SQLH builder paths combine. `OmitAssociation` excludes a path even when a tag selects it.
+
+Update defaults to the root row only. SQLR `sync:update` defaults or per-call paths can also enable relation updates. Therefore PUT can persist relations without an SQLH tag.
+
+Default PATCH requires `sqlh:"sync:update"` for eligible association paths. It selects paths from the original document or configured triggers, then omits unselected SQLR auto-sync paths. Do not infer PATCH selection from the complete merged input.
+
+### Many-to-Many Target Updates[​](#many-to-many-target-updates "Direct link to Many-to-Many Target Updates")
+
+Existing many-to-many IDs are link-only by default. SQLR verifies target existence and reconciles join-table membership without updating those target rows. An ID-less target is inserted. Removing a target from the collection removes its link, not the shared row.
+
+Enable full target-row updates only when the API permits changes to shared targets:
+
+```
+Tags []*Tag `db:"-" sqlr:"many2many:project_tags;sync:update;syncMode:many2many" sqlh:"preload:read,query,update;sync:update"`
+```
+
+For custom repository operations, `SyncMany2many("Tags")` enables full synchronization for that call. Keep the same ownership and authorization rules as the existing API.
 
 ## Custom Identity and Delete Behavior[​](#custom-identity-and-delete-behavior "Direct link to Custom Identity and Delete Behavior")
 
@@ -868,7 +1060,7 @@ definition.Delete = func(
 
     updated, err := repository.Update(tx, entity, func(qb *sqlr.QueryBuilderUpdate) {
 
-        qb.OmitAssociation("Rules", "Labels")
+        qb.OmitAssociation("Rules", "Labels", "Tags")
 
     })
 
@@ -1075,7 +1267,7 @@ type CrudOperation[K sqlr.KeyTypes, E sqlr.Entitier[K], I, O any] func(
 
 The definition supports `CreateOperation`, `ReadOperation`, `UpdateOperation`, `PatchOperation`, `ListOperation`, and `DeleteOperation`. An operation field replaces the complete default operation. `UpdateOperation` does not change the default PATCH pipeline. `PatchOperation` replaces the complete patch pipeline.
 
-Use custom operations for domain rules that need direct control over the transaction. Keep authorization, validation, status transitions, event publication, and response mapping in application callbacks.
+Use custom operations for domain rules that need direct control over persistence. The override owns authorization, validation, scope, locking, association policy, and response mapping. SQLH still wraps it in `TxRunner`. Publish success events after commit, not from a pre-commit mapper.
 
 ## Migration Notes[​](#migration-notes "Direct link to Migration Notes")
 
