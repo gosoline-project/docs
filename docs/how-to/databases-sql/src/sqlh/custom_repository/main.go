@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 
+	"github.com/gin-gonic/gin/binding"
 	"github.com/gosoline-project/httpserver"
 	"github.com/gosoline-project/sqlc"
 	"github.com/gosoline-project/sqlh"
@@ -11,6 +12,7 @@ import (
 	"github.com/justtrackio/gosoline/pkg/application"
 	"github.com/justtrackio/gosoline/pkg/cfg"
 	"github.com/justtrackio/gosoline/pkg/log"
+	"github.com/justtrackio/gosoline/pkg/validation"
 )
 
 // snippet-start: entities
@@ -39,6 +41,10 @@ func (t *AuthorMapper) TransformCreateInput(_ context.Context, input *AuthorCrea
 }
 
 func (t *AuthorMapper) TransformUpdateInput(_ context.Context, entity *Author, input *AuthorUpdateInput) (*Author, error) {
+	if err := binding.Validator.ValidateStruct(input); err != nil {
+		return nil, validation.NewError(err)
+	}
+
 	entity.Name = input.Name
 
 	return entity, nil

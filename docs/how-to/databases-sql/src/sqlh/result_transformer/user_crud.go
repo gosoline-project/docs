@@ -4,9 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/gin-gonic/gin/binding"
 	"github.com/gosoline-project/httpserver"
 	"github.com/gosoline-project/sqlh"
 	"github.com/gosoline-project/sqlr"
+	"github.com/justtrackio/gosoline/pkg/validation"
 )
 
 // snippet-start: types
@@ -57,6 +59,10 @@ func (t *UserMapper) TransformCreateInput(_ context.Context, input *UserCreateIn
 }
 
 func (t *UserMapper) TransformUpdateInput(_ context.Context, user *User, input *UserUpdateInput) (*User, error) {
+	if err := binding.Validator.ValidateStruct(input); err != nil {
+		return nil, validation.NewError(err)
+	}
+
 	user.Name = input.Name
 
 	return user, nil
