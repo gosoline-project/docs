@@ -1,0 +1,324 @@
+Migrate this service from custom CRUD handlers to the typed, transaction-aware SQLH API.
+
+## Mission and pinned API
+
+Preserve the public API and domain behavior. Keep routes, request fields, response envelopes, status codes, authorization,
+validation, delete rules, filters, counts, associations, IDs, timestamps, events, and transaction guarantees.
+
+Use these downloaded sources as the API contract:
+
+- `github.com/gosoline-project/sqlh` at `v0.7.2-0.20260914134957-1ff7ba06abce`
+- `github.com/gosoline-project/sqlr` at `v0.9.0`
+- `github.com/gosoline-project/sqlc` at `v0.4.0`
+- `github.com/gosoline-project/httpserver` at `v0.6.0`
+
+Do not upgrade dependencies or replace imports globally unless the service requires it. Do not use removed SQLH APIs such as
+`Transformer`, `JsonResultsTransformer`, `WithTx`, or `BindTx*`.
+
+## Ordered migration procedure
+
+### 1. Capture the existing contract
+
+Read local instructions, `go.mod`, route registration, generated API sources, and persistence code. Create one parity matrix
+for every CRUD endpoint.
+
+Record the method, path, middleware, authorization, request body, response envelope, status codes, errors, and not-found
+behavior. Also record filters, joins, grouping, ordering, pagination, counts, association rules, public IDs, stored keys,
+timestamps, nullable fields, events, rollback behavior, and background behavior.
+
+Keep equivalent coverage or add parity checks before removing old handlers. Search for old SQLH symbols, custom handlers,
+repository factories, relationship mappers, soft-delete scopes, generated artifacts, and event or outbox paths. Do not change
+unrelated application code.
+
+### 2. Preserve the SQLR model and tags
+
+Embed `sqlr.Entity[K]` when SQLR should manage IDs and timestamps. Otherwise implement `sqlr.Entitier[K]` and preserve the
+service's ID and timestamp behavior. Keep table names, column names, primary keys, and nullable fields. Implement
+`TableName()` when SQLR's inferred table name differs.
+
+Use `db` for columns and `db:"-"` for non-column relation fields:
+
+```go
+type Project struct {
+    sqlr.Entity[uint]
+
+    OwnerID *uint  `db:"owner_id"`
+    Owner   *Owner `db:"-" sqlr:"belongsTo:owner_id;preload" sqlh:"preload:read,update"`
+    Rules   []*Rule `db:"-" sqlr:"foreignKey:project_id;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
+    Tags    []*Tag  `db:"-" sqlr:"many2many:project_tags;sync:update" sqlh:"preload:read,update;sync:update"`
+}
+```
+
+Use SQLR tags for relationship shape and schema defaults. `foreignKey:<column>` names the foreign-key column on a HasOne or HasMany child table. `belongsTo:<column>` names the foreign-key column on the current entity and requires a matching `db` field. `many2many:<table>` names the join table.
+
+Use `parentKey:<column>` and `relatedKey:<column>` for nonstandard many-to-many join-column names. Other relevant options are `primaryKey`, `autoCreateTime`, `autoUpdateTime`, `preload`, `sync:create,update,delete`, and `syncMode:many2many`. Separate SQLR options with semicolons. `syncMode:many2many` requires `sync:update` and a many-to-many relation.
+
+Use SQLH tags for CRUD-phase builders. Valid directives are `preload:create,read,query,update` and
+`sync:create,update,delete`; separate directives with semicolons and phases with commas. SQLH tags belong only on association
+fields, and relation paths use Go field names such as `Rules` or `Rules.Owner`, not database columns or JSON names. Unknown
+directives, phases, and scalar-field tags fail during handler setup.
+
+`sqlr:"...;preload"` is a schema-level auto-preload. `sqlh:"preload:<phases>"` adds phase-specific builders, and
+`preload:update` affects the pre-update identity lookup and update write preload, not only post-write loading. SQLH parses
+nested relation tags recursively.
+
+Treat sync tags as policy. SQLR Create and Delete default to all association paths, but the first create or delete sync path
+changes that operation to selected-path mode. Update defaults to no association sync, then merges SQLR schema defaults and
+operation paths. Omit options take precedence. SQLR `sync:update` can synchronize PUT relations without an SQLH tag, while
+default PATCH association selection still needs matching SQLH `sync:update` policy.
+
+### 3. Define the typed CRUD definition
+
+Embed `sqlh.InputById[Id]` in an update input. It supplies `GetId`, force-filter storage, and the `uri:"id" json:"-"` route
+identity. Keep request fields tagged for JSON and Gin validation.
+
+After authorization, use `AddForceFilter` to attach tenant or account restrictions. Each force filter must add a restrictive
+`WHERE` clause only.
+
+```go
+type ProjectUpdateInput struct {
+    sqlh.InputById[string]
+    Name      string       `json:"name" binding:"required"`
+    RuleItems []*RuleInput `json:"ruleItems"`
+}
+```
+
+For the standard list input, use `NewCrudDefinition` and `SimpleCrudDefinition`:
+
+```go
+definition := sqlh.NewCrudDefinition(
+    operations.createInput,
+    operations.updateInput,
+    operations.patchInputFromEntity,
+    operations.output,
+)
+factory := sqlh.SimpleCrudDefinition(definition)
+```
+
+`NewCrudDefinition` fixes the list input type to `sqlh.ListInput`. For a custom list input, instantiate `CrudDefinition` with
+every type parameter. Do not assign `NewCrudDefinition` to a custom-LI definition.
+
+```go
+type ProjectListInput struct {
+    sqlh.ListInput
+    LegacyFilter string `json:"legacyFilter,omitempty"`
+}
+
+definition := sqlh.CrudDefinition[
+    uint, Project, string, ProjectCreateInput, ProjectUpdateInput, ProjectListInput, ProjectOutput,
+]{
+    CreateInput:          operations.createInput,
+    UpdateInput:          operations.updateInput,
+    PatchInputFromEntity: operations.patchInputFromEntity,
+    Output:               operations.output,
+}
+factory := sqlh.SimpleCrudDefinition(definition)
+```
+
+Use a `CrudDefinitionFactory` when construction needs context, configuration, a logger, or another startup dependency. Keep
+domain behavior in the callbacks. `CreateInput` authorizes and validates the request, maps root and child values, and
+preserves ID and state rules.
+
+`UpdateInput` authorizes the loaded entity, validates before mutation, maps complete values, resolves child IDs, creates
+ID-less children, applies state transitions, and preserves timestamp ownership. `PatchInputFromEntity` copies every writable
+value that an omitted patch field must retain, including child public IDs. `Output` checks read authorization and maps the
+existing typed response.
+
+Default HTTP binding validates the bound type. PUT validates the update input, but PATCH validates `sqlh.PatchInput`, not the
+merged update input. Validate the complete input at the start of `UpdateInput`, before changing the entity:
+
+```go
+import (
+    "github.com/gin-gonic/gin/binding"
+    "github.com/justtrackio/gosoline/pkg/validation"
+)
+
+if err := binding.Validator.ValidateStruct(input); err != nil {
+    return nil, validation.NewError(err)
+}
+```
+
+This reuses `binding` tags and registered Gin field and struct validators. `validation.NewError` maps the failure to HTTP 400.
+A custom `UpdateOperation` must perform this validation itself.
+
+### 4. Preserve JSON Merge Patch and associations
+
+The default PATCH operation runs this sequence in one transaction:
+
+1. Load the scoped entity with update preloads and a root-row lock.
+2. Build the complete update input.
+3. Merge the original RFC 7396 document into that input.
+4. Call `UpdateInput`.
+5. Select associations present in the original document.
+6. Persist the root and selected associations.
+7. Map output and commit.
+
+Do not treat `UpdateInput` as partial. The complete input must contain every value that an omitted field keeps, and arrays
+replace the complete array.
+
+An explicit null clears a pointer or nullable value. Use a pointer or nullable wrapper for fields that accept null. For a
+non-nullable scalar, JSON null becomes the field's zero value during merge. Required or domain validation must reject it when
+the old contract forbids null.
+
+An explicit null or empty selected collection clears that collection. A selected HasOne null clears its owned child. A
+nullable `BelongsTo` also needs mapper logic that clears its foreign key because SQLR skips a nil target. An omitted relation is
+not synchronized merely because the complete input contains its current value.
+
+For direct child relations, an existing child ID updates that child and an ID-less child creates one. A missing HasMany child
+can be deleted when the selected sync path requires it. For many-to-many relations, an existing ID is link-only by default.
+SQLR verifies that target and reconciles join-table membership without updating that target row. An ID-less target is created,
+and a missing target removes its link without deleting the target row.
+
+Use full target-row sync only when the old contract permits mutation of shared targets. Configure it with SQLR
+`sync:update;syncMode:many2many` and matching SQLH `sync:update`. A custom operation that bypasses the default builder must
+request the same path and use `SyncMany2many` for an operation-level full-sync choice.
+
+SQLH derives a direct association path from update-input `json` tags and entity relation names. Use overrides when the paths
+differ:
+
+```go
+definition.PatchAssociations = map[string]string{
+    "ruleItems": "Rules",
+}
+definition.PatchAssociationTriggers = map[string]string{
+    "state": "Tags",
+}
+```
+
+A direct path or trigger must name a relation with SQLH `sync:update`. A trigger only selects the relation when the scalar JSON
+path is present. It does not compute the relation or change merge and null semantics. Keep selection based on the original
+patch document.
+
+Use a custom `PatchOperation` only when the complete-input pipeline cannot represent the old API. It replaces the default
+PATCH pipeline inside SQLH's transaction, and `TxRunner` still wraps the operation. Use the supplied transaction and
+repository, and implement validation, association selection, persistence, and output mapping.
+
+### 5. Preserve list filters and counts
+
+Use the `ProjectListInput` pattern above for native SQLC JSON filters, pagination, and force filters. Embedding
+`sqlh.ListInput` supplies standard implementations only. If `LegacyFilter` changes filter behavior, override `ApplyFilters`
+and any other needed phase. A custom list input must implement `ApplyFilters`, `ApplyQueryModifiers`, `ApplyPagination`,
+`ValidatePagination`, and `GetForceFilters`.
+
+`ApplyFilters` handles user filters. Keep server-owned force filters in the embedded carrier because SQLH applies them through
+the shared query scope. For custom `Query` and `Count` callbacks, call `QueryPlan.ApplyBuilder` and then
+`QueryPlan.ApplyScope`.
+
+The query callback then applies query modifiers and pagination, in that order. The count callback applies neither. Use the same
+user-filter, force-filter, and delete scope for rows and counts. Keep grouping, ordering, and pagination out of the count unless
+the old count contract requires matching cardinality.
+
+`CrudHandler.List` and `ListOperation` always return `ListOutput[O]` with `Results` and `Total`. For another legacy envelope,
+call `handler.List` from a typed wrapper and map those fields, then register the wrapper manually:
+
+```go
+func listLegacy(ctx context.Context, input *ProjectListInput) (LegacyListOutput, error) {
+    result, err := handler.List(ctx, input)
+    if err != nil {
+        return LegacyListOutput{}, err
+    }
+
+    return LegacyListOutput{Items: result.Results, Count: result.Total}, nil
+}
+
+router.POST("/v1/projects", httpserver.Bind(listLegacy))
+```
+
+Do not make `ListOperation` return a different envelope. For a legacy filter dialect, detect it before decoding and reject
+unsafe mixed native and legacy forms.
+
+Translate known fields and operators to SQLC expressions. Preserve required joins, grouping, ordering, pagination, and
+client-dependent `LIMIT 0` behavior. Reject unknown fields, operators, directions, and boolean values. Apply the same scope to
+row and count queries.
+
+### 6. Keep routes, delete responses, and identity scope
+
+`WithCrudHandlers` registers:
+
+- `POST /v{version}/{entity}`
+- `GET /v{version}/{entity}/:id`
+- `PUT /v{version}/{entity}/:id`
+- `PATCH /v{version}/{entity}/:id`
+- `DELETE /v{version}/{entity}/:id`
+- `POST /v{version}/{plural-entity}`
+
+Use `NewCrudHandler` and manual registration when a path, method, middleware, binder, response envelope, or status differs.
+The standard delete route calls `handler.DeleteNoContent` and returns 204. Physical deletion is the default. Use
+`DeleteScope` to hide inactive rows and a custom `Delete` callback for soft deletion or other domain rules. The scope applies
+to default read, list, count, update, and delete lookups.
+
+When DELETE returns a body, set `definition.DeleteOutput = definition.Output` and manually bind `handler.Delete` on the old
+route. `DeleteNoContent` never calls `DeleteOutput`.
+
+Use `Identity` when a public route ID differs from the stored SQL key. Distinguish the public `Id` type from stored key type
+`K`.
+
+If both IDs use the same representation, validate or convert the public ID to `K`. If the public ID has its own column, query
+that column directly and return the entity with its stored `K`; do not force a conversion to `K`.
+
+The callback receives the transaction, transaction-aware repository, public ID, scope, and builder. Query through that
+repository and transaction, add the public-ID predicate, apply the supplied scope and builder, and return `sqlr.ErrNotFound`
+when no row matches.
+
+Do not drop the builder. Update and delete lookups use it for relation preloads and root-row `SELECT FOR UPDATE`. Preloaded
+child queries are separate and are not locked by that root statement. Add child locking only when existing domain behavior
+requires it.
+
+### 7. Preserve transactions, background work, and events
+
+Build `RepositoryTx` from the same `sqlc.Client` that SQLH uses to begin transactions. Use `WithRepositoryTxFactory` and
+`sqlr.NewRepositoryTxWithSettings` for custom repository construction. The default SQLH operation maps output before commit and
+rolls back on operation, association, output, and panic errors.
+
+Each custom `*Operation` receives SQLH's active `sqlr.TTx` and configured repository. Use them for every read and write. An
+override owns authorization, scope, root locking, association selection, and persistence for its named operation.
+
+`UpdateOperation` does not replace the mapper used by default PATCH. `PatchOperation` replaces the default PATCH pipeline inside
+the existing `TxRunner` transaction. `ListOperation` still returns `ListOutput[O]`. Use `TxRunner.InTransaction` for custom
+typed handlers outside a CRUD definition. Do not open a second client or put a transaction in Gin context.
+
+Keep background transitions in the application repository with explicit transactions. Use `ForUpdate()` when a transition must
+serialize with another writer. Preserve existing retry, idempotency, and reader visibility rules.
+
+Publish events only at the existing post-commit boundary. For CDC, publish from the committed change event and reload the
+aggregate with the required active or deleted-row visibility. Preserve soft-delete events, hard-delete tombstones, outbox
+boundaries, and retry behavior. Do not publish a success event from a callback before its SQLH transaction commits.
+
+Preserve the existing SQLC configuration, migration path, and reset behavior. Set MySQL `clientFoundRows: true` when a valid
+unchanged update must count as matched. Without it, SQLR can report `ErrNotFound` for an update that matched a row.
+
+### 8. Regenerate and remove old paths
+
+Keep the old route and schema definitions as the source of truth for generated API artifacts. Regenerate Go types, mocks,
+OpenAPI files, and other derived artifacts. Do not edit generated files as the primary fix. Remove old handlers and removed SQLH
+APIs only after parity checks pass.
+
+## Acceptance checklist
+
+Use the repository's normal focused unit, integration, HTTP, rollback, event, and generation checks to prove all of these:
+
+- Routes preserve paths, methods, middleware, authorization, bodies, envelopes, statuses, errors, and not-found behavior.
+- SQLR preserves tables, columns, keys, public-ID lookup, timestamps, nullability, and generated IDs.
+- Create, PUT, PATCH, and delete preserve domain validation and state transitions.
+- Merged PATCH validation returns HTTP 400 before mutation.
+- PATCH preserves omission, null, empty-array, existing-child, new-child, removed-child, and scalar-trigger behavior.
+- HasMany and many-to-many behavior preserves child-row and link semantics.
+- Existing many-to-many IDs remain link-only unless full sync is an approved contract.
+- Native and legacy filters preserve joins, grouping, ordering, pagination, empty results, and `Total`.
+- Row and count scopes match.
+- Soft-delete visibility, delete strategy, default 204 behavior, and body-returning DELETE match.
+- Custom identity applies public-ID lookup, scope, relation builder, and root-row lock.
+- Root writes, association writes, output failures, and panics roll back as required.
+- Background transitions preserve transaction and locking behavior.
+- Events occur at the same post-commit boundary with the same visibility and retry behavior.
+- No removed API, Gin transaction context, non-transaction-aware mutation repository, or incomplete list input remains.
+- Generated artifacts agree with the preserved contract.
+
+Record every intentional behavior change and the check that proves it.
+
+## Stop conditions
+
+Stop and request a domain decision when a route or response contract is ambiguous. Also stop when public-ID lookup cannot apply
+the supplied scope or builder safely, complete-input PATCH cannot represent the old semantics, association ID or delete behavior
+conflicts, the repository cannot share SQLH's client, event timing is unclear, generated artifacts would change without approval,
+or the migration needs unrelated refactoring.

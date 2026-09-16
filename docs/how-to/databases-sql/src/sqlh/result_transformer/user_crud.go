@@ -4,9 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/gin-gonic/gin/binding"
 	"github.com/gosoline-project/httpserver"
 	"github.com/gosoline-project/sqlh"
 	"github.com/gosoline-project/sqlr"
+	"github.com/justtrackio/gosoline/pkg/validation"
 )
 
 // snippet-start: types
@@ -15,6 +17,7 @@ type (
 		Name string `json:"name"`
 	}
 	UserUpdateInput struct {
+		sqlh.InputById[int]
 		Name string `json:"name"`
 	}
 	User struct {
@@ -33,29 +36,46 @@ type (
 
 // snippet-start: crud
 func NewUserCrud() httpserver.RegisterFactoryFunc {
-	return sqlh.WithCrudHandlers(0, "user", sqlh.NewJsonResultsTransformer(&UserTransformer{}))
+	transformer := &UserMapper{}
+	definition := sqlh.NewCrudDefinition(
+		transformer.TransformCreateInput,
+		transformer.TransformUpdateInput,
+		transformer.TransformPatchInputFromEntity,
+		transformer.TransformOutput,
+	)
+
+	return sqlh.WithCrudHandlers(0, "user", sqlh.SimpleCrudDefinition(definition))
 }
 
 // snippet-end: crud
 
-var _ sqlh.JsonResultsTransformer[int, User, UserCreateInput, UserUpdateInput] = (*UserTransformer)(nil)
-
 // snippet-start: transformer
-type UserTransformer struct{}
+type UserMapper struct{}
 
-func (t *UserTransformer) TransformCreateInput(ctx context.Context, input *UserCreateInput) (*User, error) {
+func (t *UserMapper) TransformCreateInput(_ context.Context, input *UserCreateInput) (*User, error) {
 	return &User{
 		Name: input.Name,
 	}, nil
 }
 
-func (t *UserTransformer) TransformUpdateInput(ctx context.Context, user *User, input *UserUpdateInput) (*User, error) {
+func (t *UserMapper) TransformUpdateInput(_ context.Context, user *User, input *UserUpdateInput) (*User, error) {
+	if err := binding.Validator.ValidateStruct(input); err != nil {
+		return nil, validation.NewError(err)
+	}
+
 	user.Name = input.Name
 
 	return user, nil
 }
 
-func (t *UserTransformer) TransformOutput(ctx context.Context, user *User) (any, error) {
+func (t *UserMapper) TransformPatchInputFromEntity(_ context.Context, user *User) (*UserUpdateInput, error) {
+	return &UserUpdateInput{
+		InputById: sqlh.InputById[int]{Id: user.Id},
+		Name:      user.Name,
+	}, nil
+}
+
+func (t *UserMapper) TransformOutput(_ context.Context, user *User) (UserOutput, error) {
 	return UserOutput{
 		Id:        user.Id,
 		Name:      user.Name,
