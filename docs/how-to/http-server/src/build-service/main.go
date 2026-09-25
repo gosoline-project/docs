@@ -90,7 +90,7 @@ func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (https
 func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
 	user, ok := h.users[input.Id]
 	if !ok {
-		return httpserver.GetErrorHandler()(http.StatusNotFound, errors.New("user not found")), nil
+		return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
 	}
 	return httpserver.NewJsonResponse(user), nil
 }
