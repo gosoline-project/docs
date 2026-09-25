@@ -222,7 +222,7 @@ httpserver:
 
 ## Error handling patterns[​](#error-handling-patterns "Direct link to Error handling patterns")
 
-Handlers distinguish between client errors (returned as structured responses) and internal errors (returned as Go errors). By default, internal errors return a sanitized `{"err":"internal server error"}` response while the server logs the actual error:
+Handlers wrap expected client errors with an HTTP status and return other errors unchanged. The default error middleware hides internal error details from clients:
 
 ```
 func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (httpserver.Response, error) {
@@ -233,7 +233,7 @@ func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (h
 
         if isBadRequest(err) {
 
-            return httpserver.GetErrorHandler()(http.StatusBadRequest, err), nil
+            return nil, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
 
         }
 
@@ -299,6 +299,6 @@ Raise `max_body_bytes` for APIs that intentionally accept larger uploads, or set
 | Shared input types                                 | Multiple handlers accept the same URI params                 |
 | Mixed binding (`uri` + `json` + `form` + `header`) | Endpoints that accept path params + query/body/header values |
 | `BindSseN` for SSE                                 | Real-time streaming endpoints                                |
-| `GetErrorHandler()(status, err)`                   | Client errors with specific status codes                     |
+| `nil, NewErrorWithStatus(status, err)`             | Client errors with specific status codes                     |
 | `nil, error`                                       | Unexpected/internal errors (500)                             |
 | Compression exclusion for SSE                      | Always exclude SSE paths from gzip                           |

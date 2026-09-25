@@ -473,7 +473,7 @@ query := sqlc.FromG[Experiment]("experiments").
     ForUpdate()
 ```
 
-Use `ForUpdate()` when the read and the following write must run in the same transaction. The lock does not protect rows loaded by separate preload queries. Use an explicit lock for each row set that must be protected.
+Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. SQLR v0.9.1 also applies a repository query's `ForUpdate()` setting to its preloads.
 
 ## UPDATE Operations[​](#update-operations "Direct link to UPDATE Operations")
 

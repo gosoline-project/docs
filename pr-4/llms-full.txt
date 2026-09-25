@@ -3650,7 +3650,7 @@ query := sqlc.FromG[Experiment]("experiments").
     ForUpdate()
 ```
 
-Use `ForUpdate()` when the read and the following write must run in the same transaction. The lock does not protect rows loaded by separate preload queries. Use an explicit lock for each row set that must be protected.
+Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. SQLR v0.9.1 also applies a repository query's `ForUpdate()` setting to its preloads.
 
 ## UPDATE Operations[​](#update-operations "Direct link to UPDATE Operations")
 
@@ -3994,15 +3994,13 @@ CRUD definitions use typed callbacks and transaction-aware repositories instead 
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
-Add the SQLH version that provides the typed CRUD API to your Go module:
+Install SQLH v0.8.0:
 
 ```
-go get github.com/gosoline-project/sqlh@v0.7.2-0.20260914134957-1ff7ba06abce
+go get github.com/gosoline-project/sqlh@v0.8.0
 ```
 
-Use the released SQLH version that provides this API when one is available.
-
-The typed API uses `github.com/gosoline-project/httpserver`, `github.com/gosoline-project/sqlc`, and `github.com/gosoline-project/sqlr`. Use compatible versions of all three packages. The examples use the `sqlc` `v0.4.0` and `sqlr` `v0.9.0` APIs.
+SQLH v0.8.0 uses `httpserver` v0.6.4, `sqlc` v0.4.0, and `sqlr` v0.9.1. Use these versions for the examples. SQLH v0.8.0 requires Go 1.27.0 or newer.
 
 Then import the package:
 
@@ -4368,21 +4366,49 @@ The generated routes are:
 
 For example, version `1` and entity name `author` produce `/v1/author` and `/v1/authors`.
 
-The default delete route uses `DeleteNoContent`. Use manual route registration with `handler.Delete` when the API must return the deleted entity:
+The default delete route uses `DeleteNoContent`. Use `NewCrudHandler` for a delete route that returns the entity:
+
+main.go
 
 ```
-router.HandleWith(httpserver.With(resource.NewHandler, func(router *httpserver.Router, handler *resource.CrudHandler) {
+type AuthorCrudHandler = sqlh.CrudHandler[int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, sqlh.ListInput, AuthorOutput]
+
+
+
+func NewAuthorHandler() httpserver.HandlerFactory[AuthorCrudHandler] {
+
+  transformer := &AuthorMapper{}
+
+  definition := sqlh.NewCrudDefinition(
+
+    transformer.TransformCreateInput,
+
+    transformer.TransformUpdateInput,
+
+    transformer.TransformPatchInputFromEntity,
+
+    transformer.TransformOutput,
+
+  )
+
+  definition.DeleteOutput = definition.Output
+
+
+
+  return sqlh.NewCrudHandler(sqlh.SimpleCrudDefinition(definition))
+
+}
+```
+
+```
+router.HandleWith(httpserver.With(NewAuthorHandler(), func(router *httpserver.Router, handler *AuthorCrudHandler) {
 
     router.DELETE("/v1/resources/:id", httpserver.Bind(handler.Delete, httpserver.NoBodyBinding{}))
 
 }))
 ```
 
-`handler.Delete` requires `CrudDefinition.DeleteOutput`. You can assign the normal output mapper when both responses have the same shape:
-
-```
-definition.DeleteOutput = definition.Output
-```
+`NewAuthorHandler` sets `DeleteOutput` to the normal output mapper. Without `DeleteOutput`, `handler.Delete` cannot return a body.
 
 ### Register Custom Paths[​](#register-custom-paths "Direct link to Register Custom Paths")
 
@@ -4391,7 +4417,7 @@ Use `NewCrudHandler` when an existing API has different paths, singular and plur
 ```
 func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
 
-    router.HandleWith(httpserver.With(resource.NewHandler, func(router *httpserver.Router, handler *resource.CrudHandler) {
+    router.HandleWith(httpserver.With(NewAuthorHandler(), func(router *httpserver.Router, handler *AuthorCrudHandler) {
 
         router.POST("/v1/resource", httpserver.Bind(handler.Create))
 
@@ -4660,6 +4686,8 @@ The key is a path in the original patch document. The value is an SQLR relation 
 
 A custom `PatchOperation` replaces the complete default patch pipeline. Use it only when the default complete-input mapping and association selection cannot represent the API contract.
 
+A custom `PatchOperation` receives `*sqlh.PatchInput[Id]`. Read the parsed `sqlh.PatchDocument` from `input.Document`. Use `input.Document.MergeInto(completeInput)` to apply the patch. Use `input.Document.Has("status")` to check whether the request supplied a field. The old `input.Document()` method is not available in v0.8.0.
+
 ## List Inputs, Filters, and Counts[​](#list-inputs-filters-and-counts "Direct link to List Inputs, Filters, and Counts")
 
 The standard list input contains a JSON SQLC filter, page limit, page offset, and server-owned force filters:
@@ -4726,7 +4754,7 @@ SQLH returns a `ListOutput` value:
 }
 ```
 
-The default list operation applies the same user filter, force filters, and delete scope to the query and count. It applies ordering, grouping, and pagination only to the row query. The count ignores those row-only modifiers.
+The default list applies user filters, force filters, delete scope, and query modifiers to both the row and count builders. Only the row builder receives pagination. SQLR `Count` removes ordering, limit, offset, and locking, but preserves grouping and HAVING.
 
 ### Force Filters[​](#force-filters "Direct link to Force Filters")
 
@@ -5298,7 +5326,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```
-go get github.com/gosoline-project/sqlr@v0.9.0
+go get github.com/gosoline-project/sqlr@v0.9.1
 ```
 
 Then import the package in your Go code:
@@ -6519,7 +6547,7 @@ err := client.WithTx(ctx, func(tx sqlc.Tx) error {
 })
 ```
 
-The lock applies to rows read by the SELECT statement and its joins. `Preload()` uses separate statements, so preloaded rows are not locked by the parent query. `Count()` removes `FOR UPDATE` because a count must not lock rows.
+`ForUpdate()` locks rows from the root SELECT, its joins, and separate `Preload()` SELECTs in the same transaction. This includes nested and many-to-many preloads. `Count()` removes `FOR UPDATE` because a count must not lock rows.
 
 WHERE conditions use the same `sqlc.Col()` expression API from the [`sqlc` package](/docs/pr-4/how-to/databases-sql/sqlc/.md):
 
@@ -8208,7 +8236,7 @@ func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
 }
 ```
 
-For client errors with a specific status code, use `GetErrorHandler()` — this returns a `Response` with `nil` error (a handled error):
+For a client error with a specific status code, return `nil` and an error wrapped with `NewErrorWithStatus`:
 
 ```
 func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
@@ -8217,7 +8245,7 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.R
 
     if !ok {
 
-        return httpserver.GetErrorHandler()(http.StatusNotFound, errors.New("user not found")), nil
+        return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
 
     }
 
@@ -8226,7 +8254,7 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.R
 }
 ```
 
-The key pattern: return a `Response` with `nil` error for **handled** errors, and `nil, error` for **unexpected** errors.
+The error middleware maps both types of errors to HTTP responses. Use `NewErrorWithStatus` for expected client errors and return unwrapped errors for unexpected failures.
 
 If middleware or lower-level code attaches an error to the Gin context and needs a specific status code, wrap it with `NewErrorWithStatus`:
 
@@ -8427,7 +8455,7 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.R
 
 	if !ok {
 
-		return httpserver.GetErrorHandler()(http.StatusNotFound, errors.New("user not found")), nil
+		return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
 
 	}
 
@@ -9144,7 +9172,7 @@ httpserver:
 | --------- | ------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `privacy` | string | `"private"` | Error detail policy for 5xx responses. Use `"private"` to hide internal details, or `"public"` to return the original error message. |
 
-With the default `private` setting, internal 5xx errors return `{"err":"internal server error"}`. Status errors below 500 still expose their message, so client errors returned through `NewErrorWithStatus` or `GetErrorHandler()(status, err)` remain useful to API clients.
+With the default `private` setting, internal 5xx errors return `{"err":"internal server error"}`. Errors below 500 wrapped with `NewErrorWithStatus` still expose their message to API clients.
 
 Set `privacy` to `public` only when exposing internal 5xx error messages is intentional:
 
@@ -9560,7 +9588,7 @@ httpserver:
 
 ## Error handling patterns[​](#error-handling-patterns "Direct link to Error handling patterns")
 
-Handlers distinguish between client errors (returned as structured responses) and internal errors (returned as Go errors). By default, internal errors return a sanitized `{"err":"internal server error"}` response while the server logs the actual error:
+Handlers wrap expected client errors with an HTTP status and return other errors unchanged. The default error middleware hides internal error details from clients:
 
 ```
 func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (httpserver.Response, error) {
@@ -9571,7 +9599,7 @@ func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (h
 
         if isBadRequest(err) {
 
-            return httpserver.GetErrorHandler()(http.StatusBadRequest, err), nil
+            return nil, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
 
         }
 
@@ -9637,7 +9665,7 @@ Raise `max_body_bytes` for APIs that intentionally accept larger uploads, or set
 | Shared input types                                 | Multiple handlers accept the same URI params                 |
 | Mixed binding (`uri` + `json` + `form` + `header`) | Endpoints that accept path params + query/body/header values |
 | `BindSseN` for SSE                                 | Real-time streaming endpoints                                |
-| `GetErrorHandler()(status, err)`                   | Client errors with specific status codes                     |
+| `nil, NewErrorWithStatus(status, err)`             | Client errors with specific status codes                     |
 | `nil, error`                                       | Unexpected/internal errors (500)                             |
 | Compression exclusion for SSE                      | Always exclude SSE paths from gzip                           |
 
@@ -17452,6 +17480,8 @@ This guide explains how to move an existing entity API to the typed SQLH CRUD AP
 
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations. It must not replace domain rules with generic CRUD behavior.
 
+This guide targets SQLH v0.8.0 and SQLR v0.9.1. SQLH requires Go 1.27.0 or newer.
+
 ## 1. Review the Current API[​](#1-review-the-current-api "Direct link to 1. Review the Current API")
 
 Before changing code, record the current behavior:
@@ -17673,6 +17703,8 @@ A custom operation that bypasses the default builder must request the same assoc
 
 Use a custom `PatchOperation` only when the complete-input pipeline cannot represent the old API. It replaces this pipeline inside SQLH's transaction, and `TxRunner` still wraps the operation. Use the supplied transaction and repository, and implement validation, association selection, persistence, and output mapping.
 
+In SQLH v0.8.0, custom PATCH operations read the parsed document from `input.Document`. Do not call `input.Document()`.
+
 ## 6. Preserve List Compatibility[​](#6-preserve-list-compatibility "Direct link to 6. Preserve List Compatibility")
 
 Use the `ProjectListInput` type above for native SQLC JSON filters, pagination, and force filters. Embedding `sqlh.ListInput` supplies standard implementations only. If `LegacyFilter` changes filter behavior, override `ApplyFilters` and any other needed phase.
@@ -17726,11 +17758,11 @@ Use `DeleteScope` to hide inactive rows and a custom `Delete` callback for soft 
 
 Use `Identity` when a public route ID differs from the stored SQL key. Distinguish the public `Id` type from stored key type `K`.
 
-If both IDs use the same representation, validate or convert the public ID to `K`. If the public ID has its own column, query that column directly and return the entity with its stored `K`; do not force a conversion to `K`.
+If both IDs use the same representation, validate or convert the public ID to `K`. If the public ID has its own column, query that column directly and return the entity with its stored `K`. Do not force a conversion to `K`.
 
 The callback receives the transaction, transaction-aware repository, public ID, scope, and builder. Query through that repository and transaction, add the public-ID predicate, apply the supplied scope and builder, and return `sqlr.ErrNotFound` when no row matches.
 
-Do not drop the builder. Update and delete lookups use it for relation preloads and root-row `SELECT FOR UPDATE`. Preloaded child queries are separate and are not locked by that root statement. Add child locking only when existing domain behavior requires it.
+Do not drop the builder. Update and delete lookups use it for relation preloads and `FOR UPDATE`. SQLR locks root and preloaded rows in the same transaction, including nested and many-to-many preloads.
 
 ## 8. Preserve Transactions, Background Work, and Events[​](#8-preserve-transactions-background-work-and-events "Direct link to 8. Preserve Transactions, Background Work, and Events")
 

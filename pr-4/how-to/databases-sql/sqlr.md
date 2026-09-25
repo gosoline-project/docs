@@ -7,7 +7,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```
-go get github.com/gosoline-project/sqlr@v0.9.0
+go get github.com/gosoline-project/sqlr@v0.9.1
 ```
 
 Then import the package in your Go code:
@@ -1228,7 +1228,7 @@ err := client.WithTx(ctx, func(tx sqlc.Tx) error {
 })
 ```
 
-The lock applies to rows read by the SELECT statement and its joins. `Preload()` uses separate statements, so preloaded rows are not locked by the parent query. `Count()` removes `FOR UPDATE` because a count must not lock rows.
+`ForUpdate()` locks rows from the root SELECT, its joins, and separate `Preload()` SELECTs in the same transaction. This includes nested and many-to-many preloads. `Count()` removes `FOR UPDATE` because a count must not lock rows.
 
 WHERE conditions use the same `sqlc.Col()` expression API from the [`sqlc` package](/docs/pr-4/how-to/databases-sql/sqlc/.md):
 

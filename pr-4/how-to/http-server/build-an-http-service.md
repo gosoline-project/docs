@@ -431,7 +431,7 @@ func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
 }
 ```
 
-For client errors with a specific status code, use `GetErrorHandler()` — this returns a `Response` with `nil` error (a handled error):
+For a client error with a specific status code, return `nil` and an error wrapped with `NewErrorWithStatus`:
 
 ```
 func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
@@ -440,7 +440,7 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.R
 
     if !ok {
 
-        return httpserver.GetErrorHandler()(http.StatusNotFound, errors.New("user not found")), nil
+        return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
 
     }
 
@@ -449,7 +449,7 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.R
 }
 ```
 
-The key pattern: return a `Response` with `nil` error for **handled** errors, and `nil, error` for **unexpected** errors.
+The error middleware maps both types of errors to HTTP responses. Use `NewErrorWithStatus` for expected client errors and return unwrapped errors for unexpected failures.
 
 If middleware or lower-level code attaches an error to the Gin context and needs a specific status code, wrap it with `NewErrorWithStatus`:
 
@@ -650,7 +650,7 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.R
 
 	if !ok {
 
-		return httpserver.GetErrorHandler()(http.StatusNotFound, errors.New("user not found")), nil
+		return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
 
 	}
 

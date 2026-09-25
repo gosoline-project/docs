@@ -4,6 +4,8 @@ This guide explains how to move an existing entity API to the typed SQLH CRUD AP
 
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations. It must not replace domain rules with generic CRUD behavior.
 
+This guide targets SQLH v0.8.0 and SQLR v0.9.1. SQLH requires Go 1.27.0 or newer.
+
 ## 1. Review the Current API[​](#1-review-the-current-api "Direct link to 1. Review the Current API")
 
 Before changing code, record the current behavior:
@@ -225,6 +227,8 @@ A custom operation that bypasses the default builder must request the same assoc
 
 Use a custom `PatchOperation` only when the complete-input pipeline cannot represent the old API. It replaces this pipeline inside SQLH's transaction, and `TxRunner` still wraps the operation. Use the supplied transaction and repository, and implement validation, association selection, persistence, and output mapping.
 
+In SQLH v0.8.0, custom PATCH operations read the parsed document from `input.Document`. Do not call `input.Document()`.
+
 ## 6. Preserve List Compatibility[​](#6-preserve-list-compatibility "Direct link to 6. Preserve List Compatibility")
 
 Use the `ProjectListInput` type above for native SQLC JSON filters, pagination, and force filters. Embedding `sqlh.ListInput` supplies standard implementations only. If `LegacyFilter` changes filter behavior, override `ApplyFilters` and any other needed phase.
@@ -278,11 +282,11 @@ Use `DeleteScope` to hide inactive rows and a custom `Delete` callback for soft 
 
 Use `Identity` when a public route ID differs from the stored SQL key. Distinguish the public `Id` type from stored key type `K`.
 
-If both IDs use the same representation, validate or convert the public ID to `K`. If the public ID has its own column, query that column directly and return the entity with its stored `K`; do not force a conversion to `K`.
+If both IDs use the same representation, validate or convert the public ID to `K`. If the public ID has its own column, query that column directly and return the entity with its stored `K`. Do not force a conversion to `K`.
 
 The callback receives the transaction, transaction-aware repository, public ID, scope, and builder. Query through that repository and transaction, add the public-ID predicate, apply the supplied scope and builder, and return `sqlr.ErrNotFound` when no row matches.
 
-Do not drop the builder. Update and delete lookups use it for relation preloads and root-row `SELECT FOR UPDATE`. Preloaded child queries are separate and are not locked by that root statement. Add child locking only when existing domain behavior requires it.
+Do not drop the builder. Update and delete lookups use it for relation preloads and `FOR UPDATE`. SQLR locks root and preloaded rows in the same transaction, including nested and many-to-many preloads.
 
 ## 8. Preserve Transactions, Background Work, and Events[​](#8-preserve-transactions-background-work-and-events "Direct link to 8. Preserve Transactions, Background Work, and Events")
 
