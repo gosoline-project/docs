@@ -18,15 +18,14 @@ CRUD definitions use typed callbacks and transaction-aware repositories instead 
 
 ## Getting Started
 
-Add the SQLH version that provides the typed CRUD API to your Go module:
+Install SQLH v0.8.0:
 
 ```bash
-go get github.com/gosoline-project/sqlh@v0.7.2-0.20260914134957-1ff7ba06abce
+go get github.com/gosoline-project/sqlh@v0.8.0
 ```
 
-Use the released SQLH version that provides this API when one is available.
-
-The typed API uses `github.com/gosoline-project/httpserver`, `github.com/gosoline-project/sqlc`, and `github.com/gosoline-project/sqlr`. Use compatible versions of all three packages. The examples use the `sqlc` `v0.4.0` and `sqlr` `v0.9.0` APIs.
+SQLH v0.8.0 uses `httpserver` v0.6.4, `sqlc` v0.4.0, and `sqlr` v0.9.1. Use these versions for the examples.
+SQLH v0.8.0 requires Go 1.27.0 or newer.
 
 Then import the package:
 
@@ -99,19 +98,17 @@ The generated routes are:
 
 For example, version `1` and entity name `author` produce `/v1/author` and `/v1/authors`.
 
-The default delete route uses `DeleteNoContent`. Use manual route registration with `handler.Delete` when the API must return the deleted entity:
+The default delete route uses `DeleteNoContent`. Use `NewCrudHandler` for a delete route that returns the entity:
+
+<CodeBlock title="main.go" language="go" snippet="manual handler">{CrudMain}</CodeBlock>
 
 ```go
-router.HandleWith(httpserver.With(resource.NewHandler, func(router *httpserver.Router, handler *resource.CrudHandler) {
+router.HandleWith(httpserver.With(NewAuthorHandler(), func(router *httpserver.Router, handler *AuthorCrudHandler) {
     router.DELETE("/v1/resources/:id", httpserver.Bind(handler.Delete, httpserver.NoBodyBinding{}))
 }))
 ```
 
-`handler.Delete` requires `CrudDefinition.DeleteOutput`. You can assign the normal output mapper when both responses have the same shape:
-
-```go
-definition.DeleteOutput = definition.Output
-```
+`NewAuthorHandler` sets `DeleteOutput` to the normal output mapper. Without `DeleteOutput`, `handler.Delete` cannot return a body.
 
 ### Register Custom Paths
 
@@ -119,7 +116,7 @@ Use `NewCrudHandler` when an existing API has different paths, singular and plur
 
 ```go
 func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-    router.HandleWith(httpserver.With(resource.NewHandler, func(router *httpserver.Router, handler *resource.CrudHandler) {
+    router.HandleWith(httpserver.With(NewAuthorHandler(), func(router *httpserver.Router, handler *AuthorCrudHandler) {
         router.POST("/v1/resource", httpserver.Bind(handler.Create))
         router.POST("/v1/resources", httpserver.Bind(handler.List))
         router.GET("/v1/resources/:id", httpserver.Bind(handler.Read, httpserver.NoBodyBinding{}))
@@ -241,6 +238,8 @@ The key is a path in the original patch document. The value is an SQLR relation 
 
 A custom `PatchOperation` replaces the complete default patch pipeline. Use it only when the default complete-input mapping and association selection cannot represent the API contract.
 
+A custom `PatchOperation` receives `*sqlh.PatchInput[Id]`. Read the parsed `sqlh.PatchDocument` from `input.Document`. Use `input.Document.MergeInto(completeInput)` to apply the patch. Use `input.Document.Has("status")` to check whether the request supplied a field. The old `input.Document()` method is not available in v0.8.0.
+
 ## List Inputs, Filters, and Counts
 
 The standard list input contains a JSON SQLC filter, page limit, page offset, and server-owned force filters:
@@ -284,7 +283,7 @@ SQLH returns a `ListOutput` value:
 }
 ```
 
-The default list operation applies the same user filter, force filters, and delete scope to the query and count. It applies ordering, grouping, and pagination only to the row query. The count ignores those row-only modifiers.
+The default list applies user filters, force filters, delete scope, and query modifiers to both the row and count builders. Only the row builder receives pagination. SQLR `Count` removes ordering, limit, offset, and locking, but preserves grouping and HAVING.
 
 ### Force Filters
 

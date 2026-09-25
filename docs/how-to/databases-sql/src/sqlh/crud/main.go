@@ -98,6 +98,23 @@ func NewAuthorCrud() httpserver.RegisterFactoryFunc {
 }
 
 // snippet-end: crud definition
+// snippet-start: manual handler
+type AuthorCrudHandler = sqlh.CrudHandler[int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, sqlh.ListInput, AuthorOutput]
+
+func NewAuthorHandler() httpserver.HandlerFactory[AuthorCrudHandler] {
+	transformer := &AuthorMapper{}
+	definition := sqlh.NewCrudDefinition(
+		transformer.TransformCreateInput,
+		transformer.TransformUpdateInput,
+		transformer.TransformPatchInputFromEntity,
+		transformer.TransformOutput,
+	)
+	definition.DeleteOutput = definition.Output
+
+	return sqlh.NewCrudHandler(sqlh.SimpleCrudDefinition(definition))
+}
+
+// snippet-end: manual handler
 
 //go:embed config.dist.yml
 var config embed.FS

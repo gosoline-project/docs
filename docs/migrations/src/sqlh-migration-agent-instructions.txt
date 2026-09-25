@@ -7,12 +7,14 @@ validation, delete rules, filters, counts, associations, IDs, timestamps, events
 
 Use these downloaded sources as the API contract:
 
-- `github.com/gosoline-project/sqlh` at `v0.7.2-0.20260914134957-1ff7ba06abce`
-- `github.com/gosoline-project/sqlr` at `v0.9.0`
+- `github.com/gosoline-project/sqlh` at `v0.8.0`
+- `github.com/gosoline-project/sqlr` at `v0.9.1`
 - `github.com/gosoline-project/sqlc` at `v0.4.0`
-- `github.com/gosoline-project/httpserver` at `v0.6.0`
+- `github.com/gosoline-project/httpserver` at `v0.6.4`
 
-Do not upgrade dependencies or replace imports globally unless the service requires it. Do not use removed SQLH APIs such as
+SQLH v0.8.0 requires Go 1.27.0 or newer.
+
+Upgrade only dependencies required by these versions. Do not change unrelated imports. Do not use removed SQLH APIs:
 `Transformer`, `JsonResultsTransformer`, `WithTx`, or `BindTx*`.
 
 ## Ordered migration procedure
@@ -193,6 +195,9 @@ Use a custom `PatchOperation` only when the complete-input pipeline cannot repre
 PATCH pipeline inside SQLH's transaction, and `TxRunner` still wraps the operation. Use the supplied transaction and
 repository, and implement validation, association selection, persistence, and output mapping.
 
+In SQLH v0.8.0, access the parsed `PatchDocument` through `input.Document`, not `input.Document()`. Call
+`input.Document.MergeInto(completeInput)` to apply the patch. Use `input.Document.Has("field")` to select a supplied path.
+
 ### 5. Preserve list filters and counts
 
 Use the `ProjectListInput` pattern above for native SQLC JSON filters, pagination, and force filters. Embedding
@@ -260,9 +265,9 @@ The callback receives the transaction, transaction-aware repository, public ID, 
 repository and transaction, add the public-ID predicate, apply the supplied scope and builder, and return `sqlr.ErrNotFound`
 when no row matches.
 
-Do not drop the builder. Update and delete lookups use it for relation preloads and root-row `SELECT FOR UPDATE`. Preloaded
-child queries are separate and are not locked by that root statement. Add child locking only when existing domain behavior
-requires it.
+Do not drop the builder. Update and delete lookups use it for relation preloads and `FOR UPDATE`. SQLR locks root
+and preloaded rows in the same transaction, including nested and many-to-many preloads. Add separate locks only when
+other queries need them.
 
 ### 7. Preserve transactions, background work, and events
 
