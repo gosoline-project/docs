@@ -15,7 +15,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlr@v0.8.0
+go get github.com/gosoline-project/sqlr@v0.9.1
 ```
 
 Then import the package in your Go code:
@@ -165,6 +165,7 @@ The `Repository` interface provides:
 | `Create(ctx, entity, opts...)` | Inserts the entity and any eligible populated association fields; optional create builder methods can limit, omit, or disable association persistence for a call, and can request a post-create reload with preloads |
 | `Read(ctx, id, opts...)` | Loads one entity by primary key, with optional `QueryBuilderRead` relation loading |
 | `Query(ctx, opts...)` | Loads entities matching query conditions |
+| `Count(ctx, qb)` | Counts the rows selected by a query builder. It preserves joins, filters, grouping, and `HAVING`, but ignores ordering, pagination, and row locking. Pass `nil` to count all rows. |
 | `Update(ctx, entity, opts...)` | Updates only the base entity row by default; associations remain untouched unless explicitly synchronized per call or via `sync:update` tags, many-to-many updates stay link-only unless `SyncMany2many()` is used, and `Preload()` can request a post-update reload of relations |
 | `Delete(ctx, id, opts...)` | Deletes the entity by primary key; by default also cleans up owned associations, and delete builder methods can narrow or disable that cleanup |
 | `Close()` | Releases resources (prepared statements, etc.) |
@@ -742,6 +743,28 @@ The `QueryBuilderSelect` supports:
 | `Offset(n)` | Skips the first n results |
 | `GroupBy(cols...)` | Sets the GROUP BY clause |
 | `Having(condition, params...)` | Adds a HAVING condition |
+| `ForUpdate()` | Adds `FOR UPDATE` as the final SQL clause and locks selected rows until the current transaction ends |
+
+`ForUpdate()` mutates `QueryBuilderSelect` and returns the same builder. Use it with `RepositoryTx.Query()` inside a transaction when a read must protect the rows before a later write:
+
+```go
+err := client.WithTx(ctx, func(tx sqlc.Tx) error {
+    transaction := sqlr.NewTx(tx)
+    entities, err := repositoryTx.Query(transaction, func(qb *sqlr.QueryBuilderSelect) {
+        qb.Where(sqlc.Col("status").Eq("scheduled")).
+            Limit(10).
+            ForUpdate()
+    })
+    if err != nil {
+        return err
+    }
+
+    _ = entities
+    return nil
+})
+```
+
+`ForUpdate()` locks rows from the root SELECT, its joins, and separate `Preload()` SELECTs in the same transaction. This includes nested and many-to-many preloads. `Count()` removes `FOR UPDATE` because a count must not lock rows.
 
 WHERE conditions use the same `sqlc.Col()` expression API from the [`sqlc` package](./sqlc.mdx):
 
@@ -750,6 +773,24 @@ qb.Where(sqlc.Col("status").Eq("published"))
 qb.Where(sqlc.Col("age").Gt(18))
 qb.Where(sqlc.And(sqlc.Col("a").Eq(1), sqlc.Col("b").Eq(2)))
 ```
+
+## Counting Query Results
+
+Use `Count()` when an endpoint needs a total beside a paginated result set:
+
+```go
+qb := sqlr.NewQueryBuilderSelect().
+    Where(sqlc.Col("status").Eq("published")).
+    LeftJoin("Author").
+    GroupBy("status").
+    Having(sqlc.Col("*").Count().Gt(0))
+
+total, err := repo.Count(ctx, qb)
+```
+
+`Count()` preserves joins, `WHERE`, `GROUP BY`, and `HAVING`. It removes `ORDER BY`, `LIMIT`, `OFFSET`, and `FOR UPDATE` before it builds the count query. A grouped query counts the rows in its grouped result. Pass `nil` to count all rows.
+
+Use `RepositoryTx.Count(ttx, qb)` when the count must use an active transaction. SQLH uses the same filter and delete scope for its list query and count operation.
 
 ## Eager Loading with Preload
 

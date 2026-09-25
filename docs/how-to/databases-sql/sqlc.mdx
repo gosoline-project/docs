@@ -14,7 +14,7 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlc@v0.3.0
+go get github.com/gosoline-project/sqlc@v0.4.0
 ```
 
 Then import the package in your Go code:
@@ -185,6 +185,34 @@ Use `Query()` when you want to iterate row-by-row. The returned `*sqlc.Rows` sup
 
 <CodeBlock title="main.go" language="go" snippet="query rows">{Main}</CodeBlock>
 
+## SELECT FOR UPDATE
+
+`ForUpdate()` adds a typed `FOR UPDATE` clause to a SELECT query. The database holds the selected row locks until the current transaction ends. Outside a transaction, the database releases the locks when the statement ends.
+
+`ForUpdate()` follows the immutable builder pattern. It returns a new builder and does not change the original query. SQLC writes the clause after `LIMIT` and `OFFSET`:
+
+```go
+query := sqlc.From("experiments").
+    Where(sqlc.Col("status").Eq("scheduled")).
+    Limit(10).
+    Offset(20).
+    ForUpdate()
+
+sql, args, err := query.ToSql()
+// sql: SELECT * FROM `experiments` WHERE `status` = ? LIMIT ? OFFSET ? FOR UPDATE
+// args: []any{"scheduled", 10, 20}
+```
+
+The generic builder exposes the same method:
+
+```go
+query := sqlc.FromG[Experiment]("experiments").
+    Where(sqlc.Col("status").Eq("scheduled")).
+    ForUpdate()
+```
+
+Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. SQLR v0.9.1 also applies a repository query's `ForUpdate()` setting to its preloads.
+
 ## UPDATE Operations
 
 Use `Update()` to create an UPDATE builder. Chain `Set()` for column values and `Where()` for conditions:
@@ -250,5 +278,6 @@ When creating a client from a wrapped handle, make sure the `QueryBuilderConfig`
 ## Integration Notes
 
 - `sqlr.RepositoryTx` can reuse prepared statements inside transactions, but the repository client must come from the same connection source that opens the transaction.
-- `sqlh.WithTx()` currently opens request-scoped transactions from the `default` sqlc client. If your handlers or repositories use another named client, use matching middleware or a custom transaction setup.
-- In `sqlh`, the request-scoped transaction created by `WithTx()` is consumed by the `BindTx*` helpers. Generated CRUD handlers use repositories directly and do not automatically switch to that request transaction.
+- SQLH creates one transaction for each default CRUD operation and uses a transaction-aware SQLR repository built from the same SQL client.
+- For custom SQLH operations, use `sqlh.TxRunner` or `sqlc.Client.WithTx()` and pass the active transaction to SQLR or SQLC operations.
+- SQLR `Count()` strips row locking and pagination. Apply the same filters and scope to the list query and count query.
