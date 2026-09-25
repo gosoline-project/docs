@@ -46,6 +46,7 @@ Preserve each hook's query, preload, and synchronization behavior.
 
 An old transformer can return an explicit `httpserver.Response`, which bypasses response negotiation.
 Typed outputs use httpserver negotiation and can return 406 for an unsupported `Accept`.
+When JSON is the only registered representation and negotiated responses are acceptable, bind typed output directly. Do not add a JSON-only wrapper.
 Preserve status, headers, content type, and `Accept` behavior with an explicit response or route wrapper when needed.
 Before replacing a v0.7.x `WithRepositoryFactory`, inspect the returned repository and every wrapper method for side effects.
 The v0.8 `WithRepositoryTxFactory` supplies a transaction-aware SQLR repository, but it does not migrate those effects.
