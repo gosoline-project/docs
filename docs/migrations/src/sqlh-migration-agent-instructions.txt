@@ -1,9 +1,10 @@
-Migrate this service from custom CRUD handlers to the typed, transaction-aware SQLH API.
+Migrate this service's existing SQLH v0.7.x CRUD or custom handlers to the typed, transaction-aware SQLH v0.8.0 API.
 
 ## Mission and pinned API
 
-Preserve the public API and domain behavior. Keep routes, request fields, response envelopes, status codes, authorization,
-validation, delete rules, filters, counts, associations, IDs, timestamps, events, and transaction guarantees.
+Preserve the public API and domain behavior.
+Keep routes, request fields, response envelopes, statuses, authorization, validation, delete rules, filters, counts, associations, IDs, timestamps, events, and transaction guarantees.
+Record `Content-Type`, `Accept`, and response negotiation behavior.
 
 Use these downloaded sources as the API contract:
 
@@ -11,26 +12,49 @@ Use these downloaded sources as the API contract:
 - `github.com/gosoline-project/sqlr` at `v0.9.1`
 - `github.com/gosoline-project/sqlc` at `v0.4.0`
 - `github.com/gosoline-project/httpserver` at `v0.6.4`
+- `github.com/justtrackio/gosoline` at `v0.63.5`
 
-SQLH v0.8.0 requires Go 1.27.0 or newer.
+SQLH v0.8.0 declares Go 1.27.0.
+Its `go.mod` requires SQLR v0.9.1, SQLC v0.4.0, httpserver v0.6.4, and Gosoline v0.63.5.
+Keep compatible newer versions selected by Go.
+Do not downgrade dependencies or change unrelated imports.
 
-Upgrade only dependencies required by these versions. Do not change unrelated imports. Do not use removed SQLH APIs:
-`Transformer`, `JsonResultsTransformer`, `WithTx`, or `BindTx*`.
+Do not carry over removed v0.7.x APIs:
+`Transformer`, `JsonResultsTransformer`, `WithTx`, `BindTx*`, `WithRepositoryFactory`, or `Builder*Aware` hooks.
 
 ## Ordered migration procedure
 
 ### 1. Capture the existing contract
 
-Read local instructions, `go.mod`, route registration, generated API sources, and persistence code. Create one parity matrix
-for every CRUD endpoint.
+Read local instructions, `go.mod`, route registration, generated API sources, and persistence code.
+Create a parity matrix for every CRUD endpoint.
 
-Record the method, path, middleware, authorization, request body, response envelope, status codes, errors, and not-found
-behavior. Also record filters, joins, grouping, ordering, pagination, counts, association rules, public IDs, stored keys,
-timestamps, nullable fields, events, rollback behavior, and background behavior.
+Record paths, methods, middleware, authorization, request bodies, response envelopes, statuses, errors, and not-found behavior.
+Record content negotiation, filters, joins, grouping, ordering, pagination, counts, associations, IDs, timestamps, and nullability.
+Also record events, rollback behavior, background behavior, and external side effects.
 
-Keep equivalent coverage or add parity checks before removing old handlers. Search for old SQLH symbols, custom handlers,
-repository factories, relationship mappers, soft-delete scopes, generated artifacts, and event or outbox paths. Do not change
-unrelated application code.
+Search for old SQLH symbols, custom handlers, repository factories and wrappers, relationship mappers, soft-delete scopes, generated artifacts, and event or outbox paths.
+For v0.7.1, inspect every `Transformer`, `JsonResultsTransformer`, `Builder*Aware` hook, `WithTx`/`BindTx*` call, and `WithRepositoryFactory`.
+
+Map `TransformCreateInput` to `CreateInput`, `TransformUpdateInput` to `UpdateInput`, and `TransformOutput` or `RenderEntityResponse` to `Output`.
+Map `RenderQueryResponse` through per-entity `Output` callbacks.
+Keep a route wrapper when the old list envelope differs from `ListOutput[O]`.
+SQLH v0.7.1 had no built-in PATCH route or patch mapper.
+Preserve a custom PATCH route with a custom operation or a complete-input mapper.
+Move every old `Builder*Aware` rule to relation tags, list or identity callbacks, or a full operation.
+Preserve each hook's query, preload, and synchronization behavior.
+
+An old transformer can return an explicit `httpserver.Response`, which bypasses response negotiation.
+Typed outputs use httpserver negotiation and can return 406 for an unsupported `Accept`.
+Preserve status, headers, content type, and `Accept` behavior with an explicit response or route wrapper when needed.
+Before replacing a v0.7.x `WithRepositoryFactory`, inspect the returned repository and every wrapper method for side effects.
+The v0.8 `WithRepositoryTxFactory` supplies a transaction-aware SQLR repository, but it does not migrate those effects.
+Preserve provisioning, data copies, and storage cleanup at the service or route boundary when their order or failure behavior matters.
+SQLH transactions cannot roll back blob-store or other external effects, and MySQL DDL may commit implicitly.
+Keep legacy Create/Delete handlers outside the SQLH CRUD handler when that order matters.
+Use `NewCrudHandler` to manually register only the other SQLH routes.
+Keep the old order, error behavior, and transaction boundaries.
+Stop when the old side effects cannot be preserved without a domain decision.
 
 ### 2. Preserve the SQLR model and tags
 
@@ -140,8 +164,11 @@ if err := binding.Validator.ValidateStruct(input); err != nil {
 }
 ```
 
-This reuses `binding` tags and registered Gin field and struct validators. `validation.NewError` maps the failure to HTTP 400.
+This reuses `binding` tags and registered Gin field and struct validators.
+`validation.NewError` maps the failure to HTTP 400.
 A custom `UpdateOperation` must perform this validation itself.
+The mapping callbacks do not receive a transaction or repository.
+Use a `*Operation` callback for database reads or writes that need SQLH's active transaction.
 
 ### 4. Preserve JSON Merge Patch and associations
 
@@ -162,9 +189,11 @@ An explicit null clears a pointer or nullable value. Use a pointer or nullable w
 non-nullable scalar, JSON null becomes the field's zero value during merge. Required or domain validation must reject it when
 the old contract forbids null.
 
-An explicit null or empty selected collection clears that collection. A selected HasOne null clears its owned child. A
-nullable `BelongsTo` also needs mapper logic that clears its foreign key because SQLR skips a nil target. An omitted relation is
-not synchronized merely because the complete input contains its current value.
+An explicit null or empty selected collection clears that collection.
+A selected HasOne null clears its owned child.
+For a selected, directly mapped BelongsTo path, SQLH also clears its nullable foreign key when PATCH sets it to null.
+For PUT or trigger-driven changes, the mapper must clear the foreign key because SQLR skips a nil target.
+An omitted relation is not synchronized merely because the complete input contains its current value.
 
 For direct child relations, an existing child ID updates that child and an ID-less child creates one. A missing HasMany child
 can be deleted when the selected sync path requires it. For many-to-many relations, an existing ID is link-only by default.
@@ -205,13 +234,21 @@ Use the `ProjectListInput` pattern above for native SQLC JSON filters, paginatio
 and any other needed phase. A custom list input must implement `ApplyFilters`, `ApplyQueryModifiers`, `ApplyPagination`,
 `ValidatePagination`, and `GetForceFilters`.
 
-`ApplyFilters` handles user filters. Keep server-owned force filters in the embedded carrier because SQLH applies them through
-the shared query scope. For custom `Query` and `Count` callbacks, call `QueryPlan.ApplyBuilder` and then
-`QueryPlan.ApplyScope`.
-
-The query callback then applies query modifiers and pagination, in that order. The count callback applies neither. Use the same
-user-filter, force-filter, and delete scope for rows and counts. Keep grouping, ordering, and pagination out of the count unless
-the old count contract requires matching cardinality.
+`ApplyFilters` handles user filters.
+Keep server-owned force filters in the embedded carrier because SQLH applies them through the shared query scope.
+Custom `Query` and `Count` callbacks must call `QueryPlan.ApplyBuilder` and then `QueryPlan.ApplyScope`.
+Return a scope error before repository work.
+Custom `Query` then applies query modifiers and pagination, in that order.
+Custom `Count` must not apply query modifiers or pagination.
+The default count applies query modifiers but not pagination.
+SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING.
+Implement a custom count when joins or grouping change the old total.
+Use the same user-filter, force-filter, and delete scope for rows and counts.
+SQLH v0.7.1 `InputQuery` contained only `filter`; v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`.
+Treat this as an API change when the old route did not expose pagination.
+To preserve the old input and unknown-field behavior, use a custom `ListInputSource` with only the old fields.
+Implement every required phase, with no-op query-modifier and pagination phases and no-op pagination validation when absent.
+Instantiate `CrudDefinition` with all type parameters because `NewCrudDefinition` fixes the input type to `sqlh.ListInput`.
 
 `CrudHandler.List` and `ListOperation` always return `ListOutput[O]` with `Results` and `Total`. For another legacy envelope,
 call `handler.List` from a typed wrapper and map those fields, then register the wrapper manually:
@@ -248,39 +285,46 @@ row and count queries.
 - `POST /v{version}/{plural-entity}`
 
 Use `NewCrudHandler` and manual registration when a path, method, middleware, binder, response envelope, or status differs.
-The standard delete route calls `handler.DeleteNoContent` and returns 204. Physical deletion is the default. Use
-`DeleteScope` to hide inactive rows and a custom `Delete` callback for soft deletion or other domain rules. The scope applies
-to default read, list, count, update, and delete lookups.
+`WithCrudHandlers` in SQLH v0.7.1 did not register a PATCH route.
+SQLH v0.8.0 adds that route.
+Both versions return 204 for the standard DELETE route.
+Do not register PATCH unless it is part of the public API.
+The standard delete route calls `handler.DeleteNoContent`. Physical deletion is the default.
+Use `DeleteScope` to hide inactive rows and a custom `Delete` callback for soft deletion or other domain rules.
+The scope applies to default read, list, count, update, PATCH, and delete lookups.
 
 When DELETE returns a body, set `definition.DeleteOutput = definition.Output` and manually bind `handler.Delete` on the old
 route. `DeleteNoContent` never calls `DeleteOutput`.
 
-Use `Identity` when a public route ID differs from the stored SQL key. Distinguish the public `Id` type from stored key type
-`K`.
+Set `Identity` when a public ID uses a non-primary-key column or when public `Id` and stored key `K` have different Go types.
+SQLH rejects differing `Id` and `K` types when `Identity` is nil.
+Use the default lookup only when types and key semantics match.
+In a custom lookup, use the supplied repository and transaction.
+Add the public-ID predicate, apply the supplied scope, return any scope error, and apply the builder.
+Return `sqlr.ErrNotFound` when no row matches.
 
-If both IDs use the same representation, validate or convert the public ID to `K`. If the public ID has its own column, query
-that column directly and return the entity with its stored `K`; do not force a conversion to `K`.
-
-The callback receives the transaction, transaction-aware repository, public ID, scope, and builder. Query through that
-repository and transaction, add the public-ID predicate, apply the supplied scope and builder, and return `sqlr.ErrNotFound`
-when no row matches.
-
-Do not drop the builder. Update and delete lookups use it for relation preloads and `FOR UPDATE`. SQLR locks root
-and preloaded rows in the same transaction, including nested and many-to-many preloads. Add separate locks only when
-other queries need them.
+Do not drop the builder.
+Update, PATCH, and delete lookups use it for relation preloads and `FOR UPDATE`.
+SQLR locks root and preloaded rows in the same transaction, including nested and many-to-many preloads.
 
 ### 7. Preserve transactions, background work, and events
 
-Build `RepositoryTx` from the same `sqlc.Client` that SQLH uses to begin transactions. Use `WithRepositoryTxFactory` and
-`sqlr.NewRepositoryTxWithSettings` for custom repository construction. The default SQLH operation maps output before commit and
-rolls back on operation, association, output, and panic errors.
+Build `RepositoryTx` from the same `sqlc.Client` that SQLH uses to begin transactions.
+Use `WithRepositoryTxFactory` and `sqlr.NewRepositoryTxWithSettings` for custom repository construction.
+The default SQLH operation maps output before commit.
+It rolls back its SQL transaction on operation, association, output, and panic errors.
 
-Each custom `*Operation` receives SQLH's active `sqlr.TTx` and configured repository. Use them for every read and write. An
-override owns authorization, scope, root locking, association selection, and persistence for its named operation.
-
-`UpdateOperation` does not replace the mapper used by default PATCH. `PatchOperation` replaces the default PATCH pipeline inside
-the existing `TxRunner` transaction. `ListOperation` still returns `ListOutput[O]`. Use `TxRunner.InTransaction` for custom
-typed handlers outside a CRUD definition. Do not open a second client or put a transaction in Gin context.
+Each custom `*Operation` runs inside SQLH's `TxRunner` and receives its active `sqlr.TTx` and configured repository.
+Use them for transaction-bound database work.
+SQLH cannot roll back blob-store or other external effects, and MySQL DDL may commit implicitly.
+An override owns authorization, scope, root locking, association selection, and persistence for its operation.
+Remove old `WithTx`/`BindTx*` middleware from migrated CRUD routes.
+SQLH v0.8.0 starts a transaction for each CRUD operation.
+Do not wrap it in another transaction or put a transaction in Gin context.
+`UpdateOperation` does not replace the mapper used by default PATCH.
+`PatchOperation` replaces the default PATCH pipeline inside the existing transaction.
+`ListOperation` still returns `ListOutput[O]`.
+Use `TxRunner.InTransaction` for custom typed handlers outside a CRUD definition.
 
 Keep background transitions in the application repository with explicit transactions. Use `ForUpdate()` when a transition must
 serialize with another writer. Preserve existing retry, idempotency, and reader visibility rules.
@@ -289,8 +333,9 @@ Publish events only at the existing post-commit boundary. For CDC, publish from 
 aggregate with the required active or deleted-row visibility. Preserve soft-delete events, hard-delete tombstones, outbox
 boundaries, and retry behavior. Do not publish a success event from a callback before its SQLH transaction commits.
 
-Preserve the existing SQLC configuration, migration path, and reset behavior. Set MySQL `clientFoundRows: true` when a valid
-unchanged update must count as matched. Without it, SQLR can report `ErrNotFound` for an update that matched a row.
+Preserve the existing SQLC configuration, migration path, and reset behavior.
+Set MySQL `parameters.clientFoundRows` to `"true"` when a valid unchanged update must count as matched.
+Without it, SQLR can report `ErrNotFound` for an update that matched a row.
 
 ### 8. Regenerate and remove old paths
 
@@ -303,6 +348,7 @@ APIs only after parity checks pass.
 Use the repository's normal focused unit, integration, HTTP, rollback, event, and generation checks to prove all of these:
 
 - Routes preserve paths, methods, middleware, authorization, bodies, envelopes, statuses, errors, and not-found behavior.
+- Responses preserve status, headers, content type, and `Accept` behavior.
 - SQLR preserves tables, columns, keys, public-ID lookup, timestamps, nullability, and generated IDs.
 - Create, PUT, PATCH, and delete preserve domain validation and state transitions.
 - Merged PATCH validation returns HTTP 400 before mutation.
@@ -310,10 +356,11 @@ Use the repository's normal focused unit, integration, HTTP, rollback, event, an
 - HasMany and many-to-many behavior preserves child-row and link semantics.
 - Existing many-to-many IDs remain link-only unless full sync is an approved contract.
 - Native and legacy filters preserve joins, grouping, ordering, pagination, empty results, and `Total`.
+- Requests with page or unknown fields preserve the old input and pagination behavior.
 - Row and count scopes match.
 - Soft-delete visibility, delete strategy, default 204 behavior, and body-returning DELETE match.
 - Custom identity applies public-ID lookup, scope, relation builder, and root-row lock.
-- Root writes, association writes, output failures, and panics roll back as required.
+- SQL writes to root and association rows roll back on failure; external side effects preserve their original order and failure behavior.
 - Background transitions preserve transaction and locking behavior.
 - Events occur at the same post-commit boundary with the same visibility and retry behavior.
 - No removed API, Gin transaction context, non-transaction-aware mutation repository, or incomplete list input remains.
@@ -323,7 +370,7 @@ Record every intentional behavior change and the check that proves it.
 
 ## Stop conditions
 
-Stop and request a domain decision when a route or response contract is ambiguous. Also stop when public-ID lookup cannot apply
-the supplied scope or builder safely, complete-input PATCH cannot represent the old semantics, association ID or delete behavior
-conflicts, the repository cannot share SQLH's client, event timing is unclear, generated artifacts would change without approval,
-or the migration needs unrelated refactoring.
+Stop and request a domain decision when a route or response contract is ambiguous.
+Also stop when public-ID lookup cannot apply the supplied scope or builder safely, complete-input PATCH cannot represent old semantics, or association ID or delete behavior conflicts.
+Stop when repository side effects or transaction boundaries cannot be preserved, the repository cannot share SQLH's client, event timing is unclear, or generated artifacts would change without approval.
+Stop when the migration needs unrelated refactoring.
