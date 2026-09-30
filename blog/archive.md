@@ -20,3 +20,8 @@
   [ - ](/docs/blog/gosoline-goes-modular/.md)
   <!-- -->
   [gosoline goes modular: smaller packages, better APIs](/docs/blog/gosoline-goes-modular/.md)
+* [September 30](/docs/blog/gosoline-v0-66-0-stream-processing/.md)
+  <!-- -->
+  [ - ](/docs/blog/gosoline-v0-66-0-stream-processing/.md)
+  <!-- -->
+  [Clearer Stream Processing, Safer Shutdown](/docs/blog/gosoline-v0-66-0-stream-processing/.md)

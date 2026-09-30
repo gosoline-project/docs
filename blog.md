@@ -1,21 +1,24 @@
-## [gosoline goes modular: smaller packages, better APIs](/docs/blog/gosoline-goes-modular/.md)
+## [Clearer Stream Processing, Safer Shutdown](/docs/blog/gosoline-v0-66-0-stream-processing/.md)
 
-June 11, 2026 ·
+September 30, 2026 ·
 
 <!-- -->
 
-4 min read
+7 min read
 
 [![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
 
 [Jan Kamieth](https://github.com/j4k4)
 
-gosoline has grown into a mature application framework that powers production backend systems. It provides the building blocks teams need to run services reliably: application lifecycle management, configuration handling, logging, metrics, tracing, and integrations for many common infrastructure components.
+Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled. The difficult part is making that flow behave predictably when callbacks run concurrently, a partition changes owners, or a deployment interrupts processing.
+
+Gosoline **[v0.66.0](https://github.com/justtrackio/gosoline/releases/tag/v0.66.0)** brings those concerns together in a simpler stream lifecycle. Inputs call processing callbacks directly, concurrency and ordering become explicit transport decisions, and processing drain is separated from transport cleanup. The result is a clearer model for building and operating streaming services.
 
 **Tags:**
 
 * [gosoline](/docs/blog/tags/gosoline/)
-* [modularization](/docs/blog/tags/modularization/)
-* [framework](/docs/blog/tags/framework/)
+* [streaming](/docs/blog/tags/streaming/)
+* [kafka](/docs/blog/tags/kafka/)
+* [lifecycle](/docs/blog/tags/lifecycle/)
 
-[**Read more**](/docs/blog/gosoline-goes-modular/.md)
+[**Read more**](/docs/blog/gosoline-v0-66-0-stream-processing/.md)
