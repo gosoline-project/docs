@@ -99,7 +99,7 @@ This example uses a separate SQS retry queue for application failures, so it als
 
 | Input setting | Default | Purpose |
 |---|---|---|
-| `runner_count` | `1` | Maximum concurrent record callbacks; must be at least `1` |
+| `runner_count` | `1` | Callback concurrency limit for this input instance; in ordered mode, limits concurrently processed partitions. Must be at least `1` |
 | `processing_mode` | `unordered` | `ordered` processes records sequentially within each topic-partition, with concurrency across partitions |
 | `max_poll_records` | `100` | Maximum records returned by one poll; callbacks still receive individual records |
 | `consume_delay` | `0` | Minimum record age before processing |
@@ -107,7 +107,30 @@ This example uses a separate SQS retry queue for application failures, so it als
 | `grace_time` | `10s` | Offset-commit grace window after processing finishes |
 | `start_offset` | `last` | Starting/reset position when the group has no usable committed offset; `first` starts at the beginning |
 
-With several runners in `unordered` mode, records from the same partition may execute concurrently. In `ordered` mode, one partition's records execute sequentially, and runner count bounds concurrency across partitions. Keep callbacks safe for concurrent use even in ordered mode.
+### Runner count and processing order
+
+`runner_count` is a concurrency limit for one Kafka input instance, not a count of consumer-group members or a setting that changes partition assignment. Its effective concurrency depends on `processing_mode`:
+
+- **`unordered`:** each record is a separate work unit. Up to `runner_count` callbacks can execute concurrently, including multiple records from the same partition. Callback completion order is not guaranteed.
+- **`ordered`:** each topic-partition's records from the current poll form one work unit. A runner processes those records sequentially before releasing its slot. At most one callback per partition runs at a time, while different partitions can run concurrently.
+
+In ordered mode, maximum callback concurrency is:
+
+```text
+min(runner_count, assigned partitions with records in the current poll)
+```
+
+| Ordered-mode configuration | Behavior |
+|---|---|
+| 3 assigned partitions, 8 runners | At most 3 callbacks run concurrently. Extra runner capacity goes unused; partition ordering remains intact. |
+| 8 assigned partitions, 3 runners | Up to 3 partitions are processed concurrently. Other partition work units wait for a slot. |
+| Several assigned partitions, 1 runner | Partition work units execute sequentially, but their cross-partition order is not guaranteed. |
+
+Only partitions assigned to this instance matter, not the topic's total partition count. Concurrency can be lower if some assigned partitions have no records in the current poll. In unordered mode, eight runners can process eight records concurrently even from a single partition.
+
+A slow partition holds its ordered-mode slot until its fetched records finish processing. Reducing runner count can therefore increase waiting and lag for other partitions. Gosoline waits for all admitted work from the current poll to finish and commits before polling again.
+
+Keep callbacks safe for concurrent use even in ordered mode. A separate retry input can invoke the same callback independently, adding concurrency beyond the Kafka runner limit; ordered Kafka processing does not order work redelivered through that retry queue.
 
 Gosoline waits for admitted work from a poll to finish before committing and allowing a rebalance. Tune poll size, runner count, delay, and callback duration together so the full processing and commit cycle fits the rebalance budget. Consumer poll batches are independent of producer-daemon batches.
 
