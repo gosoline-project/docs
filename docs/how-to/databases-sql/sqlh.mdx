@@ -72,10 +72,9 @@ The following example uses one definition for create, update, patch, and output 
 
 <CodeBlock title="main.go" language="go" snippet="transformer">{CrudMain}</CodeBlock>
 
-The output callback usually returns a Go value. `httpserver.Bind` negotiates a representation from `Accept`.
-An explicit `httpserver.Response` bypasses that negotiation.
-An unsupported `Accept` can produce HTTP 406.
-Use an explicit response when the API needs fixed status, headers, or content type.
+The `Output` callback returns a Go value. `httpserver.Bind` negotiates its representation from the request's `Accept` header.
+A typed output can implement `StatusCode() int` and `Header() http.Header` to set its status and headers.
+An explicit `httpserver.Response` bypasses negotiation. See [Customizing responses](/how-to/http-server/build-an-http-service#customizing-responses) for response overrides and content types.
 
 For a dedicated response DTO, map the entity in the output callback:
 

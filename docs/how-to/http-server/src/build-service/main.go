@@ -48,6 +48,20 @@ type User struct {
 	Role  string `json:"role"`
 }
 
+type CreatedUserOutput struct {
+	*User
+}
+
+func (CreatedUserOutput) StatusCode() int {
+	return http.StatusCreated
+}
+
+type DeletedUserOutput struct{}
+
+func (DeletedUserOutput) StatusCode() int {
+	return http.StatusNoContent
+}
+
 type Handler struct {
 	users map[int]*User
 	next  int
@@ -60,7 +74,7 @@ func NewHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*Han
 	}, nil
 }
 
-func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) (httpserver.Response, error) {
+func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) ([]*User, error) {
 	var result []*User
 	for _, u := range h.users {
 		if input.Role != "" && u.Role != input.Role {
@@ -71,10 +85,10 @@ func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) (httpser
 			break
 		}
 	}
-	return httpserver.NewJsonResponse(result), nil
+	return result, nil
 }
 
-func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (CreatedUserOutput, error) {
 	user := &User{
 		Id:    h.next,
 		Name:  input.Name,
@@ -84,25 +98,25 @@ func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (https
 	h.users[user.Id] = user
 	h.next++
 
-	return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+	return CreatedUserOutput{User: user}, nil
 }
 
-func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 	user, ok := h.users[input.Id]
 	if !ok {
 		return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
 	}
-	return httpserver.NewJsonResponse(user), nil
+	return user, nil
 }
 
-func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (DeletedUserOutput, error) {
 	delete(h.users, input.Id)
-	return httpserver.NewStatusResponse(http.StatusNoContent), nil
+	return DeletedUserOutput{}, nil
 }
 
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
 	if len(h.users) > 10000 {
 		return nil, fmt.Errorf("too many users")
 	}
-	return httpserver.NewJsonResponse(map[string]string{"status": "ok"}), nil
+	return map[string]string{"status": "ok"}, nil
 }

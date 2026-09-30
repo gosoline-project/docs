@@ -9,6 +9,8 @@ The HTTP server has always been one of the most commonly used parts of gosoline.
 
 {/* truncate */}
 
+The updated examples below target `httpserver` v0.6.4.
+
 As part of the ongoing modularization of gosoline, the HTTP server is now available as a standalone package:
 
 https://github.com/gosoline-project/httpserver
@@ -110,22 +112,22 @@ The `httpserver.With` pattern is useful because many APIs are organized around c
 The handler methods stay focused on individual endpoints:
 
 ```go
-func (h *ReportHandler) Overview(ctx context.Context) (httpserver.Response, error) {
+func (h *ReportHandler) Overview(ctx context.Context) (ReportOverview, error) {
     overview, err := h.reports.GetOverview(ctx)
     if err != nil {
-        return nil, err
+        return ReportOverview{}, err
     }
 
-    return httpserver.NewJsonResponse(overview), nil
+    return overview, nil
 }
 
-func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (httpserver.Response, error) {
+func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (ReportResult, error) {
     result, err := h.reports.Run(ctx, input.ReportType, input.Parameters)
     if err != nil {
-        return nil, err
+        return ReportResult{}, err
     }
 
-    return httpserver.NewJsonResponse(result), nil
+    return result, nil
 }
 
 func (h *ReportHandler) Export(ctx context.Context, input *ExportReportInput) (httpserver.Response, error) {
@@ -140,6 +142,10 @@ func (h *ReportHandler) Export(ctx context.Context, input *ExportReportInput) (h
     ), nil
 }
 ```
+
+`Overview` and `Run` return typed values for response negotiation. `Export` keeps an explicit response because it sends file bytes with a selected media type.
+
+See [Customizing responses](/how-to/http-server/build-an-http-service#customizing-responses) for status, header, and explicit `Response` rules.
 
 This consolidation is not required for every route. Separate handlers are still fine when routes have genuinely different dependencies or lifecycle requirements. But for most cohesive route groups, one handler service with multiple endpoint methods is the cleaner shape.
 
@@ -181,13 +187,13 @@ type RunReportInput struct {
     Parameters map[string]any `json:"parameters"`
 }
 
-func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (httpserver.Response, error) {
+func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (ReportResult, error) {
     result, err := h.reports.Run(ctx, input.ReportType, input.Parameters)
     if err != nil {
-        return nil, err
+        return ReportResult{}, err
     }
 
-    return httpserver.NewJsonResponse(result), nil
+    return result, nil
 }
 ```
 

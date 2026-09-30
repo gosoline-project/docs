@@ -8,7 +8,7 @@ import { CopyToClipboardButton } from '../components.jsx';
 
 # Migrating to the Standalone HTTP Server Package
 
-This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.5.6`.
+This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.6.4`.
 
 The new package keeps the Gin-based server lifecycle and middleware model, but it changes the application-facing API. Instead of building and returning a `*httpserver.Definitions` tree, you receive a `*httpserver.Router` and register routes on it directly. Instead of implementing handler interfaces and manually unpacking an `httpserver.Request`, handlers are plain functions or methods registered through `Bind`, `BindN`, `BindR`, or SSE binding helpers.
 
@@ -17,7 +17,7 @@ The new package keeps the Gin-based server lifecycle and middleware model, but i
 Add the standalone module:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.5.6
+go get github.com/gosoline-project/httpserver@v0.6.4
 ```
 
 Update imports:
@@ -215,16 +215,16 @@ func (h *listUsersHandler) Handle(ctx context.Context, request *httpserver.Reque
 }
 ```
 
-New handlers without request input use `BindN` and return `httpserver.Response`:
+New handlers without request input use `BindN` and return a typed result:
 
 ```go
-func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
     users, err := h.store.List(ctx)
     if err != nil {
         return nil, err
     }
 
-    return httpserver.NewJsonResponse(users), nil
+    return users, nil
 }
 ```
 
@@ -270,13 +270,13 @@ type GetUserInput struct {
     Id uint `uri:"id" binding:"required"`
 }
 
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
     user, err := h.store.Get(ctx, input.Id)
     if err != nil {
-        return nil, err
+        return User{}, err
     }
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 }
 ```
 
@@ -289,6 +289,8 @@ r.GET("/:id", httpserver.Bind(h.GetUser))
 ## 6. Migrate Request Binding
 
 The old package selected a binding helper explicitly:
+
+Bound handlers registered with `Bind`, `BindR`, `BindN`, or `BindNR` accept a typed result `O`. Return ordinary results directly. See the response migration section for explicit response cases.
 
 | Old helper | Typical new migration |
 |---|---|
@@ -309,15 +311,25 @@ type CreateUserInput struct {
     Email string `json:"email" binding:"required,email"`
 }
 
-func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+type CreatedUser struct {
+    User
+}
+
+func (CreatedUser) StatusCode() int {
+    return http.StatusCreated
+}
+
+func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (CreatedUser, error) {
     user, err := h.store.Create(ctx, input.Name, input.Email)
     if err != nil {
-        return nil, err
+        return CreatedUser{}, err
     }
 
-    return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+    return CreatedUser{User: user}, nil
 }
 ```
+
+The typed output preserves the old `201 Created` status without forcing a JSON response.
 
 You can combine URI, query, and body fields in one input struct:
 
@@ -363,13 +375,13 @@ type GetUserInput struct {
     Id uint `uri:"id" binding:"required"`
 }
 
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
     user, err := h.store.Get(ctx, input.Id)
     if err != nil {
-        return nil, err
+        return User{}, err
     }
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 }
 ```
 
@@ -410,11 +422,17 @@ r.POST("/import", httpserver.BindNR(h.ImportUsers))
 For typed input plus raw request access, use `BindR`:
 
 ```go
-func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input *UploadAvatarInput) (httpserver.Response, error) {
+type NoContent struct{}
+
+func (NoContent) StatusCode() int {
+    return http.StatusNoContent
+}
+
+func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input *UploadAvatarInput) (NoContent, error) {
     contentType := req.Header.Get("Content-Type")
     _ = contentType
 
-    return httpserver.NewStatusResponse(http.StatusNoContent), nil
+    return NoContent{}, nil
 }
 ```
 
@@ -423,15 +441,20 @@ func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input
 The old `httpserver.Request` exposed `request.ClientIp`. In the standalone package, use raw request access and resolve the client IP explicitly:
 
 ```go
-func (h *UserHandler) GetUser(ctx context.Context, req *http.Request, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, req *http.Request, input *GetUserInput) (User, error) {
     clientIP, err := httpserver.ResolveClientIP(req)
     if err != nil {
-        return nil, err
+        return User{}, err
     }
 
     _ = clientIP
 
-    // ...
+    user, err := h.store.Get(ctx, input.Id)
+    if err != nil {
+        return User{}, err
+    }
+
+    return user, nil
 }
 ```
 
@@ -439,47 +462,39 @@ Register handlers that need both typed input and the raw request with `BindR`. U
 
 ## 9. Migrate Responses
 
-The new package returns a `Response` interface instead of the old concrete `*Response` struct.
+Bound handlers in `v0.6.4` accept typed result values. Return ordinary results directly, and the server negotiates their response format. The default negotiator supports JSON only. Register other representations explicitly. A missing `Accept` header selects JSON, while an unsupported `Accept` value returns `406 Not Acceptable`.
 
-### JSON Responses
+For example, a JSON handler returns the domain value:
 
 ```go
-return httpserver.NewJsonResponse(user), nil
+return user, nil
 ```
 
-### Text Responses
+See [Customizing responses](/how-to/http-server/build-an-http-service#customizing-responses) for typed status or header methods and explicit `Response` overrides.
 
-Old low-level response:
+### Fixed response formats and bodyless responses
+
+Keep an explicit response when the route must return a fixed media type or no body.
+
+Old low-level text response:
 
 ```go
 return httpserver.NewResponse("ok", httpserver.ContentTypeText, http.StatusOK, make(http.Header)), nil
 ```
 
-New response:
+New fixed text response:
 
 ```go
 return httpserver.NewTextResponse("ok"), nil
 ```
 
-### Status Responses
+For a bodyless status such as `204 No Content`, use:
 
 ```go
 return httpserver.NewStatusResponse(http.StatusNoContent), nil
 ```
 
-### Custom Status Codes and Headers
-
-Old response options were limited and the constructor accepted status and headers directly. New responses use options consistently:
-
-```go
-return httpserver.NewJsonResponse(
-    user,
-    httpserver.WithStatusCode(http.StatusCreated),
-    httpserver.WithHeader("X-User-Id", strconv.FormatUint(uint64(user.Id), 10)),
-), nil
-```
-
-For raw bodies, use `NewResponse` with options:
+For raw bytes with a required media type, keep `NewResponse` with options:
 
 ```go
 return httpserver.NewResponse(
@@ -491,36 +506,38 @@ return httpserver.NewResponse(
 
 ## 10. Migrate Error Handling
 
-For unexpected errors, keep returning `nil, err`:
+For unexpected errors, return the zero value for the typed result and the error:
 
 ```go
-func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
     users, err := h.store.List(ctx)
     if err != nil {
         return nil, fmt.Errorf("could not list users: %w", err)
     }
 
-    return httpserver.NewJsonResponse(users), nil
+    return users, nil
 }
 ```
 
-For handled client errors, return an error response and a nil Go error:
+For an expected client error with a specific status, return the zero result and `NewErrorWithStatus`:
 
 ```go
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
     user, err := h.store.Get(ctx, input.Id)
     if errors.Is(err, ErrUserNotFound) {
-        return httpserver.GetErrorHandler()(http.StatusNotFound, err), nil
+        return User{}, httpserver.NewErrorWithStatus(http.StatusNotFound, err)
     }
     if err != nil {
-        return nil, fmt.Errorf("could not get user: %w", err)
+        return User{}, fmt.Errorf("could not get user: %w", err)
     }
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 }
 ```
 
-In `v0.5.6`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
+Custom error handlers that need a specific response body still return an explicit `httpserver.Response`.
+
+In `v0.6.4`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
 
 The 5xx behavior is controlled by `httpserver.<name>.errors.privacy`. The default is `private`, which hides internal error details. Set it to `public` only when clients should receive the original internal error message:
 
@@ -784,10 +801,10 @@ The standalone JWT helper validates `Authorization: Bearer <token>` headers usin
 Successful authenticators attach an `auth.Subject` to the request context. In bound handlers, retrieve it with `auth.GetSubject(ctx)`:
 
 ```go
-func (h *UserHandler) Me(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) Me(ctx context.Context) (auth.Subject, error) {
     subject := auth.GetSubject(ctx)
 
-    return httpserver.NewJsonResponse(subject), nil
+    return subject, nil
 }
 ```
 
@@ -885,18 +902,8 @@ func (s *UserApiSuite) SetupHttpServerRouter() httpserver.RouterFactory {
 }
 ```
 
-For handler-level tests, prefer testing handler methods directly where possible:
+Assert typed output values and domain behavior through handler methods. Test negotiation, headers, and status codes through HTTP requests.
 
-```go
-func TestGetUser(t *testing.T) {
-    handler := &UserHandler{store: fakeStore}
-
-    response, err := handler.GetUser(context.Background(), &GetUserInput{Id: 1})
-
-    require.NoError(t, err)
-    assert.Equal(t, http.StatusOK, response.StatusCode())
-}
-```
 
 For binding and routing tests, use the package test helpers or an application test case with `SetupHttpServerRouter`.
 
@@ -963,42 +970,56 @@ type CreateUserInput struct {
     Email string `json:"email" binding:"required,email"`
 }
 
-func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
     users, err := h.store.List(ctx)
     if err != nil {
         return nil, err
     }
 
-    return httpserver.NewJsonResponse(users), nil
+    return users, nil
 }
 
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
     user, err := h.store.Get(ctx, input.Id)
     if errors.Is(err, ErrUserNotFound) {
-        return httpserver.GetErrorHandler()(http.StatusNotFound, err), nil
+        return User{}, httpserver.NewErrorWithStatus(http.StatusNotFound, err)
     }
     if err != nil {
-        return nil, err
+        return User{}, err
     }
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 }
 
-func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+type CreatedUser struct {
+    User
+}
+
+func (CreatedUser) StatusCode() int {
+    return http.StatusCreated
+}
+
+func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (CreatedUser, error) {
     user, err := h.store.Create(ctx, input.Name, input.Email)
     if err != nil {
-        return nil, err
+        return CreatedUser{}, err
     }
 
-    return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+    return CreatedUser{User: user}, nil
 }
 
-func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+type NoContent struct{}
+
+func (NoContent) StatusCode() int {
+    return http.StatusNoContent
+}
+
+func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (NoContent, error) {
     if err := h.store.Delete(ctx, input.Id); err != nil {
-        return nil, err
+        return NoContent{}, err
     }
 
-    return httpserver.NewStatusResponse(http.StatusNoContent), nil
+    return NoContent{}, nil
 }
 ```
 
@@ -1014,11 +1035,9 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 - Replace path parameter helpers with `uri` tags on input structs.
 - Replace `CreateRawHandler` and `CreateReaderHandler` with `BindR` or `BindNR` and explicit `req.Body` handling.
 - Replace `request.ClientIp` with `ResolveClientIP(req)` in `BindR` or `BindNR` handlers.
-- Replace low-level `NewResponse(body, contentType, statusCode, header)` calls with `NewTextResponse`, `NewJsonResponse`, `NewStatusResponse`, or `NewResponse` options.
-- Replace old `pkg/httpserver/auth` imports with `github.com/gosoline-project/httpserver/auth`, move auth config below `httpserver.<name>.auth`, and pass the server name to auth constructors.
-- Move old global CORS config from `api_cors_*` keys to `httpserver.<name>.cors.*`, and register package CORS with `router.UseFactory(httpserver.CorsFactory)` or `httpserver.Cors(config, name)`.
-- Review `max_body_bytes`; keep the v0.5.6 default 10 MiB limit, raise it, or set it to `0` intentionally.
-- Update tests for v0.5.6 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
+- Return typed values directly from ordinary bound handlers. Keep explicit responses for fixed media types, raw bodies, and bodyless status responses. See [Customizing responses](/how-to/http-server/build-an-http-service#customizing-responses).
+- Review `max_body_bytes`; keep the v0.6.4 default 10 MiB limit, raise it, or set it to `0` intentionally.
+- Update tests for v0.6.4 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
 - Update test suites from definition setup to router factory setup.
 - Run your HTTP tests and exercise validation errors, client errors, and middleware behavior after migration.
 
