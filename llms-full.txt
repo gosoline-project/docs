@@ -9349,6 +9349,248 @@ In general, using Kafka with gosoline works like any other input/output type sup
 
 However, there are some caveats and minor differences to be considered as described below.
 
+## Connection configuration[​](#connection-configuration "Direct link to Connection configuration")
+
+Define broker connections under `kafka.connection.<name>`. Kafka inputs and outputs select them with their `connection` setting, which defaults to `default`:
+
+```
+kafka:
+
+  connection:
+
+    default:
+
+      brokers:
+
+        - kafka.example.com:9093
+
+      tls_enabled: true
+
+      dial_timeout: 10s
+
+
+
+stream:
+
+  output:
+
+    audit:
+
+      type: kafka
+
+      connection: default
+
+      topic_id: audit
+```
+
+| Connection setting     | Default  | Purpose                                                     |
+| ---------------------- | -------- | ----------------------------------------------------------- |
+| `brokers`              | required | Bootstrap broker addresses                                  |
+| `tls_enabled`          | `true`   | Enable broker TLS, with a minimum version of TLS 1.2        |
+| `insecure_skip_verify` | `false`  | Skip TLS certificate and hostname verification when enabled |
+| `dial_timeout`         | `10s`    | Timeout for establishing a broker connection                |
+| `username`, `password` | unset    | Enable SASL SCRAM-SHA-512 when **both** are nonempty        |
+
+Supply credentials through your deployment's configuration/secrets mechanism. Setting only one credential does not enable SASL. For a local plaintext broker, set `tls_enabled: false` explicitly. These settings configure broker clients; schema registry HTTP configuration is covered in the [schema registry guide](/docs/how-to/kafka/use-schema-registry/.md#configure-the-registry-connection).
+
+`topic_id` and `group_id` are formatted through Gosoline's naming patterns rather than necessarily used verbatim. See the [Kafka naming reference](/docs/reference/naming-patterns/.md#kafka) for topic/group patterns, delimiters, and resource identity overrides.
+
+## Message format, keys, and headers[​](#message-format-keys-and-headers "Direct link to Message format, keys, and headers")
+
+Kafka record values contain the encoded model directly, not a JSON envelope containing Gosoline `Body` and `Attributes` fields. Without a schema registry, a JSON producer writes the domain object's JSON as the value. With a schema registry, the value includes the registry serializer's framing and schema ID.
+
+Use `stream.AttributeKafkaKey` (the attribute name `KafkaKey`) to set the record key. Other message attributes become Kafka headers:
+
+```
+err := producer.WriteOne(ctx, order, map[string]string{
+
+    stream.AttributeKafkaKey: order.Id,
+
+    "tenant":                 "acme",
+
+})
+```
+
+franz-go uses the key for partition routing. Records with the same key are routed consistently while the topic's partition layout is unchanged; changing the partition count can change their destination. A key alone does not serialize callback execution: select `processing_mode: ordered` when processing order within a partition matters.
+
+On consumption, the record value becomes the message body, headers become string attributes, and a non-nil record key is exposed as `stream.AttributeKafkaKey`:
+
+```
+func (c *consumer) Consume(ctx context.Context, order OrderCreated, attributes map[string]string) (bool, error) {
+
+    key := attributes[stream.AttributeKafkaKey]
+
+    tenant := attributes["tenant"]
+
+    c.logger.Info(ctx, "received order %s with key %s for tenant %s", order.Id, key, tenant)
+
+
+
+    return true, nil
+
+}
+```
+
+Header order is not preserved by the attributes map. Duplicate incoming header names collapse to the last value. `KafkaKey` is reserved: output uses it as the record key rather than a header, and an incoming non-nil key overrides any header of that name. Keys and headers are exposed as strings; topic, partition, offset, and timestamp are not automatically added to callback attributes.
+
+## Consumer configuration[​](#consumer-configuration "Direct link to Consumer configuration")
+
+Consumer settings select the input, encoding, application retry handler, and processing shutdown deadline. Kafka-specific settings belong to the named input:
+
+```
+stream:
+
+  consumer:
+
+    audit:
+
+      input: audit
+
+      grace_time: 10s
+
+      retry:
+
+        enabled: true
+
+
+
+  input:
+
+    audit:
+
+      type: kafka
+
+      topic_id: audit
+
+      group_id: audit-worker
+
+      runner_count: 4
+
+      processing_mode: ordered
+
+      max_poll_records: 100
+
+      consume_delay: 0s
+
+      rebalance_timeout: 60s
+
+      grace_time: 10s
+```
+
+This example uses a separate SQS retry queue for application failures, so it also requires AWS/SQS configuration. Kafka polling and offset-commit retries are independent of this application retry setting.
+
+| Input setting       | Default     | Purpose                                                                                                  |
+| ------------------- | ----------- | -------------------------------------------------------------------------------------------------------- |
+| `runner_count`      | `1`         | Maximum concurrent record callbacks; must be at least `1`                                                |
+| `processing_mode`   | `unordered` | `ordered` processes records sequentially within each topic-partition, with concurrency across partitions |
+| `max_poll_records`  | `100`       | Maximum records returned by one poll; callbacks still receive individual records                         |
+| `consume_delay`     | `0`         | Minimum record age before processing                                                                     |
+| `rebalance_timeout` | `60s`       | Consumer-group rebalance budget                                                                          |
+| `grace_time`        | `10s`       | Offset-commit grace window after processing finishes                                                     |
+| `start_offset`      | `last`      | Starting/reset position when the group has no usable committed offset; `first` starts at the beginning   |
+
+With several runners in `unordered` mode, records from the same partition may execute concurrently. In `ordered` mode, one partition's records execute sequentially, and runner count bounds concurrency across partitions. Keep callbacks safe for concurrent use even in ordered mode.
+
+Gosoline waits for admitted work from a poll to finish before committing and allowing a rebalance. Tune poll size, runner count, delay, and callback duration together so the full processing and commit cycle fits the rebalance budget. Consumer poll batches are independent of producer-daemon batches.
+
+### Isolation and group tuning[​](#isolation-and-group-tuning "Direct link to Isolation and group tuning")
+
+These additional settings belong under `stream.input.<name>`:
+
+| Setting                 | Default                | Purpose                                                                                                           |
+| ----------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `fetch_isolation_level` | `read_uncommitted`     | Use `read_committed` to exclude aborted transactional records and wait for transactions to resolve                |
+| `balancers`             | `[cooperative-sticky]` | Ordered list of supported partition assignment strategies: `cooperative-sticky`, `sticky`, `round-robin`, `range` |
+| `session_timeout`       | `45s`                  | Consumer-group session timeout for detecting missing members                                                      |
+| `heartbeat_interval`    | `3s`                   | Interval between group heartbeats; keep below the session timeout                                                 |
+| `idle_wait_time`        | `500ms`                | Additional wait after a poll returns no records                                                                   |
+| `healthcheck.timeout`   | `5m`                   | Input progress health timeout                                                                                     |
+
+Choose balancers compatible with the other members of the group and timing values accepted by the broker. `read_committed` concerns visibility of transactional Kafka records; it does not make callbacks, retries, and offset commits an atomic transaction or provide exactly-once business processing.
+
+Idle polling, rebalancing, and intentional consume delays are handled so they do not by themselves indicate an unhealthy input. Consumer-level `stream.consumer.<name>.healthcheck.timeout` separately checks each active message's processing duration (default `5m`); one stuck callback can make the consumer unhealthy even while other callbacks finish. Health checks report a problem rather than imposing a callback deadline.
+
+### Delayed consumption[​](#delayed-consumption "Direct link to Delayed consumption")
+
+`consume_delay` holds a record until its timestamp is old enough; it does not add a fixed sleep to every record. Old backlog passes immediately. For Kafka `CreateTime` timestamps, age depends on the producer's clock. Future timestamps are clamped so the wait is at most `consume_delay`; records without timestamps are not delayed.
+
+The delay must be nonnegative and strictly less than `rebalance_timeout`. That validation alone does not ensure the whole poll batch completes within the rebalance budget. Shutdown can interrupt the delay and allow already admitted work to process early.
+
+## Offsets, failures, and retries[​](#offsets-failures-and-retries "Direct link to Offsets, failures, and retries")
+
+Kafka inputs join a consumer group and disable automatic offset commits. Gosoline explicitly commits offsets after processing the admitted records from a poll.
+
+**A successful offset commit does not mean the business operation succeeded.** Records handed to processing are commit-eligible even when the callback returns `false` or panics. Returning `false` does not rewind the Kafka partition or prevent its offset commit.
+
+Enable `stream.consumer.<name>.retry.enabled` for application failures that should be retried. This sends failed callback messages to a separate retry queue rather than seeking Kafka offsets backwards. Retry publication is not atomic with committing Kafka offsets: publication failure is logged and does not prevent the commit. Model-selection or decoding errors return before the normal callback-retry path, so malformed records are not guaranteed to reach that queue. Make processing idempotent, since failed commits or process termination can also cause Kafka redelivery.
+
+Missing topics fail consumption immediately. Retryable partition fetch errors are logged while records accompanying the errors are retained for processing; nonretryable fetch errors terminate consumption. Fetch and commit operations use their respective retry executors and the input's `backoff` settings. These retries address transport failures, not failed business operations.
+
+`start_offset` supplies the starting/reset offset when no usable committed group offset exists. It does not override valid committed offsets on every startup.
+
+## Shutdown[​](#shutdown "Direct link to Shutdown")
+
+`stream.consumer.<name>.grace_time` is the shared processing deadline after shutdown begins, including processing from the retry input. Kafka stops admitting new work and drains admitted work. When that deadline expires, callback contexts are canceled.
+
+The input's separate `stream.input.<name>.grace_time` grants final offset commits a cancellation grace window after processing finishes. It does not extend the callback processing deadline. If that commit window expires, Gosoline logs possible redelivery and completes cancellation-related shutdown normally.
+
+Shutdown commits preserve a gap-free processed prefix within each partition. The first record of an admitted work unit may still reach processing after Stop to avoid an offset gap. Records handed to processing remain commit-eligible even when their callback fails or its context is canceled. A callback that ignores cancellation can still block completion; size kernel and deployment shutdown timeouts for processing plus final commits.
+
+## Producer configuration[​](#producer-configuration "Direct link to Producer configuration")
+
+Encoding and compression are producer settings; broker batching and request settings belong to the output:
+
+```
+stream:
+
+  producer:
+
+    audit:
+
+      output: audit
+
+      encoding: application/json
+
+      compression: application/zstd
+
+
+
+  output:
+
+    audit:
+
+      type: kafka
+
+      connection: default
+
+      topic_id: audit
+
+      linger_timeout: 0s
+
+      request_timeout: 10s
+
+      max_batch_size: 10000
+
+      max_batch_bytes: 1000012
+```
+
+| Output setting    | Default   | franz-go behavior                                                                                      |
+| ----------------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| `linger_timeout`  | `0s`      | Time to wait for additional records before sending a batch                                             |
+| `request_timeout` | `10s`     | Timeout for a Kafka produce request; not an overall deadline for the application write                 |
+| `max_batch_size`  | `10000`   | Maximum buffered record count (`MaxBufferedRecords`), not a fixed number of records per broker request |
+| `max_batch_bytes` | `1000012` | Maximum per-partition producer batch bytes (`ProducerBatchMaxBytes`), including record/batch overhead  |
+
+franz-go splits records into partition-specific batches; one `producer.Write` call need not become one broker request. Match batch bytes to the broker/topic size limits and allow for overhead. The producer daemon also derives its size limits from these output settings; see [Producer Daemon usage](#producer-daemon-usage).
+
+### Write completion and failures[​](#write-completion-and-failures "Direct link to Write completion and failures")
+
+Without the producer daemon, Kafka output uses `ProduceSync`: `WriteOne` and `Write` wait for the records' produce results and return an error if any result fails. Pass a bounded context for an application-level deadline; `request_timeout` alone does not bound the complete operation, including buffering and retries.
+
+A batch can partially succeed. Gosoline returns the first produce error, not per-record results, while metrics count successful and failed records separately. An error is not evidence that the whole batch was rejected. Retrying the entire batch can duplicate records that succeeded; use idempotent business identifiers or downstream deduplication where retries are possible. The streaming output API does not expose transactional writes.
+
+With the producer daemon, the application write confirms admission to its in-process buffer. Remote produce results arrive later in background workers and failures are logged rather than returned to the original caller. See [producer-daemon backpressure and errors](/docs/how-to/streaming-applications/use-the-producer-daemon/.md#backpressure-and-errors).
+
 ## Compression[​](#compression "Direct link to Compression")
 
 Compression is handled entirely by the franz-go kafka library.
@@ -9371,6 +9613,29 @@ Aggregation is not supported with Kafka as an aggregated message would not match
 
 Batching will still be done by the producer daemon, but it will use the `max_batch_size` and `max_batch_bytes` settings specified on the `KafkaOutputConfiguration`. This is to have a single source of truth for the settings and because the Kafka library has an internal process to batch messages and would possibly break up our batches if we ignore these settings.
 
+## Operations[​](#operations "Direct link to Operations")
+
+### Metrics[​](#metrics "Direct link to Metrics")
+
+Enable Gosoline's metric collection and a writer to export Kafka metrics. The following are framework metric names; the exported naming/representation depends on the configured writer:
+
+| Area                               | Metrics                                                                                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consumer                           | `RecordsConsumed`, `RecordsConsumedFailed`, `PollCount`, `PollDuration`, `ProcessDuration`, `CommitDuration`, `RebalanceCount`, `SleepDuration` |
+| Producer                           | `RecordsSent`, `RecordsSentFailed`, `ProduceBatchSize`, `ProduceDuration`                                                                       |
+| Broker connectivity and throttling | `BrokerConnects`, `BrokerConnectsFailed`, `BrokerThrottleCount`, `BrokerThrottleTime`                                                           |
+| Wire batches                       | `ProduceBatchRecords`, `ProduceBatchBytes`, `ProduceBatchBytesCompressed`, `FetchBatchRecords`, `FetchBatchBytes`, `FetchBatchBytesCompressed`  |
+
+Client/topic metrics use `ClientType`, `Client`, and `Topic` dimensions. Wire-batch metrics include both topic totals and partition-level values with `Partition`; broker metrics use `Broker`. `Client` is the configured input/output name. Consumed counts and committed offsets do not establish business success; correlate failure counts, retry logs, and commit errors. Monitor application consumer metrics alongside Kafka-specific metrics for decoding and callback failures.
+
+### Topic creation and metadata[​](#topic-creation-and-metadata "Direct link to Topic creation and metadata")
+
+Kafka inputs and outputs register resource lifecycle managers. When `resource_lifecycles.create.enabled` is enabled, they check for the resolved topic and create it if absent with **one partition, replication factor one, and no topic-specific configuration**. Existing topics are left unchanged. Provision production topics separately when different partitioning, replication, or retention settings are needed.
+
+The lifecycle admin client currently receives broker addresses only; it does not inherit the connection's TLS/SASL settings. For secured brokers, provision topics externally and disable lifecycle creation rather than expecting it to use the authenticated reader/writer connection.
+
+When lifecycle registration is enabled (`resource_lifecycles.register.enabled`, default `true`), application metadata includes `kafka.consumers` and `kafka.producers`. Entries contain the configured component `name`, resolved `topic`, and `bootstrap_servers`. This metadata describes registered resources, not live consumer lag or delivery success.
+
 ## Schema Registry[​](#schema-registry "Direct link to Schema Registry")
 
 You can optionally use the Kafka schema registry.
@@ -9382,17 +9647,91 @@ Check this guide for more details on the schema registry usage: [How to use the 
 
 # How to use the Kafka Schema Registry
 
-Gosoline provides the option to use the Kafka schema registry when reading from or writing to a Kafka topic. This will ensure that changes to your schema do not break compatability with the previous schemas according to the specified compatability mode.
+Gosoline provides the option to use the Kafka schema registry when reading from or writing to a Kafka topic. The registry checks schema registration against the subject's configured compatibility mode. Gosoline resolves the supplied schema and configures its serializer during initialization; this is not broker-side validation of every message.
 
-Using the shema registry is optional and gosoline will let you read and write anything if you choose to.
+Using the schema registry is optional; without it, Gosoline uses the configured encoding without registry compatibility checks.
 
 Moreover, keep in mind that the Apache Kafka broker does not have any server side schema validation and will still let you write anything to a topic if you do not configure gosoline to use the schema registry, even if there are already existing consumers and producers of that topic which do use the schema registry.
 
+## Configure the registry connection[​](#configure-the-registry-connection "Direct link to Configure the registry connection")
+
+Set `schema_registry_address` on the Kafka connection selected by the input or output. Both select `default` unless their `connection` setting specifies another name:
+
+```
+kafka:
+
+  connection:
+
+    analytics:
+
+      brokers:
+
+        - kafka.example.com:9093
+
+      tls_enabled: true
+
+      schema_registry_address: https://schemas.example.com
+
+
+
+stream:
+
+  output:
+
+    producerName:
+
+      type: kafka
+
+      connection: analytics
+
+      topic_id: example-events
+
+
+
+  input:
+
+    example-events:
+
+      type: kafka
+
+      connection: analytics
+
+      topic_id: example-events
+
+      group_id: example-reader
+
+
+
+  consumer:
+
+    default:
+
+      input: example-events
+```
+
+The registry uses an HTTP client configured from this URL; Kafka broker `username`, `password`, `tls_enabled`, and `insecure_skip_verify` are not forwarded to it. Broker SASL credentials therefore do not authenticate registry requests. See [connection configuration](/docs/how-to/kafka/general/.md#connection-configuration) for broker settings.
+
 ## Registering a schema[​](#registering-a-schema "Direct link to Registering a schema")
 
-Gosoline itself will not register your schema and expects that any provided schema is already registered, as otherwise your app may crash on runtime when trying to register an incompatible schema.
+By default, Gosoline looks up the supplied schema and expects it to be registered already. A missing schema causes initialization to fail. Register schemas and check compatibility externally, for example in a CI/CD pipeline, to detect incompatibilities before deploying.
 
-Thus, you will have to externally register every schema that you want to use and check for compatability, e.g. via a CI/CD pipeline.
+Alternatively, set `AutoRegister: true` on `stream.SchemaSettings` to look up or create the schema during producer or consumer initialization:
+
+```
+schemaSettings := stream.SchemaSettings{
+
+    Subject:      "exampleEvent",
+
+    Schema:       exampleEventSchema,
+
+    Model:        &exampleEvent{},
+
+    AutoRegister: true,
+
+}
+```
+
+This opt-in requires registry write permissions and can fail initialization if the registry rejects the schema under its compatibility policy. Consumers can opt in through the settings returned by `GetSchemaSettings()` as well.
 
 ## Configure a Producer/Publisher to use the schema registry[​](#configure-a-producerpublisher-to-use-the-schema-registry "Direct link to Configure a Producer/Publisher to use the schema registry")
 
@@ -9438,6 +9777,66 @@ Where the `ExampleEvent.avsc` file would contain the avro schema.
 
 Note that depending on whether your model is specified as a struct (`exampleEvent{}`) or a pointer to a struct (`&exampleEvent{}`) you will also need to write your events accordingly via `producer.Write`/`producer.WriteOne` because the internal serializer of the franz-go kafka library will otherwise complain that there is no registered encoder for your model if you mix it up.
 
+## Protobuf message selection[​](#protobuf-message-selection "Direct link to Protobuf message selection")
+
+For `application/x-protobuf`, `SchemaSettings.ProtobufMessageIndex` selects the message within the registered `.proto` schema. Indices are zero-based and follow declaration order. Omitting the field selects `[0]`, the first top-level message.
+
+For example, this schema contains two top-level messages:
+
+```
+syntax = "proto3";
+
+package events;
+
+
+
+message OrderCreated {
+
+  string id = 1;
+
+}
+
+
+
+message OrderCancelled {
+
+  string id = 1;
+
+}
+```
+
+To write `OrderCancelled`, use index `[1]` and the matching generated Go model (here imported as `eventspb`):
+
+```
+//go:embed events.proto
+
+var eventsSchema string
+
+
+
+schemaSettings := stream.SchemaSettings{
+
+    Subject:              "order-events",
+
+    Schema:               eventsSchema,
+
+    Model:                &eventspb.OrderCancelled{},
+
+    ProtobufMessageIndex: []int{1},
+
+}
+
+
+
+producer, err := stream.NewProducer(ctx, config, logger, "producerName",
+
+    stream.WithSchemaSettings(schemaSettings),
+
+)
+```
+
+Set `stream.producer.producerName.encoding: application/x-protobuf` and write `*eventspb.OrderCancelled` values. The consumer must select the matching index/model in `GetSchemaSettings()` and use the same encoding. For nested messages, provide the full declaration path, for example `[1, 0]` for the first nested message inside the second top-level message. The path is encoded in the registry wire framing; it is not a topic partition, schema version, or Protobuf field number.
+
 ## Configure a Consumer to use the schema registry[​](#configure-a-consumer-to-use-the-schema-registry "Direct link to Configure a Consumer to use the schema registry")
 
 Configure the encoding in your config.
@@ -9469,6 +9868,12 @@ func (c consumer) GetSchemaSettings() (*stream.SchemaSettings, error) {
 
 }
 ```
+
+Implement this method on the callback passed to the typed or untyped consumer factory. The typed callback wrapper forwards the schema settings automatically.
+
+Schema registration compatibility and historical-record decoding are separate concerns. Gosoline registers the resolved schema ID and model with its serializer during initialization; do not assume that every historical schema version is automatically registered for decoding. Verify representative old records against your consumer before deployment.
+
+Kafka offsets are committed for records handed to processing even if decoding or the callback fails. Decoding errors occur before the normal callback-retry path, so `retry.enabled` alone does not guarantee retention of malformed or incompatible records. See [offsets, failures, and retries](/docs/how-to/kafka/general/.md#offsets-failures-and-retries).
 
 ## Configure a Subscriber to use the schema registry[​](#configure-a-subscriber-to-use-the-schema-registry "Direct link to Configure a Subscriber to use the schema registry")
 
@@ -9518,7 +9923,7 @@ func (t transformer) GetSchemaSettings() (*stream.SchemaSettings, error) {
 }
 ```
 
-Note that gosoline will only allow you to have one transformer per model when using the schema registry as proper schema evolution via the registry should make versioning with multiple transformers obsolete.
+Gosoline allows only one transformer per input model when using the schema registry. Evolve the schema and transformer together, and verify that the deployed transformer can handle the records it will encounter.
 
 
 ---
@@ -12249,15 +12654,25 @@ func (c *consumer) Consume(ctx context.Context, order OrderCreated, attributes m
 }
 ```
 
-The boolean controls acknowledgement:
+The boolean reports whether processing succeeded. The input determines how that result affects acknowledgement or redelivery:
 
-| Return       | Meaning                                                                    |
-| ------------ | -------------------------------------------------------------------------- |
-| `true, nil`  | Processing succeeded; acknowledge the message                              |
-| `false, nil` | Processing did not complete; do not acknowledge and retry where configured |
-| `false, err` | Processing failed; record the error and retry where configured             |
+| Return       | Meaning                                                                            |
+| ------------ | ---------------------------------------------------------------------------------- |
+| `true, nil`  | Processing succeeded                                                               |
+| `false, nil` | Processing did not complete; use native redelivery or the configured retry handler |
+| `false, err` | Processing failed; record the error and retry where configured                     |
 
-Only return `true` after the business operation is complete. The transport determines how an unacknowledged message is redelivered. When the input has no native retry mechanism, configure the consumer retry handler.
+Only return `true` after the business operation is complete. The boolean controls the retry decision independently of the error: `true, err` logs the error but still reports success.
+
+| Input                  | Failure behavior                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| SQS / SNS subscription | Failed messages are not deleted and can be redelivered after their visibility timeout. Native retry is selected automatically.      |
+| Kafka                  | Records handed to processing are committed even if processing fails. Enable the consumer retry handler for application failures.    |
+| Kinesis                | Records handed to processing are checkpointed even if processing fails. Enable the consumer retry handler for application failures. |
+| Redis list             | Reading removes the message from the list. Enable the consumer retry handler for application failures.                              |
+| File / in-memory       | Failed messages are not automatically read again. Enable the consumer retry handler when retries are needed.                        |
+
+For an input without native retry, configure `stream.consumer.<name>.retry.enabled: true`; the default retry transport is SQS. This writes failed callback messages to a separate retry queue rather than rewinding the original transport. Retry publication errors are logged; publication is not atomic with Kafka commits or Kinesis checkpoints. Model-selection and decoding errors return before this normal callback-retry path, so enabling retries is not a dead-letter guarantee for malformed messages. Make business operations idempotent because transport redelivery and retries can repeat them.
 
 ## Run the consumer[​](#run-the-consumer "Direct link to Run the consumer")
 
@@ -12309,8 +12724,6 @@ stream:
       type: file
 
       filename: events.jsonl
-
-      blocking: false
 ```
 
 The file input expects one serialized `stream.Message` per line, not a bare domain object:
@@ -12333,10 +12746,6 @@ stream:
     default:
 
       input: orders
-
-      retry:
-
-        enabled: true
 
 
 
@@ -12431,17 +12840,37 @@ Run it from `docs/docs/how-to/streaming-applications/src/consumer`:
 go run .
 ```
 
-The non-blocking file input closes after both records are consumed, so the example application exits by itself.
+The file input finishes at EOF after its workers finish processing both records, so the example application exits by itself.
+
+The commands use the Gosoline version pinned in the docs repository's `go.mod`. To exercise an unreleased branch in a sibling `gosoline` checkout, create a local Go workspace from the docs repository root with `go work init . ../gosoline` (or add both modules to an existing workspace). Then run the example from its directory. Keep the local workspace out of commits.
 
 ## Concurrency and batches[​](#concurrency-and-batches "Direct link to Concurrency and batches")
 
-`stream.consumer.<name>.runner_count` controls concurrent processing for a normal consumer. Increase it only when callback operations are safe to run concurrently and message ordering is not required.
+Configure concurrency on **the input**, using `stream.input.<name>.runner_count`; the default is `1`. The callback instance is shared by its runners, so its state and downstream operations must be safe for concurrent use.
 
-Use `application.RunBatchConsumer` or `RunBatchConsumers` when the callback should receive batches. Batch consumers have separate callback interfaces and settings; they are not equivalent to increasing `runner_count`.
+| Input                    | Concurrency and ordering                                                                                                                                                      |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SQS / SNS subscription   | Each runner receives a batch and processes its messages sequentially. Multiple runners can process different batches concurrently.                                            |
+| Kafka                    | The runner count limits concurrent record callbacks. `processing_mode: ordered` preserves processing order within each partition; `unordered` is the default.                 |
+| Kinesis                  | The runner count limits concurrent record callbacks across owned shards. `processing_mode: ordered` preserves processing order within each shard; `unordered` is the default. |
+| File / Redis / in-memory | The runner count controls concurrent callback workers; there is no `processing_mode` setting.                                                                                 |
+
+Kafka and Kinesis ordered mode still allows concurrency across partitions or shards. With several unordered runners, records from the same partition or shard may execute concurrently.
+
+Callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
 
 ## Graceful processing[​](#graceful-processing "Direct link to Graceful processing")
 
-The consumer derives a delayed cancellation context for each callback. `consume_grace_time` gives in-flight processing a short grace period after shutdown begins. `acknowledge_grace_time` and retry grace settings similarly allow final acknowledgement or retry writes. Keep callback work bounded and always pass its context to downstream calls.
+`stream.consumer.<name>.grace_time` defaults to `10s` and defines one shared processing deadline after shutdown begins, covering both the primary input and the retry input. Inputs stop fetching new messages; already fetched or admitted work may still reach the callback while draining. When the deadline expires, in-flight callback contexts are canceled.
+
+Final transport operations have separate windows:
+
+* SQS/SNS input `grace_time` allows final deletions after cancellation (default `10s`).
+* Kafka input `grace_time` allows final offset commits after processing finishes (default `10s`); see [Kafka shutdown](/docs/how-to/kafka/general/.md#shutdown).
+* Kinesis input `release_delay` allows final checkpoint persistence, shard release, and client deregistration after processing ends (default `5s`).
+* Consumer `retry.grace_time` allows final retry writes; it defaults from `kernel.kill_timeout`.
+
+These windows rely on cooperative cancellation. Keep callback work bounded, pass its context to downstream calls, and give the kernel and deployment shutdown timeouts enough room for processing and final transport operations. Cancellation does not undo an operation or guarantee redelivery: the transport rules above still apply.
 
 ## What's next?[​](#whats-next "Direct link to What's next?")
 
@@ -12523,7 +12952,7 @@ err := producer.WriteOne(ctx, order, map[string]string{
 })
 ```
 
-Attributes carry transport metadata and application routing information. Transport-specific helpers or constants should be used where available, such as Kafka keys or Kinesis partition keys.
+Attributes carry transport metadata and application routing information. Transport-specific helpers or constants should be used where available, such as Kafka keys or Kinesis partition keys. For Kafka, see [message format, keys, and headers](/docs/how-to/kafka/general/.md#message-format-keys-and-headers) for `stream.AttributeKafkaKey`, partition routing, and header conversion examples.
 
 ## Configure encoding and output[​](#configure-encoding-and-output "Direct link to Configure encoding and output")
 
@@ -12732,7 +13161,7 @@ model -> Producer -> Output -> queue, topic, or stream -> Input -> Consumer -> c
 * An **output** writes encoded messages to a transport.
 * A **producer** encodes Go values and delegates to an output.
 * An **input** reads messages from a transport.
-* A **consumer** decodes those messages, calls your callback, and handles acknowledgement, retries, health checks, metrics, and tracing.
+* A **consumer** decodes those messages, calls your callback, selects the retry mechanism, and handles health checks, metrics, tracing, and the shared processing shutdown deadline. The input executes transport acknowledgement or checkpointing.
 
 Most applications should use `Producer` and a typed consumer rather than operate an `Input` or `Output` directly.
 
@@ -12780,7 +13209,7 @@ stream:
       encoding: application/json
 ```
 
-`stream.consumer.orders.input` selects the input named `orders`. `stream.producer.notifications.output` selects the output named `notifications`. When omitted, both links default to the component's own name.
+`stream.consumer.orders.input` selects the input named `orders`. When omitted, a consumer's input defaults to the literal name `consumer`, regardless of the consumer's name. `stream.producer.notifications.output` selects the output named `notifications`; when omitted, a producer's output defaults to the producer's own name.
 
 This indirection lets you change transports without changing application code. A producer named `orders` is created the same way whether its configured output is a file, SQS queue, SNS topic, Kinesis stream, Kafka topic, or Redis list.
 
@@ -12802,23 +13231,27 @@ Each transport has additional settings such as `queue_id`, `topic_id`, `stream_n
 
 ## Input and output interfaces[​](#input-and-output-interfaces "Direct link to Input and output interfaces")
 
-An input exposes a channel of `*stream.Message` and lifecycle methods:
+An input delivers `*stream.Message` values through a processing callback and exposes lifecycle methods:
 
 ```
+type InputProcess func(ctx context.Context, msg *Message) (ack bool)
+
+
+
 type Input interface {
 
-    Run(ctx context.Context) error
+    Run(ctx context.Context, process InputProcess) error
 
     Stop(ctx context.Context)
-
-    Data() <-chan *Message
 
     IsHealthy() bool
 
 }
 ```
 
-The consumer owns this lifecycle. It runs the configured input, decodes its messages, and acknowledges them when the transport supports acknowledgement.
+The consumer runs the configured input and supplies the decoding and business-processing callback. The input owns fetching, concurrency, and transport acknowledgement. `Stop` stops fetching and allows already fetched work to drain; finite inputs such as files can finish on their own. `Run` should only be called once.
+
+The callback result is transport-specific: SQS/SNS can leave failed messages undeleted for native redelivery, while Kafka/Kinesis commit or checkpoint records handed to processing even when processing fails. Redis reads remove messages from the list. See [consumer retry, concurrency, and shutdown behavior](/docs/how-to/streaming-applications/create-a-consumer/.md) before selecting a transport.
 
 An output accepts values that already implement `WritableMessage`:
 
