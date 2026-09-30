@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"embed"
 	"fmt"
 
 	"github.com/gosoline-project/httpserver"
+	"github.com/gosoline-project/sqlc"
 	"github.com/gosoline-project/sqlh"
 	"github.com/gosoline-project/sqlr"
 	"github.com/justtrackio/gosoline/pkg/application"
@@ -37,16 +37,27 @@ type PostOutput struct {
 
 // snippet-start: transaction handler
 type PostHandler struct {
-	runner *sqlh.TxRunner
+	runner   *sqlh.TxRunner
+	postRepo sqlr.RepositoryTx[int64, Post]
 }
 
 func NewPostHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*PostHandler, error) {
-	runner, err := sqlh.NewTxRunner(ctx, config, logger, "default")
+	client, err := sqlc.ProvideClient(ctx, config, logger, "default")
 	if err != nil {
 		return nil, err
 	}
 
-	return &PostHandler{runner: runner}, nil
+	postRepo, err := sqlr.NewRepositoryTxWithSettings[int64, Post](client, sqlr.DefaultSettings())
+	if err != nil {
+		return nil, err
+	}
+
+	runner, err := sqlh.NewTxRunnerWithClient(client)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PostHandler{runner: runner, postRepo: postRepo}, nil
 }
 
 func (h *PostHandler) CreatePost(ctx context.Context, input *PostCreateInput) (PostOutput, error) {
@@ -57,7 +68,7 @@ func (h *PostHandler) CreatePost(ctx context.Context, input *PostCreateInput) (P
 			Status: "draft",
 		}
 
-		if _, err := tx.Q().Into("posts").Records(post).Exec(tx); err != nil {
+		if err := h.postRepo.Create(tx, post); err != nil {
 			return PostOutput{}, fmt.Errorf("failed to create post: %w", err)
 		}
 
@@ -72,18 +83,10 @@ func (h *PostHandler) CreatePost(ctx context.Context, input *PostCreateInput) (P
 
 // snippet-end: transaction handler
 
-//go:embed config.dist.yml
-var config embed.FS
-
 // snippet-start: transaction register
 func main() {
-	configBytes, err := config.ReadFile("config.dist.yml")
-	if err != nil {
-		panic(err)
-	}
-
 	application.New(
-		application.WithConfigBytes(configBytes, "yml"),
+		application.WithConfigFile("config.dist.yml", "yml"),
 		application.WithLoggerHandlersFromConfig,
 		application.WithModuleFactory("http", httpserver.NewServer(
 			"default",

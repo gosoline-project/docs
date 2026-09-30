@@ -535,7 +535,7 @@ func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, e
 }
 ```
 
-Custom error handlers that need a specific response body still return an explicit `httpserver.Response`.
+Custom error-body callbacks return `any`. Return ordinary values for negotiated responses, or an explicit `httpserver.Response` to bypass negotiation.
 
 In `v0.6.4`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
 

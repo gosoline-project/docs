@@ -277,11 +277,10 @@ Set `Identity` when a public ID uses a non-primary-key column or when public `Id
 SQLH rejects differing `Id` and `K` types when `Identity` is nil.
 Use the default lookup only when the types and key semantics match.
 In a custom lookup, use the supplied repository and transaction.
-Add the public-ID predicate, apply the supplied scope, return any scope error, and apply the builder.
+Add the public-ID predicate. For every lookup, apply the supplied scope, return its error before repository work, and apply the supplied builder.
 Return `sqlr.ErrNotFound` when no row matches.
-Do not drop the builder.
-Update, PATCH, and delete lookups use it for relation preloads and `FOR UPDATE`.
-SQLR locks root and preloaded rows in the same transaction, including nested and many-to-many preloads.
+Ordinary GET lookups use the builder for relation preloads, but not for row locking.
+Default Update, PATCH, and Delete lookups also use it for `FOR UPDATE`. SQLR locks the root and preloaded rows in the same transaction, including nested and many-to-many preloads.
 
 ## 8. Preserve Transactions, Background Work, and Events
 

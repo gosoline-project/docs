@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"embed"
 	"time"
 
 	"github.com/gin-gonic/gin/binding"
@@ -116,13 +115,10 @@ func NewAuthorHandler() httpserver.HandlerFactory[AuthorCrudHandler] {
 
 // snippet-end: manual handler
 
-//go:embed config.dist.yml
-var config embed.FS
-
 // snippet-start: main
 func main() {
 	application.New(
-		application.WithConfigBytes(mustReadConfig(), "yml"),
+		application.WithConfigFile("config.dist.yml", "yml"),
 		application.WithLoggerHandlersFromConfig,
 		application.WithModuleFactory("http", httpserver.NewServer(
 			"default",
@@ -136,12 +132,3 @@ func main() {
 }
 
 // snippet-end: main
-
-func mustReadConfig() []byte {
-	data, err := config.ReadFile("config.dist.yml")
-	if err != nil {
-		panic(err)
-	}
-
-	return data
-}

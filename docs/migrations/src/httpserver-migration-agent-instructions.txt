@@ -107,7 +107,7 @@ Response migration rules:
 - Do not use Header() to replace the negotiated Content-Type. The response negotiator sets that header.
 - The Response interface exposes ContentType(), Body(), Header(), and StatusCode(). Do not access fields such as resp.StatusCode or resp.Header in tests.
 - For errors, return the zero value for O and the error. Use NewErrorWithStatus(status, err) when the error must set an explicit status.
-- Custom error handlers that return a constructed response must still return a Response.
+- Custom error-body callbacks use func(statusCode int, err error) any. Return ordinary values for negotiation or a full Response to bypass it.
 - The v0.6.4 default error handler returns the actual error message for 4xx responses and returns {"err":"internal server error"} for 5xx responses.
 - The 5xx behavior is controlled by httpserver.<name>.errors.privacy. The default private value hides internal details. Set privacy to public only when exposing internal 5xx messages is intentional.
 

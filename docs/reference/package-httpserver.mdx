@@ -222,28 +222,33 @@ Binding and validation failures return `400 Bad Request`. Validation bind failur
 
 ## Error handling
 
-### [WithErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)
+### [WithErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/server_options.go)
 
 ```go
-httpserver.WithErrorHandler(func(statusCode int, err error) httpserver.Response {
-    return httpserver.NewJsonResponse(
-        map[string]any{"error": err.Error()},
-        httpserver.WithStatusCode(statusCode),
-    )
+httpserver.WithErrorHandler(func(statusCode int, err error) any {
+    return map[string]any{"error": err.Error()}
 })
 ```
 
-Sets a custom global error handler. By default, 4xx responses return `{"err":"<message>"}` and 5xx responses return `{"err":"internal server error"}`. Set `httpserver.<name>.errors.privacy` to `public` to expose 5xx error messages.
+Configures the error-body handler for the server that receives this option. Ordinary values use response negotiation.
+By default, 4xx responses return `{"err":"<message>"}` and 5xx responses return `{"err":"internal server error"}`.
+Set `httpserver.<name>.errors.privacy` to `public` to expose default 5xx error messages.
 
-### [GetErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)
+### [NewErrorWithStatus()](https://github.com/gosoline-project/httpserver/blob/main/error.go)
+
+Return a zero output and a wrapped error to set an expected client-error status:
 
 ```go
-return httpserver.GetErrorHandler()(http.StatusBadRequest, err), nil
+return nil, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
 ```
 
-Returns the current error handler, useful for returning client errors with specific status codes.
+For a struct output, replace `nil` with that struct's zero value.
 
-Use `NewErrorWithStatus(statusCode, err)` when middleware attaches an error to the Gin context and the response should use a status other than 500.
+Middleware can attach the same wrapped error to the Gin context:
+
+```go
+ginCtx.Error(httpserver.NewErrorWithStatus(http.StatusBadRequest, err))
+```
 
 ## Middleware
 

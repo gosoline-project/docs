@@ -300,13 +300,11 @@ route. `DeleteNoContent` never calls `DeleteOutput`.
 Set `Identity` when a public ID uses a non-primary-key column or when public `Id` and stored key `K` have different Go types.
 SQLH rejects differing `Id` and `K` types when `Identity` is nil.
 Use the default lookup only when types and key semantics match.
-In a custom lookup, use the supplied repository and transaction.
-Add the public-ID predicate, apply the supplied scope, return any scope error, and apply the builder.
+Add the public-ID predicate. Apply the supplied scope and builder for every identity lookup. Return any scope error before repository work.
 Return `sqlr.ErrNotFound` when no row matches.
 
-Do not drop the builder.
-Update, PATCH, and delete lookups use it for relation preloads and `FOR UPDATE`.
-SQLR locks root and preloaded rows in the same transaction, including nested and many-to-many preloads.
+Ordinary GET lookups use the builder for relation preloads, but not for row locking.
+Default Update, PATCH, and Delete lookup builders also add `FOR UPDATE`. SQLR locks the root and preloaded rows in the same transaction, including nested and many-to-many preloads.
 
 ### 7. Preserve transactions, background work, and events
 
@@ -360,7 +358,8 @@ Use the repository's normal focused unit, integration, HTTP, rollback, event, an
 - Requests with page or unknown fields preserve the old input and pagination behavior.
 - Row and count scopes match.
 - Soft-delete visibility, delete strategy, default 204 behavior, and body-returning DELETE match.
-- Custom identity applies public-ID lookup, scope, relation builder, and root-row lock.
+- Custom identity applies the public-ID predicate, supplied scope, and supplied builder to every lookup.
+- Only default Update, PATCH, and Delete lookups add `FOR UPDATE`. Ordinary GET does not.
 - SQL writes to root and association rows roll back on failure; external side effects preserve their original order and failure behavior.
 - Background transitions preserve transaction and locking behavior.
 - Events occur at the same post-commit boundary with the same visibility and retry behavior.

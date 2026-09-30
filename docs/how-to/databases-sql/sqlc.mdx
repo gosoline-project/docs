@@ -279,5 +279,8 @@ When creating a client from a wrapped handle, make sure the `QueryBuilderConfig`
 
 - `sqlr.RepositoryTx` can reuse prepared statements inside transactions, but the repository client must come from the same connection source that opens the transaction.
 - SQLH creates one transaction for each default CRUD operation and uses a transaction-aware SQLR repository built from the same SQL client.
-- For custom SQLH operations, use `sqlh.TxRunner` or `sqlc.Client.WithTx()` and pass the active transaction to SQLR or SQLC operations.
+- SQLH `*Operation` callbacks already receive the active `sqlr.TTx`. Use it directly. Do not start another transaction.
+- For a separate typed handler outside SQLH CRUD, use `sqlh.TxRunner` or `sqlc.Client.WithTx()`.
+  `TxRunner` supplies `sqlr.TTx`. `WithTx()` supplies `sqlc.Tx`.
+  Wrap `sqlc.Tx` with `sqlr.NewTx(tx)` for SQLR calls. Use the raw `sqlc.Tx` for SQLC calls.
 - SQLR `Count()` strips row locking and pagination. Apply the same filters and scope to the list query and count query.

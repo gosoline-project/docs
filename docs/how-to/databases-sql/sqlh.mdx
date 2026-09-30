@@ -37,6 +37,9 @@ Configure the HTTP server and the SQL client before the handler starts:
 
 <CodeBlock title="config.dist.yml" language="yaml" snippet="config">{CrudConfig}</CodeBlock>
 
+Each runnable example loads `config.dist.yml` from disk in the current working directory.
+Run each example from its own directory. The migration path in its config is relative to that directory.
+
 ## CRUD Model
 
 SQLH separates four concerns:
@@ -144,11 +147,11 @@ The HTTP server renders the result after the commit.
 
 The SQLH repository must use the same SQL client that starts the transaction. This requirement is important when SQLR uses prepared statements. The default handler factory creates both objects from the configured client.
 
-The old `sqlh.WithTx`, `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR` APIs are removed. Use a SQLH CRUD operation for entity CRUD. For another typed operation, use `TxRunner` and adapt it to the handler signature:
+The old `sqlh.WithTx`, `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR` APIs are removed. SQLH `*Operation` callbacks already receive the active `sqlr.TTx`. Use it directly for SQL work. Do not start another transaction inside a callback. For another typed operation outside a CRUD definition, use `TxRunner` and adapt it to the handler signature:
 
 <CodeBlock title="main.go" language="go" snippet="transaction handler">{TxMain}</CodeBlock>
 
-<CodeBlock title="main.go" language="yaml" snippet="config">{TxConfig}</CodeBlock>
+<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{TxConfig}</CodeBlock>
 
 `TxRunner.Run` rolls back transaction-bound SQL changes when the operation returns an error or panics.
 It cannot undo blob-store or other external effects.
@@ -513,7 +516,8 @@ definition.Identity = func(
 }
 ```
 
-Always apply the supplied `scope`. It contains force filters, delete visibility, and other restrictions that protect read, update, patch, and delete operations.
+SQLH passes a builder to every custom identity lookup. Apply it, along with the public-ID predicate and supplied scope, before querying. Return scope errors before repository work.
+Ordinary GET builders can add relation preloads but do not include `FOR UPDATE`. Default Update, PATCH, and Delete builders include that lock.
 
 SQLH uses physical SQLR deletion by default. Use `DeleteScope` and `Delete` for soft deletion:
 
@@ -560,7 +564,9 @@ The custom factory receives the same `sqlc.Client` that SQLH uses to start trans
 
 <CodeBlock title="main.go" language="go" snippet="repository wrapper">{CustomRepositoryMain}</CodeBlock>
 
-<CodeBlock title="main.go" language="yaml" snippet="config">{CustomRepositoryConfig}</CodeBlock>
+This configuration enables migrations for the selected `reporting` client.
+
+<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{CustomRepositoryConfig}</CodeBlock>
 
 A custom repository must implement the transaction-aware `sqlr.RepositoryTx` interface. The interface includes `Count` in addition to `Create`, `Read`, `Query`, `Update`, `Delete`, and `Close`.
 
@@ -580,7 +586,9 @@ type CrudOperation[K sqlr.KeyTypes, E sqlr.Entitier[K], I, O any] func(
 The definition supports `CreateOperation`, `ReadOperation`, `UpdateOperation`, `PatchOperation`, `ListOperation`, and `DeleteOperation`. An operation field replaces the complete default operation. `UpdateOperation` does not change the default PATCH pipeline. `PatchOperation` replaces the complete patch pipeline.
 
 Use custom operations for domain rules that need direct control over persistence.
-The override owns authorization, validation, scope, locking, association policy, and response mapping.
+An override owns authorization, validation, scope, locking, association policy, and persistence for its operation.
+Create, read, update, patch, and list overrides return their typed operation results. `DeleteOperation` instead returns the deleted `*E`.
+`handler.Delete` applies `DeleteOutput` to that entity. `handler.DeleteNoContent` skips the mapper and returns 204.
 SQLH wraps it in `TxRunner`; its transaction covers SQL work that uses the supplied transaction and repository.
 It cannot roll back blob-store or other external effects, and MySQL DDL may commit implicitly.
 Keep legacy lifecycle handlers outside SQLH CRUD when the old order or failure behavior requires it.

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"embed"
 
 	"github.com/gin-gonic/gin/binding"
 	"github.com/gosoline-project/httpserver"
@@ -84,12 +83,13 @@ func (r *ReportingAuthorRepository) Read(tx sqlr.TTx, id int64, opts ...func(qb 
 }
 
 func (r *ReportingAuthorRepository) Query(tx sqlr.TTx, opts ...func(qb *sqlr.QueryBuilderSelect)) ([]Author, error) {
-	opts = append(opts, func(qb *sqlr.QueryBuilderSelect) {
+	return r.delegate.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
 		qb.OrderBy("created_at DESC")
 		qb.Limit(100)
+		for _, opt := range opts {
+			opt(qb)
+		}
 	})
-
-	return r.delegate.Query(tx, opts...)
 }
 
 func (r *ReportingAuthorRepository) Count(tx sqlr.TTx, qb *sqlr.QueryBuilderSelect) (int, error) {
@@ -110,18 +110,10 @@ func (r *ReportingAuthorRepository) Close() error {
 
 // snippet-end: repository wrapper
 
-//go:embed config.dist.yml
-var config embed.FS
-
 // snippet-start: custom repository
 func main() {
-	configBytes, err := config.ReadFile("config.dist.yml")
-	if err != nil {
-		panic(err)
-	}
-
 	application.New(
-		application.WithConfigBytes(configBytes, "yml"),
+		application.WithConfigFile("config.dist.yml", "yml"),
 		application.WithLoggerHandlersFromConfig,
 		application.WithModuleFactory("http", httpserver.NewServer(
 			"default",
