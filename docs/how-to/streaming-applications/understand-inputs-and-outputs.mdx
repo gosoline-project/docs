@@ -12,7 +12,7 @@ model -> Producer -> Output -> queue, topic, or stream -> Input -> Consumer -> c
 - An **output** writes encoded messages to a transport.
 - A **producer** encodes Go values and delegates to an output.
 - An **input** reads messages from a transport.
-- A **consumer** decodes those messages, calls your callback, and handles acknowledgement, retries, health checks, metrics, and tracing.
+- A **consumer** decodes those messages, calls your callback, selects the retry mechanism, and handles health checks, metrics, tracing, and the shared processing shutdown deadline. The input executes transport acknowledgement or checkpointing.
 
 Most applications should use `Producer` and a typed consumer rather than operate an `Input` or `Output` directly.
 
@@ -42,7 +42,7 @@ stream:
       encoding: application/json
 ```
 
-`stream.consumer.orders.input` selects the input named `orders`. `stream.producer.notifications.output` selects the output named `notifications`. When omitted, both links default to the component's own name.
+`stream.consumer.orders.input` selects the input named `orders`. When omitted, a consumer's input defaults to the literal name `consumer`, regardless of the consumer's name. `stream.producer.notifications.output` selects the output named `notifications`; when omitted, a producer's output defaults to the producer's own name.
 
 This indirection lets you change transports without changing application code. A producer named `orders` is created the same way whether its configured output is a file, SQS queue, SNS topic, Kinesis stream, Kafka topic, or Redis list.
 
@@ -64,18 +64,21 @@ Each transport has additional settings such as `queue_id`, `topic_id`, `stream_n
 
 ## Input and output interfaces
 
-An input exposes a channel of `*stream.Message` and lifecycle methods:
+An input delivers `*stream.Message` values through a processing callback and exposes lifecycle methods:
 
 ```go
+type InputProcess func(ctx context.Context, msg *Message) (ack bool)
+
 type Input interface {
-    Run(ctx context.Context) error
+    Run(ctx context.Context, process InputProcess) error
     Stop(ctx context.Context)
-    Data() <-chan *Message
     IsHealthy() bool
 }
 ```
 
-The consumer owns this lifecycle. It runs the configured input, decodes its messages, and acknowledges them when the transport supports acknowledgement.
+The consumer runs the configured input and supplies the decoding and business-processing callback. The input owns fetching, concurrency, and transport acknowledgement. `Stop` stops fetching and allows already fetched work to drain; finite inputs such as files can finish on their own. `Run` should only be called once.
+
+The callback result is transport-specific: SQS/SNS can leave failed messages undeleted for native redelivery, while Kafka/Kinesis commit or checkpoint records handed to processing even when processing fails. Redis reads remove messages from the list. See [consumer retry, concurrency, and shutdown behavior](/how-to/streaming-applications/create-a-consumer) before selecting a transport.
 
 An output accepts values that already implement `WritableMessage`:
 

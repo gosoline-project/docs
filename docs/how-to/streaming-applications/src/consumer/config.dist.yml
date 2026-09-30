@@ -12,4 +12,3 @@ stream:
     orders:
       type: file
       filename: events.jsonl
-      blocking: false
