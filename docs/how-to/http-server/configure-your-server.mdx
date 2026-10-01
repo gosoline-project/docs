@@ -141,7 +141,7 @@ httpserver:
 |---|---|---|---|
 | `privacy` | string | `"private"` | Error detail policy for 5xx responses. Use `"private"` to hide internal details, or `"public"` to return the original error message. |
 
-With the default `private` setting, internal 5xx errors return `{"err":"internal server error"}`. Status errors below 500 still expose their message, so client errors returned through `NewErrorWithStatus` or `GetErrorHandler()(status, err)` remain useful to API clients.
+With the default `private` setting, internal 5xx errors return `{"err":"internal server error"}`. Errors below 500 wrapped with `NewErrorWithStatus` still expose their message to API clients.
 
 Set `privacy` to `public` only when exposing internal 5xx error messages is intentional:
 

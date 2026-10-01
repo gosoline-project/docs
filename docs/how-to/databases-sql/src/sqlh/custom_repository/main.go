@@ -2,14 +2,16 @@ package main
 
 import (
 	"context"
-	_ "embed"
 
+	"github.com/gin-gonic/gin/binding"
 	"github.com/gosoline-project/httpserver"
+	"github.com/gosoline-project/sqlc"
 	"github.com/gosoline-project/sqlh"
 	"github.com/gosoline-project/sqlr"
 	"github.com/justtrackio/gosoline/pkg/application"
 	"github.com/justtrackio/gosoline/pkg/cfg"
 	"github.com/justtrackio/gosoline/pkg/log"
+	"github.com/justtrackio/gosoline/pkg/validation"
 )
 
 // snippet-start: entities
@@ -25,41 +27,69 @@ type AuthorCreateInput struct {
 }
 
 type AuthorUpdateInput struct {
+	sqlh.InputById[int64]
 	Name string `json:"name" binding:"required"`
 }
 
 // snippet-end: entities
 
-type AuthorTransformer struct{}
+type AuthorMapper struct{}
 
-func (t *AuthorTransformer) TransformCreateInput(_ context.Context, input *AuthorCreateInput) (*Author, error) {
-	return &Author{
-		Name:  input.Name,
-		Email: input.Email,
-	}, nil
+func (t *AuthorMapper) TransformCreateInput(_ context.Context, input *AuthorCreateInput) (*Author, error) {
+	return &Author{Name: input.Name, Email: input.Email}, nil
 }
 
-func (t *AuthorTransformer) TransformUpdateInput(_ context.Context, entity *Author, input *AuthorUpdateInput) (*Author, error) {
+func (t *AuthorMapper) TransformUpdateInput(_ context.Context, entity *Author, input *AuthorUpdateInput) (*Author, error) {
+	if err := binding.Validator.ValidateStruct(input); err != nil {
+		return nil, validation.NewError(err)
+	}
+
 	entity.Name = input.Name
 
 	return entity, nil
 }
 
-func (t *AuthorTransformer) RenderEntityResponse(_ context.Context, entity *Author) (httpserver.Response, error) {
-	return httpserver.NewJsonResponse(entity), nil
+func (t *AuthorMapper) TransformPatchInputFromEntity(_ context.Context, entity *Author) (*AuthorUpdateInput, error) {
+	return &AuthorUpdateInput{
+		InputById: sqlh.InputById[int64]{Id: entity.Id},
+		Name:      entity.Name,
+	}, nil
 }
 
-func (t *AuthorTransformer) RenderQueryResponse(_ context.Context, entities []Author) (httpserver.Response, error) {
-	return httpserver.NewJsonResponse(entities), nil
+func (t *AuthorMapper) TransformOutput(_ context.Context, entity *Author) (*Author, error) {
+	return entity, nil
 }
+
+// snippet-start: reporting list input
+const (
+	reportingAuthorOrderBy      = "created_at DESC"
+	reportingAuthorDefaultLimit = 100
+)
+
+type reportingAuthorListInput struct {
+	sqlh.ListInput
+}
+
+func (i reportingAuthorListInput) ApplyQueryModifiers(qb *sqlr.QueryBuilderSelect) {
+	qb.OrderBy(reportingAuthorOrderBy)
+}
+
+func (i reportingAuthorListInput) ApplyPagination(qb *sqlr.QueryBuilderSelect) {
+	i.ListInput.ApplyPagination(qb)
+	if i.Page.Limit == 0 {
+		qb.Limit(reportingAuthorDefaultLimit)
+	}
+}
+
+// snippet-end: reporting list input
 
 // snippet-start: repository wrapper
 type ReportingAuthorRepository struct {
-	delegate sqlr.Repository[int64, Author]
+	delegate sqlr.RepositoryTx[int64, Author]
 }
 
-func NewReportingAuthorRepository(ctx context.Context, config cfg.Config, logger log.Logger, name string) (sqlr.Repository[int64, Author], error) {
-	repo, err := sqlr.NewRepository[int64, Author](ctx, config, logger, name)
+func NewReportingAuthorRepository(client sqlc.Client, settings sqlr.Settings) (sqlr.RepositoryTx[int64, Author], error) {
+	repo, err := sqlr.NewRepositoryTxWithSettings[int64, Author](client, settings)
 	if err != nil {
 		return nil, err
 	}
@@ -67,27 +97,34 @@ func NewReportingAuthorRepository(ctx context.Context, config cfg.Config, logger
 	return &ReportingAuthorRepository{delegate: repo}, nil
 }
 
-func (r *ReportingAuthorRepository) Create(ctx context.Context, entity *Author, opts ...func(qb *sqlr.QueryBuilderCreate)) error {
-	return r.delegate.Create(ctx, entity, opts...)
+func (r *ReportingAuthorRepository) Create(tx sqlr.TTx, entity *Author, opts ...func(qb *sqlr.QueryBuilderCreate)) error {
+	return r.delegate.Create(tx, entity, opts...)
 }
 
-func (r *ReportingAuthorRepository) Read(ctx context.Context, id int64, opts ...func(qb *sqlr.QueryBuilderRead)) (*Author, error) {
-	return r.delegate.Read(ctx, id, opts...)
+func (r *ReportingAuthorRepository) Read(tx sqlr.TTx, id int64, opts ...func(qb *sqlr.QueryBuilderRead)) (*Author, error) {
+	return r.delegate.Read(tx, id, opts...)
 }
 
-func (r *ReportingAuthorRepository) Query(ctx context.Context, opts ...func(qb *sqlr.QueryBuilderSelect)) ([]Author, error) {
-	return r.delegate.Query(ctx, append(opts, func(qb *sqlr.QueryBuilderSelect) {
-		qb.OrderBy("created_at DESC")
-		qb.Limit(100)
-	})...)
+func (r *ReportingAuthorRepository) Query(tx sqlr.TTx, opts ...func(qb *sqlr.QueryBuilderSelect)) ([]Author, error) {
+	return r.delegate.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
+		qb.OrderBy(reportingAuthorOrderBy)
+		qb.Limit(reportingAuthorDefaultLimit)
+		for _, opt := range opts {
+			opt(qb)
+		}
+	})
 }
 
-func (r *ReportingAuthorRepository) Update(ctx context.Context, entity *Author, opts ...func(qb *sqlr.QueryBuilderUpdate)) (*Author, error) {
-	return r.delegate.Update(ctx, entity, opts...)
+func (r *ReportingAuthorRepository) Count(tx sqlr.TTx, qb *sqlr.QueryBuilderSelect) (int, error) {
+	return r.delegate.Count(tx, qb)
 }
 
-func (r *ReportingAuthorRepository) Delete(ctx context.Context, id int64, opts ...func(qb *sqlr.QueryBuilderDelete)) error {
-	return r.delegate.Delete(ctx, id, opts...)
+func (r *ReportingAuthorRepository) Update(tx sqlr.TTx, entity *Author, opts ...func(qb *sqlr.QueryBuilderUpdate)) (*Author, error) {
+	return r.delegate.Update(tx, entity, opts...)
+}
+
+func (r *ReportingAuthorRepository) Delete(tx sqlr.TTx, id int64, opts ...func(qb *sqlr.QueryBuilderDelete)) error {
+	return r.delegate.Delete(tx, id, opts...)
 }
 
 func (r *ReportingAuthorRepository) Close() error {
@@ -96,25 +133,30 @@ func (r *ReportingAuthorRepository) Close() error {
 
 // snippet-end: repository wrapper
 
-//go:embed config.dist.yml
-var config []byte
-
 // snippet-start: custom repository
 func main() {
 	application.New(
-		application.WithConfigBytes(config, "yml"),
+		application.WithConfigFile("config.dist.yml", "yml"),
 		application.WithLoggerHandlersFromConfig,
 		application.WithModuleFactory("http", httpserver.NewServer(
 			"default",
 			func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+				mapper := &AuthorMapper{}
+				definition := sqlh.CrudDefinition[
+					int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, reportingAuthorListInput, *Author,
+				]{
+					CreateInput:          mapper.TransformCreateInput,
+					UpdateInput:          mapper.TransformUpdateInput,
+					PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
+					Output:               mapper.TransformOutput,
+				}
 				router.HandleWith(sqlh.WithCrudHandlers(
 					1,
 					"author",
-					sqlh.SimpleTransformer(&AuthorTransformer{}),
+					sqlh.SimpleCrudDefinition(definition),
 					sqlh.WithClientName[int64, Author]("reporting"),
-					sqlh.WithRepositoryFactory[int64, Author](NewReportingAuthorRepository),
+					sqlh.WithRepositoryTxFactory[int64, Author](NewReportingAuthorRepository),
 				))
-
 				return nil
 			},
 		)),

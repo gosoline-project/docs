@@ -1,4 +1,4 @@
-Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.5.6, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
+Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.6.4, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
 
 Scope discovery:
 
@@ -14,9 +14,9 @@ Scope discovery:
 - Find all uses of GetStringFromRequest and GetUintFromRequest.
 - Find all uses of old response constructors and fields, especially NewResponse(body, contentType, statusCode, header), ContentTypeText, ContentTypeJson, ContentTypeHtml, ContentTypeProtobuf, Response.AddHeader, Response.WithBody, and Response.WithContentType.
 - Find all HTTP server test setup helpers that return an old httpserver.Definer or implement SetupApiDefinitions.
-- Find endpoints that accept large request bodies and check whether they need a v0.5.6 max_body_bytes override.
+- Find endpoints that accept large request bodies and check whether they need a v0.6.4 max_body_bytes override.
 - Find tests or clients that assert internal error response bodies, binding error status codes, CORS partial-origin matching, health-check error details, or profiling listen addresses.
-- Find all router.UseFactory calls and custom httpserver.MiddlewareFactory implementations, because v0.5.6 middleware factories receive server settings as a fourth argument.
+- Find all router.UseFactory calls and custom httpserver.MiddlewareFactory implementations, because v0.6.4 middleware factories receive server settings as a fourth argument.
 - Find any environment-specific need to expose internal 5xx error details, which now requires httpserver.<name>.errors.privacy: public.
 - Find old global CORS config keys: api_cors_allowed_origin_pattern, api_cors_allowed_headers, and api_cors_allowed_methods.
 
@@ -24,7 +24,7 @@ Do not start with a global import replacement. First classify each usage, becaus
 
 Migration order:
 
-1. Add the new dependency with: go get github.com/gosoline-project/httpserver@v0.5.6
+1. Add the new dependency with: go get github.com/gosoline-project/httpserver@v0.6.4
 2. Migrate server startup and router factories.
 3. Migrate route definitions from returned Definitions to mutating *Router.
 4. Migrate middleware registration.
@@ -33,7 +33,7 @@ Migration order:
 7. Consolidate old route-specific handlers into domain or route-group handlers where they share dependencies.
 8. Migrate request binding and raw request access.
 9. Migrate responses and handled errors.
-10. Review v0.5.6 runtime behavior: request body limits, binding errors, configurable error privacy, CORS origin matching, health responses, and profiling bind address.
+10. Review v0.6.4 runtime behavior: request body limits, binding errors, configurable error privacy, CORS origin matching, health responses, and profiling bind address.
 11. Migrate tests.
 12. Run formatting and tests.
 
@@ -68,14 +68,15 @@ Handler consolidation instructions:
 
 Handler signature transformations:
 
-- CreateHandler(handler) where handler.Handle(ctx, request) ignores input becomes BindN(h.Method) with func(ctx context.Context) (httpserver.Response, error).
-- CreateJsonHandler(handler) becomes Bind(h.Method) with json tags on the input struct.
-- CreateQueryHandler(handler) becomes Bind(h.Method) with form tags on the input struct.
-- CreateUriHandler(handler) becomes Bind(h.Method) with uri tags on the input struct.
-- CreateMultipleBindingsHandler(handler) becomes Bind(h.Method) with combined tags, or explicit Gin binders if necessary.
-- CreateRawHandler(handler) becomes BindNR(h.Method) and explicit req.Body reading.
-- CreateReaderHandler(handler) becomes BindNR(h.Method) and direct req.Body use.
+- CreateHandler(handler) where handler.Handle(ctx, request) ignores input becomes BindN(h.Method) with func(ctx context.Context) (O, error).
+- CreateJsonHandler(handler) becomes Bind(h.Method) with func(ctx context.Context, input *Input) (O, error) and json tags on the input struct.
+- CreateQueryHandler(handler) becomes Bind(h.Method) with func(ctx context.Context, input *Input) (O, error) and form tags on the input struct.
+- CreateUriHandler(handler) becomes Bind(h.Method) with func(ctx context.Context, input *Input) (O, error) and uri tags on the input struct.
+- CreateMultipleBindingsHandler(handler) becomes Bind(h.Method) with func(ctx context.Context, input *Input) (O, error) and combined tags, or explicit Gin binders if necessary.
+- CreateRawHandler(handler) becomes BindNR(h.Method) with func(ctx context.Context, req *http.Request) (O, error) and explicit req.Body reading.
+- CreateReaderHandler(handler) becomes BindNR(h.Method) with func(ctx context.Context, req *http.Request) (O, error) and direct req.Body use.
 - CreateSseHandler(handler) becomes BindSse or BindSseN.
+The ordinary result type O can be any Go value. Return it directly. See the response migration rules and the dedicated response customization section below.
 
 Replace old GetInput methods with input struct arguments. Old code that returns &Input{} from GetInput and then reads request.Body.(*Input) should become a method that directly accepts input *Input.
 
@@ -93,21 +94,22 @@ Request data migration rules:
 
 Prefer typed binding over manual request inspection. Use BindR or BindNR only when the handler truly needs the raw *http.Request, for example to read the body directly or resolve the client IP.
 
-In v0.5.6, Bind and BindSse binding or validation failures are client errors and return 400 Bad Request through the default error middleware. Update tests that expected 500 for malformed input.
+In v0.6.4, Bind and BindSse binding or validation failures are client errors and return 400 Bad Request through the default error middleware. Update tests that expected 500 for malformed input.
 
 Response migration rules:
 
-- NewJsonResponse(body) stays NewJsonResponse(body).
-- NewStatusResponse(code) stays NewStatusResponse(code).
-- NewResponse("text", ContentTypeText, code, header) becomes NewTextResponse("text", WithStatusCode(code), WithHeaders(header)).
+- Bind[I, O] uses func(ctx context.Context, input *I) (O, error). BindR[I, O] uses func(ctx context.Context, req *http.Request, input *I) (O, error). BindN[O] uses func(ctx context.Context) (O, error). BindNR[O] uses func(ctx context.Context, req *http.Request) (O, error).
+- A typed result can implement StatusCode() int or Header() http.Header. See /how-to/http-server/build-an-http-service#customizing-responses for status and header rules.
+- NewResponse("text", ContentTypeText, code, header) becomes NewTextResponse(text, WithStatusCode(code), WithHeaders(header)).
 - NewResponse([]byte(...), contentType, code, header) becomes NewResponse(WithBody(...), WithHeader("Content-Type", contentType), WithStatusCode(code), WithHeaders(header)).
-- resp.AddHeader(k, v) becomes WithHeader(k, v) at construction time, or an accumulated response option list.
-- resp.WithBody(body) becomes WithBody([]byte(...)) when constructing NewResponse.
-- The new Response is an interface. Do not access fields like resp.StatusCode or resp.Header; use resp.StatusCode() and resp.Header() in tests.
-- The v0.5.6 default error handler returns the actual error message for 4xx responses and returns {"err":"internal server error"} for 5xx responses.
+- A typed result that is a httpserver.Response bypasses response negotiation. Use it only when the handler must control the response directly.
+- Keep NewTextResponse for a fixed text representation, NewStatusResponse for bodyless responses that must bypass negotiation (for example, to preserve 204 for an unsupported Accept value), and NewResponse options for raw bytes or a required media type.
+- Do not use Header() to replace the negotiated Content-Type. The response negotiator sets that header.
+- The Response interface exposes ContentType(), Body(), Header(), and StatusCode(). Do not access fields such as resp.StatusCode or resp.Header in tests.
+- For errors, return the zero value for O and the error. Use NewErrorWithStatus(status, err) when the error must set an explicit status.
+- Custom error-body callbacks use func(statusCode int, err error) any. Return ordinary values for negotiation or a full Response to bypass it.
+- The v0.6.4 default error handler returns the actual error message for 4xx responses and returns {"err":"internal server error"} for 5xx responses.
 - The 5xx behavior is controlled by httpserver.<name>.errors.privacy. The default private value hides internal details. Set privacy to public only when exposing internal 5xx messages is intentional.
-- For handled client errors, prefer returning GetErrorHandler()(status, err), nil.
-- For errors attached to a Gin context or propagated through middleware, use NewErrorWithStatus(status, err) when the response status should not be 500.
 
 Auth migration rules:
 
@@ -150,7 +152,7 @@ Test migration rules:
 - Assert response.StatusCode(), response.Header(), and response.Body() instead of old response fields.
 - Keep integration or routing tests for binding, middleware, and path behavior.
 
-Configuration and runtime behavior rules for v0.5.6:
+Configuration and runtime behavior rules for v0.6.4:
 
 - The main server configuration lives under httpserver.<name>. RunDefaultServer uses the name default.
 - The server adds /health automatically. Unhealthy modules are reported as "unhealthy"; underlying error messages are logged but not returned in the response body.
@@ -177,7 +179,7 @@ Validation checklist:
 - All request binding tags still match the route parameters, query parameters, and body fields expected by clients.
 - All old request.ClientIp usages are replaced with ResolveClientIP(req) in BindR or BindNR handlers.
 - All handled client errors still return the intended HTTP status code.
-- Large-body endpoints have an explicit max_body_bytes setting if the v0.5.6 default 10 MiB limit is too small.
+- Large-body endpoints have an explicit max_body_bytes setting if the v0.6.4 default 10 MiB limit is too small.
 - Tests expecting binding failures now assert 400 Bad Request.
 - Tests expecting internal error details in 5xx JSON responses now assert the sanitized default/private body, configure httpserver.<name>.errors.privacy: public, or install a custom error handler intentionally.
 - CORS tests use full-origin matches and do not depend on partial regex matching.

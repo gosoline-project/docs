@@ -6,14 +6,10 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/gosoline-project/httpserver v0.6.4
 	github.com/gosoline-project/sqlc v0.4.0
-	github.com/gosoline-project/sqlh v0.7.0
+	github.com/gosoline-project/sqlh v0.8.0
 	github.com/gosoline-project/sqlr v0.9.1
 	github.com/justtrackio/gosoline v0.63.7
 )
-
-replace github.com/gosoline-project/sqlh => ../sqlh
-
-replace github.com/gosoline-project/sqlr => ../sqlr
 
 require (
 	dario.cat/mergo v1.0.1 // indirect

@@ -3,13 +3,13 @@ sidebar_position: 1
 title: Build an HTTP service
 ---
 
-In this guide, you'll build a complete HTTP service from scratch. You'll start with the basics of defining routes, then level up to type-safe handlers with dependency injection, request binding, and structured responses.
+In this guide, you will build an HTTP service from scratch. You will add routes, typed handlers, dependency injection, request binding, and negotiated responses.
 
 ## What is httpserver?
 
-The httpserver package is built on top of [Gin](https://gin-gonic.com/), one of the most popular HTTP frameworks for Go. It inherits all of Gin's routing, middleware, and parameter handling — so you can always fall back to raw `*gin.Context` handlers when you need to.
+The httpserver package is built on [Gin](https://gin-gonic.com/), an HTTP framework for Go. You can use Gin routing and middleware, and you can register raw `*gin.Context` handlers when needed.
 
-On top of that foundation, httpserver adds a structured, type-safe way to build HTTP services. The **`With` pattern** gives you clean dependency injection: each handler group gets its own constructor that receives `ctx`, `config`, and `logger`, so your dependencies are initialized in one place and shared across related routes. The **`Bind` function** replaces manual request parsing with struct-tag-driven binding and validation — declare an input struct with `json`, `uri`, `form`, or `header` tags, and the request data is populated and validated before your handler even runs. Your handlers return a typed `Response` instead of writing directly to the response writer, making them easy to test and compose.
+httpserver adds a typed way to build HTTP services. The **`With` pattern** gives each handler group a constructor that receives `ctx`, `config`, and `logger`. The constructor initializes dependencies that related routes share. The **`Bind` function** uses struct tags to bind and validate request data. Typed handlers return Go values. httpserver selects a response format from the request's `Accept` header and writes the response.
 
 Together with built-in middleware for logging, metrics, compression, and graceful shutdown — all configured through YAML — httpserver lets you focus on your application logic rather than HTTP plumbing.
 
@@ -18,16 +18,16 @@ Together with built-in middleware for logging, metrics, compression, and gracefu
 Install the package:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.5.6
+go get github.com/gosoline-project/httpserver@v0.6.4
 ```
 
 The entry point for any HTTP server is a `RouterFactory` — a function that receives a `*Router` and registers routes on it:
 
 ```go
 httpserver.RunDefaultServer(func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-    router.GET("/hello", func(ginCtx *gin.Context) {
-        ginCtx.String(200, "Hello, World!")
-    })
+    router.GET("/hello", httpserver.BindN(func(ctx context.Context) (map[string]string, error) {
+        return map[string]string{"message": "Hello, World!"}, nil
+    }))
     return nil
 })
 ```
@@ -53,12 +53,12 @@ Group related routes with `router.Group()`:
 
 ```go
 api := router.Group("/api")
-api.GET("/ping", func(ginCtx *gin.Context) {
-    ginCtx.JSON(200, gin.H{"message": "pong"})
-})
+api.GET("/ping", httpserver.BindN(func(ctx context.Context) (map[string]string, error) {
+    return map[string]string{"message": "pong"}, nil
+}))
 ```
 
-Raw Gin handlers work fine for simple cases. For type safety and cleaner code, read on.
+Raw Gin handlers remain useful when you need direct access to Gin APIs. Use typed handlers when you want request binding and negotiated output.
 
 ## The With pattern
 
@@ -111,34 +111,41 @@ The suffixes follow a simple pattern:
 
 | Helper | Handler shape | Use when |
 |---|---|---|
-| `Bind[I]` | `(ctx, *Input) (Response, error)` | The endpoint needs request data bound into an input struct. This is the default choice for most endpoints. |
-| `BindR[I]` | `(ctx, *http.Request, *Input) (Response, error)` | The endpoint needs both bound input and raw request access, for example headers, method, body metadata, or client IP resolution. |
-| `BindN` | `(ctx) (Response, error)` | The endpoint does not need request input, for example health checks or static status endpoints. |
-| `BindNR` | `(ctx, *http.Request) (Response, error)` | The endpoint does not need a bound input struct, but still needs raw request access. |
+| `Bind[I, O any]` | `func(ctx context.Context, input *I) (O, error)` | The endpoint needs request data bound into an input struct. This is the default choice for most endpoints. |
+| `BindR[I, O any]` | `func(ctx context.Context, req *http.Request, input *I) (O, error)` | The endpoint needs both bound input and raw request access, for example headers, method, body metadata, or client IP resolution. |
+| `BindN[O any]` | `func(ctx context.Context) (O, error)` | The endpoint does not need request input, for example health checks or static status endpoints. |
+| `BindNR[O any]` | `func(ctx context.Context, req *http.Request) (O, error)` | The endpoint does not need a bound input struct, but still needs raw request access. |
 
 `Bind` and `BindR` can bind request data from JSON bodies, query parameters, form data, URI parameters, headers, and other supported sources. `BindN` and `BindNR` skip request binding entirely because there is no input struct.
 
 ```go
 // With input
-func (h *Handler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
-    // input is populated from the request
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
+    user, ok := h.users[input.Id]
+    if !ok {
+        return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
+    }
+    return user, nil
 }
 
 // With input and raw request access
-func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (httpserver.Response, error) {
+func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (map[string]string, error) {
     contentType := req.Header.Get("Content-Type")
     // input is populated from the request
+    return map[string]string{"contentType": contentType}, nil
 }
 
 // Without input
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
     // no request data needed
+    return map[string]string{"status": "ok"}, nil
 }
 
 // Without input, but with raw request access
-func (h *Handler) Ping(ctx context.Context, req *http.Request) (httpserver.Response, error) {
+func (h *Handler) Ping(ctx context.Context, req *http.Request) (map[string]string, error) {
     userAgent := req.Header.Get("User-Agent")
     // no input struct is bound
+    return map[string]string{"userAgent": userAgent}, nil
 }
 ```
 
@@ -255,9 +262,9 @@ The `binding` tag uses [go-playground/validator](https://pkg.go.dev/github.com/g
 If you need the raw `*http.Request` alongside your input struct:
 
 ```go
-func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (httpserver.Response, error) {
+func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (map[string]string, error) {
     contentType := req.Header.Get("Content-Type")
-    // ...
+    return map[string]string{"contentType": contentType}, nil
 }
 ```
 
@@ -266,15 +273,13 @@ func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadIn
 When your handler needs the caller IP address, use `ResolveClientIP` with the raw request from `BindR` or `BindNR`:
 
 ```go
-func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetProfileInput) (httpserver.Response, error) {
+func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetProfileInput) (map[string]string, error) {
     clientIP, err := httpserver.ResolveClientIP(req)
     if err != nil {
         return nil, err
     }
 
-    logger.Info(ctx, "profile requested from %s", clientIP)
-
-    // ...
+    return map[string]string{"clientIP": clientIP}, nil
 }
 ```
 
@@ -282,75 +287,169 @@ func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetP
 
 ## Sending responses
 
-All handler methods return an `httpserver.Response` interface.
+Typed handlers return Go values. The default response negotiator encodes these values as JSON. If the request has no `Accept` header, httpserver selects JSON. The default negotiator supports only JSON. If `Accept` does not allow JSON, httpserver returns `406 Not Acceptable`.
 
-### JSON responses
+### JSON by default
 
-`NewJsonResponse` serializes any value as JSON:
+Return a Go value from a handler. httpserver encodes it as JSON:
 
 ```go
-return httpserver.NewJsonResponse(user), nil
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
+    return map[string]string{"status": "ok"}, nil
+}
 ```
 
-### Text responses
+Send a compatible `Accept` header to get JSON:
 
-```go
-return httpserver.NewTextResponse("Hello, plain text!"), nil
+```bash
+curl -i -H "Accept: application/json" http://localhost:8088/api/users/health
+# HTTP/1.1 200 OK
+# {"status":"ok"}
 ```
 
-### Status-only responses
+The default negotiator does not support plain text. This request returns `406 Not Acceptable`:
 
-`NewStatusResponse` returns a response with only a status code — useful for `DELETE`, `PUT`, `PATCH`:
-
-```go
-return httpserver.NewStatusResponse(204), nil
+```bash
+curl -i -H "Accept: text/plain" http://localhost:8088/api/users/health
+# HTTP/1.1 406 Not Acceptable
 ```
 
-### Custom status codes and headers
-
-Use functional options to customize any response:
+To support XML or another format, create a negotiator with the representations that the server can produce:
 
 ```go
-return httpserver.NewJsonResponse(
-    user,
-    httpserver.WithStatusCode(http.StatusCreated),
-    httpserver.WithHeader("X-Custom-Header", "my-value"),
-), nil
+negotiator, err := httpserver.NewContentNegotiator(
+    httpserver.ContentTypeApplicationJson,
+    httpserver.JSONRepresentation(),
+    httpserver.XMLRepresentation(),
+)
+if err != nil {
+    return err
+}
+```
+
+Configure the negotiator for the whole server with `WithResponseNegotiator`. Pass this server option to `NewServer` or `NewServerWithSettings`. When using the application helper, put it in `ServerDefinition.Options` passed to `RunServers`:
+
+```go
+httpserver.RunServers(map[string]httpserver.ServerDefinition{
+    "default": {
+        RouterFactory: func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+            type HelloResponse struct {
+                Message string `json:"message" xml:"message"`
+            }
+            router.GET("/hello", httpserver.BindN(func(ctx context.Context) (HelloResponse, error) {
+                return HelloResponse{Message: "Hello, World!"}, nil
+            }))
+            return nil
+        },
+        Options: []httpserver.ServerOption{
+            httpserver.WithResponseNegotiator(negotiator),
+        },
+    },
+})
+```
+
+In this example, JSON is the default and XML is available. XML encoding requires output types that Go's `encoding/xml` package supports.
+
+Use `ResponseNegotiationMiddleware` only when a router or group needs to override the server negotiator. For example, this group uses JSON only, while other routes retain the server's JSON and XML representations:
+
+```go
+group := router.Group("/json-only")
+group.Use(httpserver.ResponseNegotiationMiddleware(
+    httpserver.NewDefaultResponseNegotiator(),
+))
+```
+
+Register the group's routes after installing the middleware. You do not need this middleware to configure the server-wide negotiator.
+
+### Customizing responses
+
+A typed output can implement `StatusCode() int` to set its HTTP status. The default status is `200 OK`. The complete example uses this for `201 Created` from `CreateUser`; `DeleteUser` uses an explicit bodyless response, described below.
+
+```go
+type CreatedUserOutput struct {
+    *User
+}
+
+func (CreatedUserOutput) StatusCode() int {
+    return http.StatusCreated
+}
+```
+
+To add a header to `CreatedUserOutput`, implement `Header() http.Header`:
+
+```go
+func (CreatedUserOutput) Header() http.Header {
+    header := make(http.Header)
+    header.Set("X-User-Created", "true")
+    return header
+}
+```
+
+httpserver negotiates the typed output before it applies these methods. The selected representation controls `Content-Type`. A `Header` method cannot override `Content-Type`. A `ContentType() string` method by itself does not change the selected representation.
+
+A full `httpserver.Response` bypasses negotiation. An explicit `Response` implements `ContentType() string`, `Body() ([]byte, error)`, `Header() http.Header`, and `StatusCode() int`. The server does not compare its content type with the request's `Accept` header.
+
+For a bodyless response such as `204 No Content`, use `NewStatusResponse(http.StatusNoContent)`. A typed output with that status is negotiated first and can return `406 Not Acceptable` if `Accept` excludes supported representations; the explicit response preserves `204` regardless of `Accept`.
+
+```go
+return httpserver.NewStatusResponse(http.StatusNoContent), nil
+```
+
+This is specific to explicit responses; ordinary typed outputs, including those with custom status codes, remain subject to negotiation.
+
+```go
+func (h *Handler) PlainText(ctx context.Context) (httpserver.Response, error) {
+    return httpserver.NewTextResponse("plain text"), nil
+}
+```
+
+Use `NewJsonResponse`, `NewTextResponse`, or `NewStatusResponse` to create a full response. Each constructor bypasses negotiation. `NewTextResponse` creates a text response. `NewStatusResponse(http.StatusNoContent)` creates a no-content response.
+
+Use response options to set a status, headers, or body:
+
+```go
+func explicitUserResponse(user *User) httpserver.Response {
+    return httpserver.NewJsonResponse(
+        user,
+        httpserver.WithStatusCode(http.StatusCreated),
+        httpserver.WithHeader("X-Custom-Header", "my-value"),
+    )
+}
 ```
 
 | Option | Description |
 |---|---|
-| `WithStatusCode(code int)` | Set the HTTP status code (default: 200) |
-| `WithHeader(key, value string)` | Add a single header |
-| `WithHeaders(headers http.Header)` | Merge multiple headers |
-| `WithBody(body []byte)` | Set the raw response body |
+| `WithStatusCode(code int)` | Set the HTTP status code. |
+| `WithHeader(key, value string)` | Add one header. |
+| `WithHeaders(headers http.Header)` | Merge multiple headers. |
+| `WithBody(body []byte)` | Set the response body. |
 
 ### Error handling
 
-Return `nil, error` for unexpected errors. The error middleware returns `500 Internal Server Error` with a sanitized `{"err":"internal server error"}` response, so internal details do not leak to clients:
+Return a zero output and an error for unexpected failures. The error middleware returns `500 Internal Server Error` with `{"err":"internal server error"}`. This prevents internal details from reaching clients.
 
 ```go
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
     if len(h.users) > 10000 {
         return nil, fmt.Errorf("too many users")
     }
-    return httpserver.NewJsonResponse(map[string]string{"status": "ok"}), nil
+    return map[string]string{"status": "ok"}, nil
 }
 ```
 
-For client errors with a specific status code, use `GetErrorHandler()` — this returns a `Response` with `nil` error (a handled error):
+For a client error with a specific status code, return a zero output and an error wrapped with `NewErrorWithStatus`:
 
 ```go
-func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
     user, ok := h.users[input.Id]
     if !ok {
-        return httpserver.GetErrorHandler()(http.StatusNotFound, errors.New("user not found")), nil
+        return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
     }
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 }
 ```
 
-The key pattern: return a `Response` with `nil` error for **handled** errors, and `nil, error` for **unexpected** errors.
+The error middleware maps both types of errors to HTTP responses. Use `NewErrorWithStatus` for expected client errors and return unwrapped errors for unexpected failures.
 
 If middleware or lower-level code attaches an error to the Gin context and needs a specific status code, wrap it with `NewErrorWithStatus`:
 
@@ -378,13 +477,13 @@ Test it:
 
 ```bash
 # Create a user
-curl -X POST http://localhost:8088/api/users \
+curl -X POST http://localhost:8088/api/users/ \
   -H "Content-Type: application/json" \
   -d '{"name":"Alice","email":"alice@example.com","role":"admin"}'
 # {"id":1,"name":"Alice","email":"alice@example.com","role":"admin"}
 
 # List users
-curl http://localhost:8088/api/users
+curl http://localhost:8088/api/users/
 # [{"id":1,"name":"Alice","email":"alice@example.com","role":"admin"}]
 
 # Get a user by ID
@@ -395,9 +494,14 @@ curl http://localhost:8088/api/users/1
 curl http://localhost:8088/api/users/99
 # {"err":"user not found"}
 
-# Delete a user
-curl -X DELETE http://localhost:8088/api/users/1 -v
+# Delete a user; the explicit bodyless response preserves 204 for this unsupported representation
+curl -X DELETE http://localhost:8088/api/users/1 -H "Accept: text/plain" -v
 # HTTP/1.1 204 No Content
+
+# The user was deleted
+curl -i http://localhost:8088/api/users/1
+# HTTP/1.1 404 Not Found
+# {"err":"user not found"}
 
 # Health check
 curl http://localhost:8088/api/users/health

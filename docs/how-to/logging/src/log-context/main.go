@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/gosoline-project/httpserver"
 	"github.com/justtrackio/gosoline/pkg/application"

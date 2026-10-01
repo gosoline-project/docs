@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gosoline-project/httpserver"
 	"github.com/justtrackio/gosoline/pkg/cfg"
 	"github.com/justtrackio/gosoline/pkg/log"
 )
@@ -69,7 +68,7 @@ func truncate(ctx context.Context, text string) string {
 
 // snippet-end: truncate
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -89,16 +88,16 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 	// highlight-next-line
 	h.logger.Info(localctx, "creating new task due at %v", todo.DueDate)
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 }
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	todo, ok := h.todos[input.Id]
 	if !ok {
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 	}
 
 	// highlight-start
@@ -106,7 +105,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 	todo.Text = truncate(localctx, input.Text)
 	// highlight-end
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 }
 
 // snippet-start: parse id helper
