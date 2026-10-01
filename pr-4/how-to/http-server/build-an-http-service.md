@@ -1,12 +1,12 @@
 # Build an HTTP service
 
-In this guide, you'll build a complete HTTP service from scratch. You'll start with the basics of defining routes, then level up to type-safe handlers with dependency injection, request binding, and structured responses.
+In this guide, you will build an HTTP service from scratch. You will add routes, typed handlers, dependency injection, request binding, and negotiated responses.
 
 ## What is httpserver?[​](#what-is-httpserver "Direct link to What is httpserver?")
 
-The httpserver package is built on top of [Gin](https://gin-gonic.com/), one of the most popular HTTP frameworks for Go. It inherits all of Gin's routing, middleware, and parameter handling — so you can always fall back to raw `*gin.Context` handlers when you need to.
+The httpserver package is built on [Gin](https://gin-gonic.com/), an HTTP framework for Go. You can use Gin routing and middleware, and you can register raw `*gin.Context` handlers when needed.
 
-On top of that foundation, httpserver adds a structured, type-safe way to build HTTP services. The **`With` pattern** gives you clean dependency injection: each handler group gets its own constructor that receives `ctx`, `config`, and `logger`, so your dependencies are initialized in one place and shared across related routes. The **`Bind` function** replaces manual request parsing with struct-tag-driven binding and validation — declare an input struct with `json`, `uri`, `form`, or `header` tags, and the request data is populated and validated before your handler even runs. Your handlers return a typed `Response` instead of writing directly to the response writer, making them easy to test and compose.
+httpserver adds a typed way to build HTTP services. The **`With` pattern** gives each handler group a constructor that receives `ctx`, `config`, and `logger`. The constructor initializes dependencies that related routes share. The **`Bind` function** uses struct tags to bind and validate request data. Typed handlers return Go values. httpserver selects a response format from the request's `Accept` header and writes the response.
 
 Together with built-in middleware for logging, metrics, compression, and graceful shutdown — all configured through YAML — httpserver lets you focus on your application logic rather than HTTP plumbing.
 
@@ -15,7 +15,7 @@ Together with built-in middleware for logging, metrics, compression, and gracefu
 Install the package:
 
 ```
-go get github.com/gosoline-project/httpserver@v0.5.6
+go get github.com/gosoline-project/httpserver@v0.6.4
 ```
 
 The entry point for any HTTP server is a `RouterFactory` — a function that receives a `*Router` and registers routes on it:
@@ -23,11 +23,11 @@ The entry point for any HTTP server is a `RouterFactory` — a function that rec
 ```
 httpserver.RunDefaultServer(func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
 
-    router.GET("/hello", func(ginCtx *gin.Context) {
+    router.GET("/hello", httpserver.BindN(func(ctx context.Context) (map[string]string, error) {
 
-        ginCtx.String(200, "Hello, World!")
+        return map[string]string{"message": "Hello, World!"}, nil
 
-    })
+    }))
 
     return nil
 
@@ -61,14 +61,14 @@ Group related routes with `router.Group()`:
 ```
 api := router.Group("/api")
 
-api.GET("/ping", func(ginCtx *gin.Context) {
+api.GET("/ping", httpserver.BindN(func(ctx context.Context) (map[string]string, error) {
 
-    ginCtx.JSON(200, gin.H{"message": "pong"})
+    return map[string]string{"message": "pong"}, nil
 
-})
+}))
 ```
 
-Raw Gin handlers work fine for simple cases. For type safety and cleaner code, read on.
+Raw Gin handlers remain useful when you need direct access to Gin APIs. Use typed handlers when you want request binding and negotiated output.
 
 ## The With pattern[​](#the-with-pattern "Direct link to The With pattern")
 
@@ -134,21 +134,29 @@ The suffixes follow a simple pattern:
 * **`R`** means the raw `*http.Request` is passed to the handler.
 * **`N`** means there is no input struct to bind.
 
-| Helper     | Handler shape                                    | Use when                                                                                                                         |
-| ---------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `Bind[I]`  | `(ctx, *Input) (Response, error)`                | The endpoint needs request data bound into an input struct. This is the default choice for most endpoints.                       |
-| `BindR[I]` | `(ctx, *http.Request, *Input) (Response, error)` | The endpoint needs both bound input and raw request access, for example headers, method, body metadata, or client IP resolution. |
-| `BindN`    | `(ctx) (Response, error)`                        | The endpoint does not need request input, for example health checks or static status endpoints.                                  |
-| `BindNR`   | `(ctx, *http.Request) (Response, error)`         | The endpoint does not need a bound input struct, but still needs raw request access.                                             |
+| Helper            | Handler shape                                                       | Use when                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `Bind[I, O any]`  | `func(ctx context.Context, input *I) (O, error)`                    | The endpoint needs request data bound into an input struct. This is the default choice for most endpoints.                       |
+| `BindR[I, O any]` | `func(ctx context.Context, req *http.Request, input *I) (O, error)` | The endpoint needs both bound input and raw request access, for example headers, method, body metadata, or client IP resolution. |
+| `BindN[O any]`    | `func(ctx context.Context) (O, error)`                              | The endpoint does not need request input, for example health checks or static status endpoints.                                  |
+| `BindNR[O any]`   | `func(ctx context.Context, req *http.Request) (O, error)`           | The endpoint does not need a bound input struct, but still needs raw request access.                                             |
 
 `Bind` and `BindR` can bind request data from JSON bodies, query parameters, form data, URI parameters, headers, and other supported sources. `BindN` and `BindNR` skip request binding entirely because there is no input struct.
 
 ```
 // With input
 
-func (h *Handler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 
-    // input is populated from the request
+    user, ok := h.users[input.Id]
+
+    if !ok {
+
+        return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
+
+    }
+
+    return user, nil
 
 }
 
@@ -156,11 +164,13 @@ func (h *Handler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.
 
 // With input and raw request access
 
-func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (httpserver.Response, error) {
+func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (map[string]string, error) {
 
     contentType := req.Header.Get("Content-Type")
 
     // input is populated from the request
+
+    return map[string]string{"contentType": contentType}, nil
 
 }
 
@@ -168,9 +178,11 @@ func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadIn
 
 // Without input
 
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
 
     // no request data needed
+
+    return map[string]string{"status": "ok"}, nil
 
 }
 
@@ -178,11 +190,13 @@ func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
 
 // Without input, but with raw request access
 
-func (h *Handler) Ping(ctx context.Context, req *http.Request) (httpserver.Response, error) {
+func (h *Handler) Ping(ctx context.Context, req *http.Request) (map[string]string, error) {
 
     userAgent := req.Header.Get("User-Agent")
 
     // no input struct is bound
+
+    return map[string]string{"userAgent": userAgent}, nil
 
 }
 ```
@@ -327,11 +341,11 @@ The `binding` tag uses [go-playground/validator](https://pkg.go.dev/github.com/g
 If you need the raw `*http.Request` alongside your input struct:
 
 ```
-func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (httpserver.Response, error) {
+func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (map[string]string, error) {
 
     contentType := req.Header.Get("Content-Type")
 
-    // ...
+    return map[string]string{"contentType": contentType}, nil
 
 }
 ```
@@ -341,7 +355,7 @@ func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadIn
 When your handler needs the caller IP address, use `ResolveClientIP` with the raw request from `BindR` or `BindNR`:
 
 ```
-func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetProfileInput) (httpserver.Response, error) {
+func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetProfileInput) (map[string]string, error) {
 
     clientIP, err := httpserver.ResolveClientIP(req)
 
@@ -353,11 +367,7 @@ func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetP
 
 
 
-    logger.Info(ctx, "profile requested from %s", clientIP)
-
-
-
-    // ...
+    return map[string]string{"clientIP": clientIP}, nil
 
 }
 ```
@@ -366,59 +376,157 @@ func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetP
 
 ## Sending responses[​](#sending-responses "Direct link to Sending responses")
 
-All handler methods return an `httpserver.Response` interface.
+Typed handlers return Go values. The default response negotiator encodes these values as JSON. If the request has no `Accept` header, httpserver selects JSON. The default negotiator supports only JSON. If `Accept` does not allow JSON, httpserver returns `406 Not Acceptable`.
 
-### JSON responses[​](#json-responses "Direct link to JSON responses")
+### JSON by default[​](#json-by-default "Direct link to JSON by default")
 
-`NewJsonResponse` serializes any value as JSON:
-
-```
-return httpserver.NewJsonResponse(user), nil
-```
-
-### Text responses[​](#text-responses "Direct link to Text responses")
+Return a Go value from a handler. httpserver encodes it as JSON:
 
 ```
-return httpserver.NewTextResponse("Hello, plain text!"), nil
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
+
+    return map[string]string{"status": "ok"}, nil
+
+}
 ```
 
-### Status-only responses[​](#status-only-responses "Direct link to Status-only responses")
-
-`NewStatusResponse` returns a response with only a status code — useful for `DELETE`, `PUT`, `PATCH`:
+Send a compatible `Accept` header to get JSON:
 
 ```
-return httpserver.NewStatusResponse(204), nil
+curl -i -H "Accept: application/json" http://localhost:8088/api/users/health
+
+# HTTP/1.1 200 OK
+
+# {"status":"ok"}
 ```
 
-### Custom status codes and headers[​](#custom-status-codes-and-headers "Direct link to Custom status codes and headers")
-
-Use functional options to customize any response:
+The default negotiator does not support plain text. This request returns `406 Not Acceptable`:
 
 ```
-return httpserver.NewJsonResponse(
+curl -i -H "Accept: text/plain" http://localhost:8088/api/users/health
 
-    user,
-
-    httpserver.WithStatusCode(http.StatusCreated),
-
-    httpserver.WithHeader("X-Custom-Header", "my-value"),
-
-), nil
+# HTTP/1.1 406 Not Acceptable
 ```
 
-| Option                             | Description                             |
-| ---------------------------------- | --------------------------------------- |
-| `WithStatusCode(code int)`         | Set the HTTP status code (default: 200) |
-| `WithHeader(key, value string)`    | Add a single header                     |
-| `WithHeaders(headers http.Header)` | Merge multiple headers                  |
-| `WithBody(body []byte)`            | Set the raw response body               |
+To support XML or another format, create a negotiator with the representations that the server can produce:
+
+```
+negotiator, err := httpserver.NewContentNegotiator(
+
+    httpserver.ContentTypeApplicationJson,
+
+    httpserver.JSONRepresentation(),
+
+    httpserver.XMLRepresentation(),
+
+)
+
+if err != nil {
+
+    return err
+
+}
+```
+
+Install the middleware on a router or group:
+
+```
+router.Use(httpserver.ResponseNegotiationMiddleware(negotiator))
+```
+
+In this example, JSON is the default and XML is available. XML encoding requires output types that Go's `encoding/xml` package supports. To configure a server, include `WithResponseNegotiator(negotiator)` in the options passed to `RunServerWithOptions`.
+
+### Customizing responses[​](#customizing-responses "Direct link to Customizing responses")
+
+A typed output can implement `StatusCode() int` to set its HTTP status. The default status is `200 OK`. The complete example returns `201 Created` from `CreateUser` and `204 No Content` from `DeleteUser`:
+
+```
+type CreatedUserOutput struct {
+
+    *User
+
+}
+
+
+
+func (CreatedUserOutput) StatusCode() int {
+
+    return http.StatusCreated
+
+}
+
+
+
+type DeletedUserOutput struct{}
+
+
+
+func (DeletedUserOutput) StatusCode() int {
+
+    return http.StatusNoContent
+
+}
+```
+
+To add a header to `CreatedUserOutput`, implement `Header() http.Header`:
+
+```
+func (CreatedUserOutput) Header() http.Header {
+
+    header := make(http.Header)
+
+    header.Set("X-User-Created", "true")
+
+    return header
+
+}
+```
+
+httpserver negotiates the typed output before it applies these methods. The selected representation controls `Content-Type`. A `Header` method cannot override `Content-Type`. A `ContentType() string` method by itself does not change the selected representation.
+
+A full `httpserver.Response` bypasses negotiation. An explicit `Response` implements `ContentType() string`, `Body() ([]byte, error)`, `Header() http.Header`, and `StatusCode() int`. The server does not compare its content type with the request's `Accept` header.
+
+```
+func (h *Handler) PlainText(ctx context.Context) (httpserver.Response, error) {
+
+    return httpserver.NewTextResponse("plain text"), nil
+
+}
+```
+
+Use `NewJsonResponse`, `NewTextResponse`, or `NewStatusResponse` to create a full response. Each constructor bypasses negotiation. `NewTextResponse` creates a text response. `NewStatusResponse(http.StatusNoContent)` creates a no-content response.
+
+Use response options to set a status, headers, or body:
+
+```
+func explicitUserResponse(user *User) httpserver.Response {
+
+    return httpserver.NewJsonResponse(
+
+        user,
+
+        httpserver.WithStatusCode(http.StatusCreated),
+
+        httpserver.WithHeader("X-Custom-Header", "my-value"),
+
+    )
+
+}
+```
+
+| Option                             | Description               |
+| ---------------------------------- | ------------------------- |
+| `WithStatusCode(code int)`         | Set the HTTP status code. |
+| `WithHeader(key, value string)`    | Add one header.           |
+| `WithHeaders(headers http.Header)` | Merge multiple headers.   |
+| `WithBody(body []byte)`            | Set the response body.    |
 
 ### Error handling[​](#error-handling "Direct link to Error handling")
 
-Return `nil, error` for unexpected errors. The error middleware returns `500 Internal Server Error` with a sanitized `{"err":"internal server error"}` response, so internal details do not leak to clients:
+Return a zero output and an error for unexpected failures. The error middleware returns `500 Internal Server Error` with `{"err":"internal server error"}`. This prevents internal details from reaching clients.
 
 ```
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
 
     if len(h.users) > 10000 {
 
@@ -426,15 +534,15 @@ func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
 
     }
 
-    return httpserver.NewJsonResponse(map[string]string{"status": "ok"}), nil
+    return map[string]string{"status": "ok"}, nil
 
 }
 ```
 
-For a client error with a specific status code, return `nil` and an error wrapped with `NewErrorWithStatus`:
+For a client error with a specific status code, return a zero output and an error wrapped with `NewErrorWithStatus`:
 
 ```
-func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 
     user, ok := h.users[input.Id]
 
@@ -444,7 +552,7 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.R
 
     }
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 
 }
 ```
@@ -566,6 +674,34 @@ type User struct {
 
 
 
+type CreatedUserOutput struct {
+
+	*User
+
+}
+
+
+
+func (CreatedUserOutput) StatusCode() int {
+
+	return http.StatusCreated
+
+}
+
+
+
+type DeletedUserOutput struct{}
+
+
+
+func (DeletedUserOutput) StatusCode() int {
+
+	return http.StatusNoContent
+
+}
+
+
+
 type Handler struct {
 
 	users map[int]*User
@@ -590,7 +726,7 @@ func NewHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*Han
 
 
 
-func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) (httpserver.Response, error) {
+func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) ([]*User, error) {
 
 	var result []*User
 
@@ -612,13 +748,13 @@ func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) (httpser
 
 	}
 
-	return httpserver.NewJsonResponse(result), nil
+	return result, nil
 
 }
 
 
 
-func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (CreatedUserOutput, error) {
 
 	user := &User{
 
@@ -638,13 +774,13 @@ func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (https
 
 
 
-	return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+	return CreatedUserOutput{User: user}, nil
 
 }
 
 
 
-func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 
 	user, ok := h.users[input.Id]
 
@@ -654,23 +790,23 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.R
 
 	}
 
-	return httpserver.NewJsonResponse(user), nil
+	return user, nil
 
 }
 
 
 
-func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (DeletedUserOutput, error) {
 
 	delete(h.users, input.Id)
 
-	return httpserver.NewStatusResponse(http.StatusNoContent), nil
+	return DeletedUserOutput{}, nil
 
 }
 
 
 
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
 
 	if len(h.users) > 10000 {
 
@@ -678,7 +814,7 @@ func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
 
 	}
 
-	return httpserver.NewJsonResponse(map[string]string{"status": "ok"}), nil
+	return map[string]string{"status": "ok"}, nil
 
 }
 ```
@@ -708,7 +844,7 @@ Test it:
 ```
 # Create a user
 
-curl -X POST http://localhost:8088/api/users \
+curl -X POST http://localhost:8088/api/users/ \
 
   -H "Content-Type: application/json" \
 
@@ -720,7 +856,7 @@ curl -X POST http://localhost:8088/api/users \
 
 # List users
 
-curl http://localhost:8088/api/users
+curl http://localhost:8088/api/users/
 
 # [{"id":1,"name":"Alice","email":"alice@example.com","role":"admin"}]
 

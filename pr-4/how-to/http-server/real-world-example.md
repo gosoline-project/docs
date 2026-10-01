@@ -109,7 +109,7 @@ type DeploymentSelectorInput struct {
 Multiple handlers reference this same type:
 
 ```
-func (h *HandlerCheckpoints) GetCheckpoints(ctx context.Context, request *DeploymentSelectorInput) (httpserver.Response, error) {
+func (h *HandlerCheckpoints) GetCheckpoints(ctx context.Context, request *DeploymentSelectorInput) ([]Checkpoint, error) {
 
     // request.Namespace and request.Name are populated from the URI
 
@@ -222,10 +222,10 @@ httpserver:
 
 ## Error handling patterns[​](#error-handling-patterns "Direct link to Error handling patterns")
 
-Handlers wrap expected client errors with an HTTP status and return other errors unchanged. The default error middleware hides internal error details from clients:
+Handlers attach an HTTP status to expected client errors and add context to other errors. The default error middleware hides internal error details from clients.
 
 ```
-func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (httpserver.Response, error) {
+func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (ListFilesResponse, error) {
 
     items, err := h.files.ListFiles(ctx, input.Database, input.Table, input.Partitions)
 
@@ -233,15 +233,15 @@ func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (h
 
         if isBadRequest(err) {
 
-            return nil, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
+            return ListFilesResponse{}, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
 
         }
 
-        return nil, fmt.Errorf("could not list files: %w", err)
+        return ListFilesResponse{}, fmt.Errorf("could not list files: %w", err)
 
     }
 
-    return httpserver.NewJsonResponse(ListFilesResponse{Files: items}), nil
+    return ListFilesResponse{Files: items}, nil
 
 }
 ```

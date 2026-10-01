@@ -35,8 +35,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -155,7 +153,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -189,13 +187,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -207,7 +205,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -219,7 +217,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -295,8 +293,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -415,7 +411,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -449,13 +445,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -467,7 +463,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -479,7 +475,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -529,8 +525,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -649,7 +643,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -683,13 +677,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -701,7 +695,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -713,7 +707,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -782,8 +776,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -902,7 +894,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -936,13 +928,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -954,7 +946,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -966,7 +958,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -1018,8 +1010,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -1138,7 +1128,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -1172,13 +1162,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -1190,7 +1180,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -1202,7 +1192,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 

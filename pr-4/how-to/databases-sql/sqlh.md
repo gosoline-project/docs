@@ -60,6 +60,8 @@ sqlc:
       path: migrations
 ```
 
+Each runnable example loads `config.dist.yml` from disk in the current working directory. Run each example from its own directory. The migration path in its config is relative to that directory.
+
 ## CRUD Model[​](#crud-model "Direct link to CRUD Model")
 
 SQLH separates four concerns:
@@ -217,7 +219,7 @@ func (t *AuthorMapper) TransformOutput(_ context.Context, entity *Author) (Autho
 }
 ```
 
-The output callback usually returns a Go value. `httpserver.Bind` negotiates a representation from `Accept`. An explicit `httpserver.Response` bypasses that negotiation. An unsupported `Accept` can produce HTTP 406. Use an explicit response when the API needs fixed status, headers, or content type.
+The `Output` callback returns a Go value. `httpserver.Bind` negotiates its representation from the request's `Accept` header. A typed output can implement `StatusCode() int` and `Header() http.Header` to set its status and headers. An explicit `httpserver.Response` bypasses negotiation. See [Customizing responses](/docs/pr-4/how-to/http-server/build-an-http-service/.md#customizing-responses) for response overrides and content types.
 
 For a dedicated response DTO, map the entity in the output callback:
 
@@ -458,14 +460,16 @@ SQLH creates one transaction for every default CRUD operation. It loads the enti
 
 The SQLH repository must use the same SQL client that starts the transaction. This requirement is important when SQLR uses prepared statements. The default handler factory creates both objects from the configured client.
 
-The old `sqlh.WithTx`, `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR` APIs are removed. Use a SQLH CRUD operation for entity CRUD. For another typed operation, use `TxRunner` and adapt it to the handler signature:
+The old `sqlh.WithTx`, `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR` APIs are removed. SQLH `*Operation` callbacks already receive the active `sqlr.TTx`. Use it directly for SQL work. Do not start another transaction inside a callback. For another typed operation outside a CRUD definition, use `TxRunner` and adapt it to the handler signature:
 
 main.go
 
 ```
 type PostHandler struct {
 
-  runner *sqlh.TxRunner
+  runner   *sqlh.TxRunner
+
+  postRepo sqlr.RepositoryTx[int64, Post]
 
 }
 
@@ -473,7 +477,7 @@ type PostHandler struct {
 
 func NewPostHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*PostHandler, error) {
 
-  runner, err := sqlh.NewTxRunner(ctx, config, logger, "default")
+  client, err := sqlc.ProvideClient(ctx, config, logger, "default")
 
   if err != nil {
 
@@ -483,7 +487,27 @@ func NewPostHandler(ctx context.Context, config cfg.Config, logger log.Logger) (
 
 
 
-  return &PostHandler{runner: runner}, nil
+  postRepo, err := sqlr.NewRepositoryTxWithSettings[int64, Post](client, sqlr.DefaultSettings())
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  runner, err := sqlh.NewTxRunnerWithClient(client)
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  return &PostHandler{runner: runner, postRepo: postRepo}, nil
 
 }
 
@@ -505,7 +529,7 @@ func (h *PostHandler) CreatePost(ctx context.Context, input *PostCreateInput) (P
 
 
 
-    if _, err := tx.Q().Into("posts").Records(post).Exec(tx); err != nil {
+    if err := h.postRepo.Create(tx, post); err != nil {
 
       return PostOutput{}, fmt.Errorf("failed to create post: %w", err)
 
@@ -530,7 +554,7 @@ func (h *PostHandler) CreatePost(ctx context.Context, input *PostCreateInput) (P
 }
 ```
 
-main.go
+config.dist.yml
 
 ```
 httpserver:
@@ -1054,7 +1078,7 @@ definition.Identity = func(
 }
 ```
 
-Always apply the supplied `scope`. It contains force filters, delete visibility, and other restrictions that protect read, update, patch, and delete operations.
+SQLH passes a builder to every custom identity lookup. Apply it, along with the public-ID predicate and supplied scope, before querying. Return scope errors before repository work. Ordinary GET builders can add relation preloads but do not include `FOR UPDATE`. Default Update, PATCH, and Delete builders include that lock.
 
 SQLH uses physical SQLR deletion by default. Use `DeleteScope` and `Delete` for soft deletion:
 
@@ -1171,17 +1195,19 @@ func (r *ReportingAuthorRepository) Read(tx sqlr.TTx, id int64, opts ...func(qb 
 
 func (r *ReportingAuthorRepository) Query(tx sqlr.TTx, opts ...func(qb *sqlr.QueryBuilderSelect)) ([]Author, error) {
 
-  opts = append(opts, func(qb *sqlr.QueryBuilderSelect) {
+  return r.delegate.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
 
     qb.OrderBy("created_at DESC")
 
     qb.Limit(100)
 
+    for _, opt := range opts {
+
+      opt(qb)
+
+    }
+
   })
-
-
-
-  return r.delegate.Query(tx, opts...)
 
 }
 
@@ -1218,7 +1244,9 @@ func (r *ReportingAuthorRepository) Close() error {
 }
 ```
 
-main.go
+This configuration enables migrations for the selected `reporting` client.
+
+config.dist.yml
 
 ```
 httpserver:
@@ -1233,7 +1261,7 @@ httpserver:
 
 sqlc:
 
-  default:
+  reporting:
 
     driver: mysql
 
@@ -1256,22 +1284,6 @@ sqlc:
       reset: true
 
       path: migrations
-
-  reporting:
-
-    driver: mysql
-
-    uri:
-
-      host: 127.0.0.1
-
-      port: 3306
-
-      user: root
-
-      password: gosoline
-
-      database: blog
 ```
 
 A custom repository must implement the transaction-aware `sqlr.RepositoryTx` interface. The interface includes `Count` in addition to `Create`, `Read`, `Query`, `Update`, `Delete`, and `Close`.
@@ -1296,7 +1308,7 @@ type CrudOperation[K sqlr.KeyTypes, E sqlr.Entitier[K], I, O any] func(
 
 The definition supports `CreateOperation`, `ReadOperation`, `UpdateOperation`, `PatchOperation`, `ListOperation`, and `DeleteOperation`. An operation field replaces the complete default operation. `UpdateOperation` does not change the default PATCH pipeline. `PatchOperation` replaces the complete patch pipeline.
 
-Use custom operations for domain rules that need direct control over persistence. The override owns authorization, validation, scope, locking, association policy, and response mapping. SQLH wraps it in `TxRunner`; its transaction covers SQL work that uses the supplied transaction and repository. It cannot roll back blob-store or other external effects, and MySQL DDL may commit implicitly. Keep legacy lifecycle handlers outside SQLH CRUD when the old order or failure behavior requires it. Publish success events after commit, not from a pre-commit mapper.
+Use custom operations for domain rules that need direct control over persistence. An override owns authorization, validation, scope, locking, association policy, and persistence for its operation. Create, read, update, patch, and list overrides return their typed operation results. `DeleteOperation` instead returns the deleted `*E`. `handler.Delete` applies `DeleteOutput` to that entity. `handler.DeleteNoContent` skips the mapper and returns 204. SQLH wraps it in `TxRunner`; its transaction covers SQL work that uses the supplied transaction and repository. It cannot roll back blob-store or other external effects, and MySQL DDL may commit implicitly. Keep legacy lifecycle handlers outside SQLH CRUD when the old order or failure behavior requires it. Publish success events after commit, not from a pre-commit mapper.
 
 ## Migration Notes[​](#migration-notes "Direct link to Migration Notes")
 

@@ -9,6 +9,7 @@
 - [Archive](/blog/archive.md): Archive
 - [Authors](/blog/authors.md)
 - [gosoline goes modular: smaller packages, better APIs](/blog/gosoline-goes-modular.md): gosoline has grown into a mature application framework that powers production backend systems. It provides the building blocks teams need to run services reliably: application lifecycle management, configuration handling, logging, metrics, tracing, and integrations for many common infrastructure components.
+- [Clearer Stream Processing, Safer Shutdown](/blog/gosoline-v0-66-0-stream-processing.md): Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled. The difficult part is making that flow behave predictably when callbacks run concurrently, a partition changes owners, or a deployment interrupts processing.
 - [Identity & Naming Patterns: Flexible, Configuration-Driven Resource Naming](/blog/identity-and-naming-patterns.md): Managing cloud resources across multiple environments, teams, and services is hard enough without fighting your own naming conventions. Gosoline's old AppId model locked you into a fixed project/family/group hierarchy — useful in practice, but inflexible by design. This release replaces it with a tag-based Identity system and a unified naming pattern engine that gives you full control over how every resource is named, from a single config file.
 - [Introducing the Standalone HTTP Server Package](/blog/introducing-httpserver-package.md): The HTTP server has always been one of the most commonly used parts of gosoline. Most services need a way to expose APIs, register routes, bind requests, return structured responses, and plug into the application lifecycle.
 - [Log Sampling in Go: Less Noise, More Debuggability](/blog/sampling-fingers-crossed-logging.md): High-traffic services have a logging problem: the more successful traffic you handle, the more you pay to store and query logs that rarely matter. But if you turn logging down, you lose the context you need when something does break.
@@ -16,15 +17,18 @@
 - [One post tagged with "breaking-changes"](/blog/tags/breaking-changes.md)
 - [One post tagged with "configuration"](/blog/tags/configuration.md)
 - [2 posts tagged with "framework"](/blog/tags/framework.md)
-- [2 posts tagged with "gosoline"](/blog/tags/gosoline.md)
+- [3 posts tagged with "gosoline"](/blog/tags/gosoline.md)
 - [One post tagged with "httpserver"](/blog/tags/httpserver.md)
 - [One post tagged with "identity"](/blog/tags/identity.md)
+- [One post tagged with "kafka"](/blog/tags/kafka.md)
+- [One post tagged with "lifecycle"](/blog/tags/lifecycle.md)
 - [One post tagged with "logging"](/blog/tags/logging.md)
 - [One post tagged with "migration"](/blog/tags/migration.md)
 - [One post tagged with "modularization"](/blog/tags/modularization.md)
 - [One post tagged with "naming"](/blog/tags/naming.md)
 - [One post tagged with "observability"](/blog/tags/observability.md)
 - [One post tagged with "sampling"](/blog/tags/sampling.md)
+- [One post tagged with "streaming"](/blog/tags/streaming.md)
 - [Search the documentation](/search.md)
 - [Fundamentals](/category/fundamentals.md): Learn the fundamental concepts and core principles of gosoline:
 - [Getting started](/category/getting-started.md): Here, you'll find tutorials to help you get started quickly with gosoline:
@@ -45,7 +49,7 @@
 - [sqlr - SQL Repository](/how-to/databases-sql/sqlr.md): The sqlr package provides a generic, type-safe repository layer built on top of sqlc. It offers CRUD operations, relationship management, eager loading via joins and preloads, and transaction support — all using Go generics for compile-time type safety.
 - [Add middleware](/how-to/http-server/add-middleware.md): The httpserver includes a built-in middleware chain and supports custom middleware at both the router and route-group level.
 - [Authenticate requests](/how-to/http-server/authentication.md): The github.com/gosoline-project/httpserver/auth package provides Gin-compatible middleware for common HTTP authentication patterns. You can attach auth middleware to the whole server, to a route group, or to selected routes.
-- [Build an HTTP service](/how-to/http-server/build-an-http-service.md): In this guide, you'll build a complete HTTP service from scratch. You'll start with the basics of defining routes, then level up to type-safe handlers with dependency injection, request binding, and structured responses.
+- [Build an HTTP service](/how-to/http-server/build-an-http-service.md): In this guide, you will build an HTTP service from scratch. You will add routes, typed handlers, dependency injection, request binding, and negotiated responses.
 - [Chaos middleware](/how-to/http-server/chaos-middleware.md): The httpserver includes an optional chaos middleware for resilience testing. When enabled, it randomly introduces failures to exercise client retry logic, circuit breakers, and timeout handling in non-production environments.
 - [Concurrency and connection pressure](/how-to/http-server/concurrency-and-connection-pressure.md): The httpserver provides three complementary mechanisms to protect your service under load:
 - [Configure your server](/how-to/http-server/configure-your-server.md): The httpserver package provides flexible configuration options through YAML config files. All settings live under httpserver. where ` is the server name you pass to NewServer`.
@@ -67,8 +71,9 @@
 - [Build a CLI tool](/how-to/use-cli.md): The pkg/cli package lets you build multi-command CLI tools that run inside the gosoline application lifecycle, giving each command access to the same config, logger, and kernel modules as any other gosoline application.
 - [Implement health checks](/how-to/write-health-checks.md): You can check the health of a running gosoline application.
 - [Migrating to Identity and Naming Patterns](/migrations/app-identity-and-naming-patterns.md): This guide details how to migrate your gosoline application to the new Identity system and dynamic resource naming.
-- [Migrating to the Standalone HTTP Server Package](/migrations/httpserver-package.md): This guide explains how to migrate from the old github.com/justtrackio/gosoline/pkg/httpserver package directly to the standalone github.com/gosoline-project/httpserver module at v0.5.6.
+- [Migrating to the Standalone HTTP Server Package](/migrations/httpserver-package.md): This guide explains how to migrate from the old github.com/justtrackio/gosoline/pkg/httpserver package directly to the standalone github.com/gosoline-project/httpserver module at v0.6.4.
 - [Migrating an Existing Service to SQLH CRUD](/migrations/sqlh-crud.md): This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers.
+- [Migrating to the Callback-Based Stream Consumer Lifecycle](/migrations/stream-consumer-lifecycle.md): This guide covers the breaking stream changes introduced in Gosoline v0.66.0 by commit 04b54462, stream: unify input processing and shutdown. Follow this guide when upgrading from an earlier release to v0.66.0 or later.
 - [Naming patterns](/reference/naming-patterns.md): Gosoline uses naming patterns to generate consistent names for resources (SQS queues, SNS topics, DynamoDB tables, Kafka topics, Redis keys, metric namespaces, tracing service names, ...).
 - [cfg package](/reference/package-cfg.md): With the cfg package, you can configure and use configurations in your gosoline project.
 - [Package cloud/aws](/reference/package-cloud_aws.md): The cloud/aws package
@@ -84,27 +89,30 @@
 
 # Full Documentation Content
 
-## [gosoline goes modular: smaller packages, better APIs](/docs/pr-4/blog/gosoline-goes-modular/.md)
+## [Clearer Stream Processing, Safer Shutdown](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
 
-June 11, 2026 ·
+September 30, 2026 ·
 
 <!-- -->
 
-4 min read
+7 min read
 
 [![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
 
 [Jan Kamieth](https://github.com/j4k4)
 
-gosoline has grown into a mature application framework that powers production backend systems. It provides the building blocks teams need to run services reliably: application lifecycle management, configuration handling, logging, metrics, tracing, and integrations for many common infrastructure components.
+Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled. The difficult part is making that flow behave predictably when callbacks run concurrently, a partition changes owners, or a deployment interrupts processing.
+
+Gosoline **[v0.66.0](https://github.com/justtrackio/gosoline/releases/tag/v0.66.0)** brings those concerns together in a simpler stream lifecycle. Inputs call processing callbacks directly, concurrency and ordering become explicit transport decisions, and processing drain is separated from transport cleanup. The result is a clearer model for building and operating streaming services.
 
 **Tags:**
 
 * [gosoline](/docs/pr-4/blog/tags/gosoline/.md)
-* [modularization](/docs/pr-4/blog/tags/modularization/.md)
-* [framework](/docs/pr-4/blog/tags/framework/.md)
+* [streaming](/docs/pr-4/blog/tags/streaming/.md)
+* [kafka](/docs/pr-4/blog/tags/kafka/.md)
+* [lifecycle](/docs/pr-4/blog/tags/lifecycle/.md)
 
-[**Read more**](/docs/pr-4/blog/gosoline-goes-modular/.md)
+[**Read more**](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
 
 
 ---
@@ -131,6 +139,11 @@ gosoline has grown into a mature application framework that powers production ba
   [ - ](/docs/pr-4/blog/gosoline-goes-modular/.md)
   <!-- -->
   [gosoline goes modular: smaller packages, better APIs](/docs/pr-4/blog/gosoline-goes-modular/.md)
+* [September 30](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
+  <!-- -->
+  [ - ](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
+  <!-- -->
+  [Clearer Stream Processing, Safer Shutdown](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
 
 
 ---
@@ -141,7 +154,7 @@ gosoline has grown into a mature application framework that powers production ba
 
   ## [Jan Kamieth](https://github.com/j4k4)
 
-  4
+  5
 
 
 ---
@@ -234,6 +247,113 @@ This is an important step for gosoline. It keeps the framework useful for large 
 * [framework](/docs/pr-4/blog/tags/framework/.md)
 
 [Edit this page](https://github.com/gosoline-project/docs/tree/main/blog/2026-06-11-gosoline-goes-modular.md)
+
+
+---
+
+# Clearer Stream Processing, Safer Shutdown
+
+September 30, 2026 ·
+
+<!-- -->
+
+7 min read
+
+[![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
+
+[Jan Kamieth](https://github.com/j4k4)
+
+Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled. The difficult part is making that flow behave predictably when callbacks run concurrently, a partition changes owners, or a deployment interrupts processing.
+
+Gosoline **[v0.66.0](https://github.com/justtrackio/gosoline/releases/tag/v0.66.0)** brings those concerns together in a simpler stream lifecycle. Inputs call processing callbacks directly, concurrency and ordering become explicit transport decisions, and processing drain is separated from transport cleanup. The result is a clearer model for building and operating streaming services.
+
+<!-- -->
+
+## Clear Ownership from Receipt to Cleanup[​](#clear-ownership-from-receipt-to-cleanup "Direct link to Clear Ownership from Receipt to Cleanup")
+
+Previously, inputs exposed message channels, while consumers scheduled callback work and coordinated acknowledgement through separate APIs. Understanding a message's lifecycle meant following it across those boundaries.
+
+The new model gives each layer a focused responsibility:
+
+* **Consumers own application processing**, including a shared shutdown processing deadline for primary and retry work.
+* **Inputs own delivery and transport bookkeeping**, including SQS deletion, Kafka offset commits, and Kinesis checkpoints.
+
+Instead of handing a message to a channel and acknowledging it through another interface later, an input invokes the processing callback and handles the result within its own transport lifecycle.
+
+This puts transport behavior next to the code that understands it. SQS can decide when to delete a message, Kafka can coordinate processing with group rebalances and commits, and Kinesis can track which records belong in the next checkpoint. Normal typed and untyped application callbacks keep their familiar `Consume` contract.
+
+## Shutdown That Gives In-Flight Work Room to Finish[​](#shutdown-that-gives-in-flight-work-room-to-finish "Direct link to Shutdown That Gives In-Flight Work Room to Finish")
+
+A rollout should stop new work without immediately abandoning everything already in progress. It should also leave time to persist transport state after application processing finishes.
+
+Before v0.66.0, the channel handoff separated transport progress from actual application completion. During a rollout, that could produce several awkward outcomes:
+
+* **Progress recorded too early:** Kafka could commit offsets, or Kinesis advance checkpoints, after handing records downstream while application callbacks were still running. If the process exited before those callbacks finished, the next consumer could resume past unfinished work.
+* **Cleanup interrupted by cancellation:** Kafka's final commits used a context that could already be cancelled, and Kinesis's release allowance could be counting down while downstream work was still draining. Failed final persistence could cause replay and duplicate processing, or delay shard handover.
+* **A shutdown budget that was hard to follow:** per-callback cancellation allowances and separate channel stages did not provide one authoritative processing deadline shared by primary and retry work.
+
+In v0.66.0, transport processing waits for the direct callback to return rather than treating channel delivery as completion. The consumer requests that inputs stop fetching and gives admitted work one shared processing drain window. Primary and retry inputs use the same deadline, rather than each callback having its own independent cancellation grace period. When the window expires, remaining callback contexts are cancelled.
+
+Transport cleanup has its own allowance: Kafka commits receive a separate cancellation grace window, Kinesis starts its checkpoint-and-release window after processing drains, and SQS deletion operations can outlive cancellation of their input context. These mechanisms respect each transport's lifecycle rather than applying one timer to every operation.
+
+That separation makes shutdown easier to reason about: application work has a processing budget, and recording its transport progress is a distinct responsibility. Callbacks still need to respect context cancellation, but the framework now provides a consistent drain signal across inputs.
+
+The same care extends beyond broker-backed inputs. Buffered in-memory messages can drain during graceful shutdown, messages returned by an in-progress Redis blocking read are preserved for processing, and file inputs finish naturally when their source is exhausted.
+
+## Parallelism with an Explicit Ordering Choice[​](#parallelism-with-an-explicit-ordering-choice "Direct link to Parallelism with an Explicit Ordering Choice")
+
+Concurrency is most useful when its meaning matches the source of the work. v0.66.0 puts callback concurrency at the input layer and adds explicit **ordered** and **unordered** processing for Kafka and Kinesis.
+
+For an independent event-processing workload, unordered mode allows multiple records from the same partition or shard to run concurrently. For stateful updates that must happen in sequence, ordered mode processes records sequentially within each Kafka topic-partition or Kinesis shard while allowing work across different partitions or shards to overlap.
+
+For example, a Kafka input assigned eight active partitions with three runners can process three partition work units concurrently in ordered mode. The other partitions wait for capacity, and each partition retains its own sequence. Increasing the runner count beyond the number of active assigned partitions leaves extra capacity unused rather than weakening ordering.
+
+The benefit is an explicit trade-off between parallelism and sequencing. Ordering is local to a partition or shard; separate retry work has its own execution path. The [Kafka usage guide](/docs/pr-4/how-to/kafka/general/.md#runner-count-and-processing-order) explains how those limits interact in practice.
+
+## Stronger Offset and Checkpoint Handling[​](#stronger-offset-and-checkpoint-handling "Direct link to Stronger Offset and Checkpoint Handling")
+
+Concurrent processing makes shutdown bookkeeping especially important. If a later record finishes before an earlier one, advancing transport progress carelessly can skip work that never reached processing.
+
+Kafka processing now preserves a gap-free handled prefix when committing during concurrent execution and shutdown. Kinesis similarly advances checkpoints only through the contiguous handled record prefix. Together with the separate cleanup windows, this strengthens the boundary between admitted work and work left for another consumer to receive.
+
+These are transport-progress guarantees, not exactly-once business processing. Kafka and Kinesis can advance progress for records whose processing callback reports failure; application retry handling remains responsible for recovering that failed work. Failed commits or checkpoints can also cause redelivery. Idempotency and observability still matter, but the framework's responsibilities are more clearly defined.
+
+## SQS Acknowledgement with a Clear Latency–Cost Trade-Off[​](#sqs-acknowledgement-with-a-clear-latencycost-trade-off "Direct link to SQS Acknowledgement with a Clear Latency–Cost Trade-Off")
+
+SQS and SNS-backed inputs now own acknowledgement directly. Individual deletion is the default: once a message's callback succeeds, the input can delete it without waiting for the rest of the receive result to finish.
+
+Optional batch deletion provides another useful choice. Successfully processed messages from a receive result can be deleted together, reducing delete requests at the cost of waiting until that receive result has finished processing. This batches transport acknowledgement, not application callbacks.
+
+The input also validates required message metadata and reports partial batch-deletion failures. SQS retry inputs use the same acknowledgement behavior, giving primary and retry delivery a consistent implementation.
+
+## Health Checks That Notice One Stuck Callback[​](#health-checks-that-notice-one-stuck-callback "Direct link to Health Checks That Notice One Stuck Callback")
+
+A busy consumer can look healthy while one callback remains stuck. Successful work elsewhere should not hide that condition.
+
+Consumer health now tracks active processing individually. If one callback exceeds the health-check timeout, the consumer can report unhealthy even while other callbacks continue to finish. That makes health reporting more representative of the work actually in flight.
+
+The refactor also expands test coverage around startup, draining, cancellation, ordering, retry behavior, commits, checkpoints, and acknowledgements. Those are the lifecycle edges that matter most during deployments and failures.
+
+## A Simpler Foundation for Streaming Services[​](#a-simpler-foundation-for-streaming-services "Direct link to A Simpler Foundation for Streaming Services")
+
+v0.66.0 consolidates the stream lifecycle around a smaller set of concepts with explicit ownership: processing, concurrency, ordering, and transport cleanup.
+
+For application teams, the main wins are easier-to-understand shutdown, transport-aware parallelism, stronger progress bookkeeping, and health checks that expose slow work. For the framework, the direct callback contract provides a common foundation without hiding the differences between Kafka, Kinesis, and SQS.
+
+For further reading about Kafka configuration, concurrency, and runtime behavior, check the [Kafka usage guide](/docs/pr-4/how-to/kafka/general/.md).
+
+For further reading about streaming applications in general, check [Understanding inputs and outputs](/docs/pr-4/how-to/streaming-applications/understand-inputs-and-outputs/.md) and [Creating a consumer](/docs/pr-4/how-to/streaming-applications/create-a-consumer/.md).
+
+This release includes breaking changes. For upgrade details, see the [stream consumer lifecycle migration guide](/docs/pr-4/migrations/stream-consumer-lifecycle/.md).
+
+**Tags:**
+
+* [gosoline](/docs/pr-4/blog/tags/gosoline/.md)
+* [streaming](/docs/pr-4/blog/tags/streaming/.md)
+* [kafka](/docs/pr-4/blog/tags/kafka/.md)
+* [lifecycle](/docs/pr-4/blog/tags/lifecycle/.md)
+
+[Edit this page](https://github.com/gosoline-project/docs/tree/main/blog/2026-09-30-gosoline-v0-66-0-stream-processing.md)
 
 
 ---
@@ -547,6 +667,8 @@ The HTTP server has always been one of the most commonly used parts of gosoline.
 
 <!-- -->
 
+The updated examples below target `httpserver` v0.6.4.
+
 As part of the ongoing modularization of gosoline, the HTTP server is now available as a standalone package:
 
 <https://github.com/gosoline-project/httpserver>
@@ -693,37 +815,37 @@ The `httpserver.With` pattern is useful because many APIs are organized around c
 The handler methods stay focused on individual endpoints:
 
 ```
-func (h *ReportHandler) Overview(ctx context.Context) (httpserver.Response, error) {
+func (h *ReportHandler) Overview(ctx context.Context) (ReportOverview, error) {
 
     overview, err := h.reports.GetOverview(ctx)
 
     if err != nil {
 
-        return nil, err
+        return ReportOverview{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(overview), nil
+    return overview, nil
 
 }
 
 
 
-func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (httpserver.Response, error) {
+func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (ReportResult, error) {
 
     result, err := h.reports.Run(ctx, input.ReportType, input.Parameters)
 
     if err != nil {
 
-        return nil, err
+        return ReportResult{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(result), nil
+    return result, nil
 
 }
 
@@ -751,6 +873,10 @@ func (h *ReportHandler) Export(ctx context.Context, input *ExportReportInput) (h
 
 }
 ```
+
+`Overview` and `Run` return typed values for response negotiation. `Export` keeps an explicit response because it sends file bytes with a selected media type.
+
+See [Customizing responses](/docs/pr-4/how-to/http-server/build-an-http-service/.md#customizing-responses) for status, header, and explicit `Response` rules.
 
 This consolidation is not required for every route. Separate handlers are still fine when routes have genuinely different dependencies or lifecycle requirements. But for most cohesive route groups, one handler service with multiple endpoint methods is the cleaner shape.
 
@@ -815,19 +941,19 @@ type RunReportInput struct {
 
 
 
-func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (httpserver.Response, error) {
+func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (ReportResult, error) {
 
     result, err := h.reports.Run(ctx, input.ReportType, input.Parameters)
 
     if err != nil {
 
-        return nil, err
+        return ReportResult{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(result), nil
+    return result, nil
 
 }
 ```
@@ -1332,27 +1458,30 @@ gosoline has grown into a mature application framework that powers production ba
 
 ---
 
-## [gosoline goes modular: smaller packages, better APIs](/docs/pr-4/blog/gosoline-goes-modular/.md)
+## [Clearer Stream Processing, Safer Shutdown](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
 
-June 11, 2026 ·
+September 30, 2026 ·
 
 <!-- -->
 
-4 min read
+7 min read
 
 [![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
 
 [Jan Kamieth](https://github.com/j4k4)
 
-gosoline has grown into a mature application framework that powers production backend systems. It provides the building blocks teams need to run services reliably: application lifecycle management, configuration handling, logging, metrics, tracing, and integrations for many common infrastructure components.
+Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled. The difficult part is making that flow behave predictably when callbacks run concurrently, a partition changes owners, or a deployment interrupts processing.
+
+Gosoline **[v0.66.0](https://github.com/justtrackio/gosoline/releases/tag/v0.66.0)** brings those concerns together in a simpler stream lifecycle. Inputs call processing callbacks directly, concurrency and ordering become explicit transport decisions, and processing drain is separated from transport cleanup. The result is a clearer model for building and operating streaming services.
 
 **Tags:**
 
 * [gosoline](/docs/pr-4/blog/tags/gosoline/.md)
-* [modularization](/docs/pr-4/blog/tags/modularization/.md)
-* [framework](/docs/pr-4/blog/tags/framework/.md)
+* [streaming](/docs/pr-4/blog/tags/streaming/.md)
+* [kafka](/docs/pr-4/blog/tags/kafka/.md)
+* [lifecycle](/docs/pr-4/blog/tags/lifecycle/.md)
 
-[**Read more**](/docs/pr-4/blog/gosoline-goes-modular/.md)
+[**Read more**](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
 
 
 ---
@@ -1409,6 +1538,62 @@ Managing cloud resources across multiple environments, teams, and services is ha
 
 ---
 
+## [Clearer Stream Processing, Safer Shutdown](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
+
+September 30, 2026 ·
+
+<!-- -->
+
+7 min read
+
+[![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
+
+[Jan Kamieth](https://github.com/j4k4)
+
+Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled. The difficult part is making that flow behave predictably when callbacks run concurrently, a partition changes owners, or a deployment interrupts processing.
+
+Gosoline **[v0.66.0](https://github.com/justtrackio/gosoline/releases/tag/v0.66.0)** brings those concerns together in a simpler stream lifecycle. Inputs call processing callbacks directly, concurrency and ordering become explicit transport decisions, and processing drain is separated from transport cleanup. The result is a clearer model for building and operating streaming services.
+
+**Tags:**
+
+* [gosoline](/docs/pr-4/blog/tags/gosoline/.md)
+* [streaming](/docs/pr-4/blog/tags/streaming/.md)
+* [kafka](/docs/pr-4/blog/tags/kafka/.md)
+* [lifecycle](/docs/pr-4/blog/tags/lifecycle/.md)
+
+[**Read more**](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
+
+
+---
+
+## [Clearer Stream Processing, Safer Shutdown](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
+
+September 30, 2026 ·
+
+<!-- -->
+
+7 min read
+
+[![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
+
+[Jan Kamieth](https://github.com/j4k4)
+
+Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled. The difficult part is making that flow behave predictably when callbacks run concurrently, a partition changes owners, or a deployment interrupts processing.
+
+Gosoline **[v0.66.0](https://github.com/justtrackio/gosoline/releases/tag/v0.66.0)** brings those concerns together in a simpler stream lifecycle. Inputs call processing callbacks directly, concurrency and ordering become explicit transport decisions, and processing drain is separated from transport cleanup. The result is a clearer model for building and operating streaming services.
+
+**Tags:**
+
+* [gosoline](/docs/pr-4/blog/tags/gosoline/.md)
+* [streaming](/docs/pr-4/blog/tags/streaming/.md)
+* [kafka](/docs/pr-4/blog/tags/kafka/.md)
+* [lifecycle](/docs/pr-4/blog/tags/lifecycle/.md)
+
+[**Read more**](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
+
+
+---
+
 ## [Log Sampling in Go: Less Noise, More Debuggability](/docs/pr-4/blog/sampling-fingers-crossed-logging/.md)
 
 January 15, 2026 ·
@@ -1557,6 +1742,34 @@ High-traffic services have a logging problem: the more successful traffic you ha
 * [observability](/docs/pr-4/blog/tags/observability/.md)
 
 [**Read more**](/docs/pr-4/blog/sampling-fingers-crossed-logging/.md)
+
+
+---
+
+## [Clearer Stream Processing, Safer Shutdown](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
+
+September 30, 2026 ·
+
+<!-- -->
+
+7 min read
+
+[![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
+
+[Jan Kamieth](https://github.com/j4k4)
+
+Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled. The difficult part is making that flow behave predictably when callbacks run concurrently, a partition changes owners, or a deployment interrupts processing.
+
+Gosoline **[v0.66.0](https://github.com/justtrackio/gosoline/releases/tag/v0.66.0)** brings those concerns together in a simpler stream lifecycle. Inputs call processing callbacks directly, concurrency and ordering become explicit transport decisions, and processing drain is separated from transport cleanup. The result is a clearer model for building and operating streaming services.
+
+**Tags:**
+
+* [gosoline](/docs/pr-4/blog/tags/gosoline/.md)
+* [streaming](/docs/pr-4/blog/tags/streaming/.md)
+* [kafka](/docs/pr-4/blog/tags/kafka/.md)
+* [lifecycle](/docs/pr-4/blog/tags/lifecycle/.md)
+
+[**Read more**](/docs/pr-4/blog/gosoline-v0-66-0-stream-processing/.md)
 
 
 ---
@@ -1613,7 +1826,7 @@ Copyright © 2026 justtrack
 
 ## [📄️Build an HTTP service](/docs/pr-4/how-to/http-server/build-an-http-service/.md)
 
-[In this guide, you'll build a complete HTTP service from scratch. You'll start with the basics of defining routes, then level up to type-safe handlers with dependency injection, request binding, and structured responses.](/docs/pr-4/how-to/http-server/build-an-http-service/.md)
+[In this guide, you will build an HTTP service from scratch. You will add routes, typed handlers, dependency injection, request binding, and negotiated responses.](/docs/pr-4/how-to/http-server/build-an-http-service/.md)
 
 
 ---
@@ -3980,7 +4193,8 @@ When creating a client from a wrapped handle, make sure the `QueryBuilderConfig`
 
 * `sqlr.RepositoryTx` can reuse prepared statements inside transactions, but the repository client must come from the same connection source that opens the transaction.
 * SQLH creates one transaction for each default CRUD operation and uses a transaction-aware SQLR repository built from the same SQL client.
-* For custom SQLH operations, use `sqlh.TxRunner` or `sqlc.Client.WithTx()` and pass the active transaction to SQLR or SQLC operations.
+* SQLH `*Operation` callbacks already receive the active `sqlr.TTx`. Use it directly. Do not start another transaction.
+* For a separate typed handler outside SQLH CRUD, use `sqlh.TxRunner` or `sqlc.Client.WithTx()`. `TxRunner` supplies `sqlr.TTx`. `WithTx()` supplies `sqlc.Tx`. Wrap `sqlc.Tx` with `sqlr.NewTx(tx)` for SQLR calls. Use the raw `sqlc.Tx` for SQLC calls.
 * SQLR `Count()` strips row locking and pagination. Apply the same filters and scope to the list query and count query.
 
 
@@ -4047,6 +4261,8 @@ sqlc:
 
       path: migrations
 ```
+
+Each runnable example loads `config.dist.yml` from disk in the current working directory. Run each example from its own directory. The migration path in its config is relative to that directory.
 
 ## CRUD Model[​](#crud-model "Direct link to CRUD Model")
 
@@ -4205,7 +4421,7 @@ func (t *AuthorMapper) TransformOutput(_ context.Context, entity *Author) (Autho
 }
 ```
 
-The output callback usually returns a Go value. `httpserver.Bind` negotiates a representation from `Accept`. An explicit `httpserver.Response` bypasses that negotiation. An unsupported `Accept` can produce HTTP 406. Use an explicit response when the API needs fixed status, headers, or content type.
+The `Output` callback returns a Go value. `httpserver.Bind` negotiates its representation from the request's `Accept` header. A typed output can implement `StatusCode() int` and `Header() http.Header` to set its status and headers. An explicit `httpserver.Response` bypasses negotiation. See [Customizing responses](/docs/pr-4/how-to/http-server/build-an-http-service/.md#customizing-responses) for response overrides and content types.
 
 For a dedicated response DTO, map the entity in the output callback:
 
@@ -4446,14 +4662,16 @@ SQLH creates one transaction for every default CRUD operation. It loads the enti
 
 The SQLH repository must use the same SQL client that starts the transaction. This requirement is important when SQLR uses prepared statements. The default handler factory creates both objects from the configured client.
 
-The old `sqlh.WithTx`, `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR` APIs are removed. Use a SQLH CRUD operation for entity CRUD. For another typed operation, use `TxRunner` and adapt it to the handler signature:
+The old `sqlh.WithTx`, `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR` APIs are removed. SQLH `*Operation` callbacks already receive the active `sqlr.TTx`. Use it directly for SQL work. Do not start another transaction inside a callback. For another typed operation outside a CRUD definition, use `TxRunner` and adapt it to the handler signature:
 
 main.go
 
 ```
 type PostHandler struct {
 
-  runner *sqlh.TxRunner
+  runner   *sqlh.TxRunner
+
+  postRepo sqlr.RepositoryTx[int64, Post]
 
 }
 
@@ -4461,7 +4679,7 @@ type PostHandler struct {
 
 func NewPostHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*PostHandler, error) {
 
-  runner, err := sqlh.NewTxRunner(ctx, config, logger, "default")
+  client, err := sqlc.ProvideClient(ctx, config, logger, "default")
 
   if err != nil {
 
@@ -4471,7 +4689,27 @@ func NewPostHandler(ctx context.Context, config cfg.Config, logger log.Logger) (
 
 
 
-  return &PostHandler{runner: runner}, nil
+  postRepo, err := sqlr.NewRepositoryTxWithSettings[int64, Post](client, sqlr.DefaultSettings())
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  runner, err := sqlh.NewTxRunnerWithClient(client)
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  return &PostHandler{runner: runner, postRepo: postRepo}, nil
 
 }
 
@@ -4493,7 +4731,7 @@ func (h *PostHandler) CreatePost(ctx context.Context, input *PostCreateInput) (P
 
 
 
-    if _, err := tx.Q().Into("posts").Records(post).Exec(tx); err != nil {
+    if err := h.postRepo.Create(tx, post); err != nil {
 
       return PostOutput{}, fmt.Errorf("failed to create post: %w", err)
 
@@ -4518,7 +4756,7 @@ func (h *PostHandler) CreatePost(ctx context.Context, input *PostCreateInput) (P
 }
 ```
 
-main.go
+config.dist.yml
 
 ```
 httpserver:
@@ -5042,7 +5280,7 @@ definition.Identity = func(
 }
 ```
 
-Always apply the supplied `scope`. It contains force filters, delete visibility, and other restrictions that protect read, update, patch, and delete operations.
+SQLH passes a builder to every custom identity lookup. Apply it, along with the public-ID predicate and supplied scope, before querying. Return scope errors before repository work. Ordinary GET builders can add relation preloads but do not include `FOR UPDATE`. Default Update, PATCH, and Delete builders include that lock.
 
 SQLH uses physical SQLR deletion by default. Use `DeleteScope` and `Delete` for soft deletion:
 
@@ -5159,17 +5397,19 @@ func (r *ReportingAuthorRepository) Read(tx sqlr.TTx, id int64, opts ...func(qb 
 
 func (r *ReportingAuthorRepository) Query(tx sqlr.TTx, opts ...func(qb *sqlr.QueryBuilderSelect)) ([]Author, error) {
 
-  opts = append(opts, func(qb *sqlr.QueryBuilderSelect) {
+  return r.delegate.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
 
     qb.OrderBy("created_at DESC")
 
     qb.Limit(100)
 
+    for _, opt := range opts {
+
+      opt(qb)
+
+    }
+
   })
-
-
-
-  return r.delegate.Query(tx, opts...)
 
 }
 
@@ -5206,7 +5446,9 @@ func (r *ReportingAuthorRepository) Close() error {
 }
 ```
 
-main.go
+This configuration enables migrations for the selected `reporting` client.
+
+config.dist.yml
 
 ```
 httpserver:
@@ -5221,7 +5463,7 @@ httpserver:
 
 sqlc:
 
-  default:
+  reporting:
 
     driver: mysql
 
@@ -5244,22 +5486,6 @@ sqlc:
       reset: true
 
       path: migrations
-
-  reporting:
-
-    driver: mysql
-
-    uri:
-
-      host: 127.0.0.1
-
-      port: 3306
-
-      user: root
-
-      password: gosoline
-
-      database: blog
 ```
 
 A custom repository must implement the transaction-aware `sqlr.RepositoryTx` interface. The interface includes `Count` in addition to `Create`, `Read`, `Query`, `Update`, `Delete`, and `Close`.
@@ -5284,7 +5510,7 @@ type CrudOperation[K sqlr.KeyTypes, E sqlr.Entitier[K], I, O any] func(
 
 The definition supports `CreateOperation`, `ReadOperation`, `UpdateOperation`, `PatchOperation`, `ListOperation`, and `DeleteOperation`. An operation field replaces the complete default operation. `UpdateOperation` does not change the default PATCH pipeline. `PatchOperation` replaces the complete patch pipeline.
 
-Use custom operations for domain rules that need direct control over persistence. The override owns authorization, validation, scope, locking, association policy, and response mapping. SQLH wraps it in `TxRunner`; its transaction covers SQL work that uses the supplied transaction and repository. It cannot roll back blob-store or other external effects, and MySQL DDL may commit implicitly. Keep legacy lifecycle handlers outside SQLH CRUD when the old order or failure behavior requires it. Publish success events after commit, not from a pre-commit mapper.
+Use custom operations for domain rules that need direct control over persistence. An override owns authorization, validation, scope, locking, association policy, and persistence for its operation. Create, read, update, patch, and list overrides return their typed operation results. `DeleteOperation` instead returns the deleted `*E`. `handler.Delete` applies `DeleteOutput` to that entity. `handler.DeleteNoContent` skips the mapper and returns 204. SQLH wraps it in `TxRunner`; its transaction covers SQL work that uses the supplied transaction and repository. It cannot roll back blob-store or other external effects, and MySQL DDL may commit implicitly. Keep legacy lifecycle handlers outside SQLH CRUD when the old order or failure behavior requires it. Publish success events after commit, not from a pre-commit mapper.
 
 ## Migration Notes[​](#migration-notes "Direct link to Migration Notes")
 
@@ -7405,13 +7631,13 @@ curl -H 'X-API-KEY: secret' http://localhost:8080/api/ping
 Successful authenticators attach an `auth.Subject` to the request context. Handlers registered through `Bind`, `BindN`, `BindR`, `BindNR`, and SSE helpers receive that context.
 
 ```
-func me(ctx context.Context) (httpserver.Response, error) {
+func me(ctx context.Context) (map[string]any, error) {
 
     subject := auth.GetSubject(ctx)
 
 
 
-    return httpserver.NewJsonResponse(map[string]any{
+    return map[string]any{
 
         "name":             subject.Name,
 
@@ -7421,7 +7647,7 @@ func me(ctx context.Context) (httpserver.Response, error) {
 
         "attributes":       subject.Attributes,
 
-    }), nil
+    }, nil
 
 }
 ```
@@ -7806,13 +8032,13 @@ httpserver:
 
 # Build an HTTP service
 
-In this guide, you'll build a complete HTTP service from scratch. You'll start with the basics of defining routes, then level up to type-safe handlers with dependency injection, request binding, and structured responses.
+In this guide, you will build an HTTP service from scratch. You will add routes, typed handlers, dependency injection, request binding, and negotiated responses.
 
 ## What is httpserver?[​](#what-is-httpserver "Direct link to What is httpserver?")
 
-The httpserver package is built on top of [Gin](https://gin-gonic.com/), one of the most popular HTTP frameworks for Go. It inherits all of Gin's routing, middleware, and parameter handling — so you can always fall back to raw `*gin.Context` handlers when you need to.
+The httpserver package is built on [Gin](https://gin-gonic.com/), an HTTP framework for Go. You can use Gin routing and middleware, and you can register raw `*gin.Context` handlers when needed.
 
-On top of that foundation, httpserver adds a structured, type-safe way to build HTTP services. The **`With` pattern** gives you clean dependency injection: each handler group gets its own constructor that receives `ctx`, `config`, and `logger`, so your dependencies are initialized in one place and shared across related routes. The **`Bind` function** replaces manual request parsing with struct-tag-driven binding and validation — declare an input struct with `json`, `uri`, `form`, or `header` tags, and the request data is populated and validated before your handler even runs. Your handlers return a typed `Response` instead of writing directly to the response writer, making them easy to test and compose.
+httpserver adds a typed way to build HTTP services. The **`With` pattern** gives each handler group a constructor that receives `ctx`, `config`, and `logger`. The constructor initializes dependencies that related routes share. The **`Bind` function** uses struct tags to bind and validate request data. Typed handlers return Go values. httpserver selects a response format from the request's `Accept` header and writes the response.
 
 Together with built-in middleware for logging, metrics, compression, and graceful shutdown — all configured through YAML — httpserver lets you focus on your application logic rather than HTTP plumbing.
 
@@ -7821,7 +8047,7 @@ Together with built-in middleware for logging, metrics, compression, and gracefu
 Install the package:
 
 ```
-go get github.com/gosoline-project/httpserver@v0.5.6
+go get github.com/gosoline-project/httpserver@v0.6.4
 ```
 
 The entry point for any HTTP server is a `RouterFactory` — a function that receives a `*Router` and registers routes on it:
@@ -7829,11 +8055,11 @@ The entry point for any HTTP server is a `RouterFactory` — a function that rec
 ```
 httpserver.RunDefaultServer(func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
 
-    router.GET("/hello", func(ginCtx *gin.Context) {
+    router.GET("/hello", httpserver.BindN(func(ctx context.Context) (map[string]string, error) {
 
-        ginCtx.String(200, "Hello, World!")
+        return map[string]string{"message": "Hello, World!"}, nil
 
-    })
+    }))
 
     return nil
 
@@ -7867,14 +8093,14 @@ Group related routes with `router.Group()`:
 ```
 api := router.Group("/api")
 
-api.GET("/ping", func(ginCtx *gin.Context) {
+api.GET("/ping", httpserver.BindN(func(ctx context.Context) (map[string]string, error) {
 
-    ginCtx.JSON(200, gin.H{"message": "pong"})
+    return map[string]string{"message": "pong"}, nil
 
-})
+}))
 ```
 
-Raw Gin handlers work fine for simple cases. For type safety and cleaner code, read on.
+Raw Gin handlers remain useful when you need direct access to Gin APIs. Use typed handlers when you want request binding and negotiated output.
 
 ## The With pattern[​](#the-with-pattern "Direct link to The With pattern")
 
@@ -7940,21 +8166,29 @@ The suffixes follow a simple pattern:
 * **`R`** means the raw `*http.Request` is passed to the handler.
 * **`N`** means there is no input struct to bind.
 
-| Helper     | Handler shape                                    | Use when                                                                                                                         |
-| ---------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `Bind[I]`  | `(ctx, *Input) (Response, error)`                | The endpoint needs request data bound into an input struct. This is the default choice for most endpoints.                       |
-| `BindR[I]` | `(ctx, *http.Request, *Input) (Response, error)` | The endpoint needs both bound input and raw request access, for example headers, method, body metadata, or client IP resolution. |
-| `BindN`    | `(ctx) (Response, error)`                        | The endpoint does not need request input, for example health checks or static status endpoints.                                  |
-| `BindNR`   | `(ctx, *http.Request) (Response, error)`         | The endpoint does not need a bound input struct, but still needs raw request access.                                             |
+| Helper            | Handler shape                                                       | Use when                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `Bind[I, O any]`  | `func(ctx context.Context, input *I) (O, error)`                    | The endpoint needs request data bound into an input struct. This is the default choice for most endpoints.                       |
+| `BindR[I, O any]` | `func(ctx context.Context, req *http.Request, input *I) (O, error)` | The endpoint needs both bound input and raw request access, for example headers, method, body metadata, or client IP resolution. |
+| `BindN[O any]`    | `func(ctx context.Context) (O, error)`                              | The endpoint does not need request input, for example health checks or static status endpoints.                                  |
+| `BindNR[O any]`   | `func(ctx context.Context, req *http.Request) (O, error)`           | The endpoint does not need a bound input struct, but still needs raw request access.                                             |
 
 `Bind` and `BindR` can bind request data from JSON bodies, query parameters, form data, URI parameters, headers, and other supported sources. `BindN` and `BindNR` skip request binding entirely because there is no input struct.
 
 ```
 // With input
 
-func (h *Handler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 
-    // input is populated from the request
+    user, ok := h.users[input.Id]
+
+    if !ok {
+
+        return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
+
+    }
+
+    return user, nil
 
 }
 
@@ -7962,11 +8196,13 @@ func (h *Handler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.
 
 // With input and raw request access
 
-func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (httpserver.Response, error) {
+func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (map[string]string, error) {
 
     contentType := req.Header.Get("Content-Type")
 
     // input is populated from the request
+
+    return map[string]string{"contentType": contentType}, nil
 
 }
 
@@ -7974,9 +8210,11 @@ func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadIn
 
 // Without input
 
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
 
     // no request data needed
+
+    return map[string]string{"status": "ok"}, nil
 
 }
 
@@ -7984,11 +8222,13 @@ func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
 
 // Without input, but with raw request access
 
-func (h *Handler) Ping(ctx context.Context, req *http.Request) (httpserver.Response, error) {
+func (h *Handler) Ping(ctx context.Context, req *http.Request) (map[string]string, error) {
 
     userAgent := req.Header.Get("User-Agent")
 
     // no input struct is bound
+
+    return map[string]string{"userAgent": userAgent}, nil
 
 }
 ```
@@ -8133,11 +8373,11 @@ The `binding` tag uses [go-playground/validator](https://pkg.go.dev/github.com/g
 If you need the raw `*http.Request` alongside your input struct:
 
 ```
-func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (httpserver.Response, error) {
+func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (map[string]string, error) {
 
     contentType := req.Header.Get("Content-Type")
 
-    // ...
+    return map[string]string{"contentType": contentType}, nil
 
 }
 ```
@@ -8147,7 +8387,7 @@ func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadIn
 When your handler needs the caller IP address, use `ResolveClientIP` with the raw request from `BindR` or `BindNR`:
 
 ```
-func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetProfileInput) (httpserver.Response, error) {
+func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetProfileInput) (map[string]string, error) {
 
     clientIP, err := httpserver.ResolveClientIP(req)
 
@@ -8159,11 +8399,7 @@ func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetP
 
 
 
-    logger.Info(ctx, "profile requested from %s", clientIP)
-
-
-
-    // ...
+    return map[string]string{"clientIP": clientIP}, nil
 
 }
 ```
@@ -8172,59 +8408,157 @@ func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetP
 
 ## Sending responses[​](#sending-responses "Direct link to Sending responses")
 
-All handler methods return an `httpserver.Response` interface.
+Typed handlers return Go values. The default response negotiator encodes these values as JSON. If the request has no `Accept` header, httpserver selects JSON. The default negotiator supports only JSON. If `Accept` does not allow JSON, httpserver returns `406 Not Acceptable`.
 
-### JSON responses[​](#json-responses "Direct link to JSON responses")
+### JSON by default[​](#json-by-default "Direct link to JSON by default")
 
-`NewJsonResponse` serializes any value as JSON:
-
-```
-return httpserver.NewJsonResponse(user), nil
-```
-
-### Text responses[​](#text-responses "Direct link to Text responses")
+Return a Go value from a handler. httpserver encodes it as JSON:
 
 ```
-return httpserver.NewTextResponse("Hello, plain text!"), nil
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
+
+    return map[string]string{"status": "ok"}, nil
+
+}
 ```
 
-### Status-only responses[​](#status-only-responses "Direct link to Status-only responses")
-
-`NewStatusResponse` returns a response with only a status code — useful for `DELETE`, `PUT`, `PATCH`:
+Send a compatible `Accept` header to get JSON:
 
 ```
-return httpserver.NewStatusResponse(204), nil
+curl -i -H "Accept: application/json" http://localhost:8088/api/users/health
+
+# HTTP/1.1 200 OK
+
+# {"status":"ok"}
 ```
 
-### Custom status codes and headers[​](#custom-status-codes-and-headers "Direct link to Custom status codes and headers")
-
-Use functional options to customize any response:
+The default negotiator does not support plain text. This request returns `406 Not Acceptable`:
 
 ```
-return httpserver.NewJsonResponse(
+curl -i -H "Accept: text/plain" http://localhost:8088/api/users/health
 
-    user,
-
-    httpserver.WithStatusCode(http.StatusCreated),
-
-    httpserver.WithHeader("X-Custom-Header", "my-value"),
-
-), nil
+# HTTP/1.1 406 Not Acceptable
 ```
 
-| Option                             | Description                             |
-| ---------------------------------- | --------------------------------------- |
-| `WithStatusCode(code int)`         | Set the HTTP status code (default: 200) |
-| `WithHeader(key, value string)`    | Add a single header                     |
-| `WithHeaders(headers http.Header)` | Merge multiple headers                  |
-| `WithBody(body []byte)`            | Set the raw response body               |
+To support XML or another format, create a negotiator with the representations that the server can produce:
+
+```
+negotiator, err := httpserver.NewContentNegotiator(
+
+    httpserver.ContentTypeApplicationJson,
+
+    httpserver.JSONRepresentation(),
+
+    httpserver.XMLRepresentation(),
+
+)
+
+if err != nil {
+
+    return err
+
+}
+```
+
+Install the middleware on a router or group:
+
+```
+router.Use(httpserver.ResponseNegotiationMiddleware(negotiator))
+```
+
+In this example, JSON is the default and XML is available. XML encoding requires output types that Go's `encoding/xml` package supports. To configure a server, include `WithResponseNegotiator(negotiator)` in the options passed to `RunServerWithOptions`.
+
+### Customizing responses[​](#customizing-responses "Direct link to Customizing responses")
+
+A typed output can implement `StatusCode() int` to set its HTTP status. The default status is `200 OK`. The complete example returns `201 Created` from `CreateUser` and `204 No Content` from `DeleteUser`:
+
+```
+type CreatedUserOutput struct {
+
+    *User
+
+}
+
+
+
+func (CreatedUserOutput) StatusCode() int {
+
+    return http.StatusCreated
+
+}
+
+
+
+type DeletedUserOutput struct{}
+
+
+
+func (DeletedUserOutput) StatusCode() int {
+
+    return http.StatusNoContent
+
+}
+```
+
+To add a header to `CreatedUserOutput`, implement `Header() http.Header`:
+
+```
+func (CreatedUserOutput) Header() http.Header {
+
+    header := make(http.Header)
+
+    header.Set("X-User-Created", "true")
+
+    return header
+
+}
+```
+
+httpserver negotiates the typed output before it applies these methods. The selected representation controls `Content-Type`. A `Header` method cannot override `Content-Type`. A `ContentType() string` method by itself does not change the selected representation.
+
+A full `httpserver.Response` bypasses negotiation. An explicit `Response` implements `ContentType() string`, `Body() ([]byte, error)`, `Header() http.Header`, and `StatusCode() int`. The server does not compare its content type with the request's `Accept` header.
+
+```
+func (h *Handler) PlainText(ctx context.Context) (httpserver.Response, error) {
+
+    return httpserver.NewTextResponse("plain text"), nil
+
+}
+```
+
+Use `NewJsonResponse`, `NewTextResponse`, or `NewStatusResponse` to create a full response. Each constructor bypasses negotiation. `NewTextResponse` creates a text response. `NewStatusResponse(http.StatusNoContent)` creates a no-content response.
+
+Use response options to set a status, headers, or body:
+
+```
+func explicitUserResponse(user *User) httpserver.Response {
+
+    return httpserver.NewJsonResponse(
+
+        user,
+
+        httpserver.WithStatusCode(http.StatusCreated),
+
+        httpserver.WithHeader("X-Custom-Header", "my-value"),
+
+    )
+
+}
+```
+
+| Option                             | Description               |
+| ---------------------------------- | ------------------------- |
+| `WithStatusCode(code int)`         | Set the HTTP status code. |
+| `WithHeader(key, value string)`    | Add one header.           |
+| `WithHeaders(headers http.Header)` | Merge multiple headers.   |
+| `WithBody(body []byte)`            | Set the response body.    |
 
 ### Error handling[​](#error-handling "Direct link to Error handling")
 
-Return `nil, error` for unexpected errors. The error middleware returns `500 Internal Server Error` with a sanitized `{"err":"internal server error"}` response, so internal details do not leak to clients:
+Return a zero output and an error for unexpected failures. The error middleware returns `500 Internal Server Error` with `{"err":"internal server error"}`. This prevents internal details from reaching clients.
 
 ```
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
 
     if len(h.users) > 10000 {
 
@@ -8232,15 +8566,15 @@ func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
 
     }
 
-    return httpserver.NewJsonResponse(map[string]string{"status": "ok"}), nil
+    return map[string]string{"status": "ok"}, nil
 
 }
 ```
 
-For a client error with a specific status code, return `nil` and an error wrapped with `NewErrorWithStatus`:
+For a client error with a specific status code, return a zero output and an error wrapped with `NewErrorWithStatus`:
 
 ```
-func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 
     user, ok := h.users[input.Id]
 
@@ -8250,7 +8584,7 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.R
 
     }
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 
 }
 ```
@@ -8372,6 +8706,34 @@ type User struct {
 
 
 
+type CreatedUserOutput struct {
+
+	*User
+
+}
+
+
+
+func (CreatedUserOutput) StatusCode() int {
+
+	return http.StatusCreated
+
+}
+
+
+
+type DeletedUserOutput struct{}
+
+
+
+func (DeletedUserOutput) StatusCode() int {
+
+	return http.StatusNoContent
+
+}
+
+
+
 type Handler struct {
 
 	users map[int]*User
@@ -8396,7 +8758,7 @@ func NewHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*Han
 
 
 
-func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) (httpserver.Response, error) {
+func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) ([]*User, error) {
 
 	var result []*User
 
@@ -8418,13 +8780,13 @@ func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) (httpser
 
 	}
 
-	return httpserver.NewJsonResponse(result), nil
+	return result, nil
 
 }
 
 
 
-func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (CreatedUserOutput, error) {
 
 	user := &User{
 
@@ -8444,13 +8806,13 @@ func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (https
 
 
 
-	return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+	return CreatedUserOutput{User: user}, nil
 
 }
 
 
 
-func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 
 	user, ok := h.users[input.Id]
 
@@ -8460,23 +8822,23 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.R
 
 	}
 
-	return httpserver.NewJsonResponse(user), nil
+	return user, nil
 
 }
 
 
 
-func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (DeletedUserOutput, error) {
 
 	delete(h.users, input.Id)
 
-	return httpserver.NewStatusResponse(http.StatusNoContent), nil
+	return DeletedUserOutput{}, nil
 
 }
 
 
 
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
 
 	if len(h.users) > 10000 {
 
@@ -8484,7 +8846,7 @@ func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
 
 	}
 
-	return httpserver.NewJsonResponse(map[string]string{"status": "ok"}), nil
+	return map[string]string{"status": "ok"}, nil
 
 }
 ```
@@ -8514,7 +8876,7 @@ Test it:
 ```
 # Create a user
 
-curl -X POST http://localhost:8088/api/users \
+curl -X POST http://localhost:8088/api/users/ \
 
   -H "Content-Type: application/json" \
 
@@ -8526,7 +8888,7 @@ curl -X POST http://localhost:8088/api/users \
 
 # List users
 
-curl http://localhost:8088/api/users
+curl http://localhost:8088/api/users/
 
 # [{"id":1,"name":"Alice","email":"alice@example.com","role":"admin"}]
 
@@ -9476,7 +9838,7 @@ type DeploymentSelectorInput struct {
 Multiple handlers reference this same type:
 
 ```
-func (h *HandlerCheckpoints) GetCheckpoints(ctx context.Context, request *DeploymentSelectorInput) (httpserver.Response, error) {
+func (h *HandlerCheckpoints) GetCheckpoints(ctx context.Context, request *DeploymentSelectorInput) ([]Checkpoint, error) {
 
     // request.Namespace and request.Name are populated from the URI
 
@@ -9589,10 +9951,10 @@ httpserver:
 
 ## Error handling patterns[​](#error-handling-patterns "Direct link to Error handling patterns")
 
-Handlers wrap expected client errors with an HTTP status and return other errors unchanged. The default error middleware hides internal error details from clients:
+Handlers attach an HTTP status to expected client errors and add context to other errors. The default error middleware hides internal error details from clients.
 
 ```
-func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (httpserver.Response, error) {
+func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (ListFilesResponse, error) {
 
     items, err := h.files.ListFiles(ctx, input.Database, input.Table, input.Partitions)
 
@@ -9600,15 +9962,15 @@ func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (h
 
         if isBadRequest(err) {
 
-            return nil, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
+            return ListFilesResponse{}, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
 
         }
 
-        return nil, fmt.Errorf("could not list files: %w", err)
+        return ListFilesResponse{}, fmt.Errorf("could not list files: %w", err)
 
     }
 
-    return httpserver.NewJsonResponse(ListFilesResponse{Files: items}), nil
+    return ListFilesResponse{Files: items}, nil
 
 }
 ```
@@ -10188,6 +10550,271 @@ In general, using Kafka with gosoline works like any other input/output type sup
 
 However, there are some caveats and minor differences to be considered as described below.
 
+## Connection configuration[​](#connection-configuration "Direct link to Connection configuration")
+
+Define broker connections under `kafka.connection.<name>`. Kafka inputs and outputs select them with their `connection` setting, which defaults to `default`:
+
+```
+kafka:
+
+  connection:
+
+    default:
+
+      brokers:
+
+        - kafka.example.com:9093
+
+      tls_enabled: true
+
+      dial_timeout: 10s
+
+
+
+stream:
+
+  output:
+
+    audit:
+
+      type: kafka
+
+      connection: default
+
+      topic_id: audit
+```
+
+| Connection setting     | Default  | Purpose                                                     |
+| ---------------------- | -------- | ----------------------------------------------------------- |
+| `brokers`              | required | Bootstrap broker addresses                                  |
+| `tls_enabled`          | `true`   | Enable broker TLS, with a minimum version of TLS 1.2        |
+| `insecure_skip_verify` | `false`  | Skip TLS certificate and hostname verification when enabled |
+| `dial_timeout`         | `10s`    | Timeout for establishing a broker connection                |
+| `username`, `password` | unset    | Enable SASL SCRAM-SHA-512 when **both** are nonempty        |
+
+Supply credentials through your deployment's configuration/secrets mechanism. Setting only one credential does not enable SASL. For a local plaintext broker, set `tls_enabled: false` explicitly. These settings configure broker clients; schema registry HTTP configuration is covered in the [schema registry guide](/docs/pr-4/how-to/kafka/use-schema-registry/.md#configure-the-registry-connection).
+
+`topic_id` and `group_id` are formatted through Gosoline's naming patterns rather than necessarily used verbatim. See the [Kafka naming reference](/docs/pr-4/reference/naming-patterns/.md#kafka) for topic/group patterns, delimiters, and resource identity overrides.
+
+## Message format, keys, and headers[​](#message-format-keys-and-headers "Direct link to Message format, keys, and headers")
+
+Kafka record values contain the encoded model directly, not a JSON envelope containing Gosoline `Body` and `Attributes` fields. Without a schema registry, a JSON producer writes the domain object's JSON as the value. With a schema registry, the value includes the registry serializer's framing and schema ID.
+
+Use `stream.AttributeKafkaKey` (the attribute name `KafkaKey`) to set the record key. Other message attributes become Kafka headers:
+
+```
+err := producer.WriteOne(ctx, order, map[string]string{
+
+    stream.AttributeKafkaKey: order.Id,
+
+    "tenant":                 "acme",
+
+})
+```
+
+franz-go uses the key for partition routing. Records with the same key are routed consistently while the topic's partition layout is unchanged; changing the partition count can change their destination. A key alone does not serialize callback execution: select `processing_mode: ordered` when processing order within a partition matters.
+
+On consumption, the record value becomes the message body, headers become string attributes, and a non-nil record key is exposed as `stream.AttributeKafkaKey`:
+
+```
+func (c *consumer) Consume(ctx context.Context, order OrderCreated, attributes map[string]string) (bool, error) {
+
+    key := attributes[stream.AttributeKafkaKey]
+
+    tenant := attributes["tenant"]
+
+    c.logger.Info(ctx, "received order %s with key %s for tenant %s", order.Id, key, tenant)
+
+
+
+    return true, nil
+
+}
+```
+
+Header order is not preserved by the attributes map. Duplicate incoming header names collapse to the last value. `KafkaKey` is reserved: output uses it as the record key rather than a header, and an incoming non-nil key overrides any header of that name. Keys and headers are exposed as strings; topic, partition, offset, and timestamp are not automatically added to callback attributes.
+
+## Consumer configuration[​](#consumer-configuration "Direct link to Consumer configuration")
+
+Consumer settings select the input, encoding, application retry handler, and processing shutdown deadline. Kafka-specific settings belong to the named input:
+
+```
+stream:
+
+  consumer:
+
+    audit:
+
+      input: audit
+
+      grace_time: 10s
+
+      retry:
+
+        enabled: true
+
+
+
+  input:
+
+    audit:
+
+      type: kafka
+
+      topic_id: audit
+
+      group_id: audit-worker
+
+      runner_count: 4
+
+      processing_mode: ordered
+
+      max_poll_records: 100
+
+      consume_delay: 0s
+
+      rebalance_timeout: 60s
+
+      grace_time: 10s
+```
+
+This example uses a separate SQS retry queue for application failures, so it also requires AWS/SQS configuration. Kafka polling and offset-commit retries are independent of this application retry setting.
+
+| Input setting       | Default     | Purpose                                                                                                                             |
+| ------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `runner_count`      | `1`         | Callback concurrency limit for this input instance; in ordered mode, limits concurrently processed partitions. Must be at least `1` |
+| `processing_mode`   | `unordered` | `ordered` processes records sequentially within each topic-partition, with concurrency across partitions                            |
+| `max_poll_records`  | `100`       | Maximum records returned by one poll; callbacks still receive individual records                                                    |
+| `consume_delay`     | `0`         | Minimum record age before processing                                                                                                |
+| `rebalance_timeout` | `60s`       | Consumer-group rebalance budget                                                                                                     |
+| `grace_time`        | `10s`       | Offset-commit grace window after processing finishes                                                                                |
+| `start_offset`      | `last`      | Starting/reset position when the group has no usable committed offset; `first` starts at the beginning                              |
+
+### Runner count and processing order[​](#runner-count-and-processing-order "Direct link to Runner count and processing order")
+
+`runner_count` is a concurrency limit for one Kafka input instance, not a count of consumer-group members or a setting that changes partition assignment. Its effective concurrency depends on `processing_mode`:
+
+* **`unordered`:** each record is a separate work unit. Up to `runner_count` callbacks can execute concurrently, including multiple records from the same partition. Callback completion order is not guaranteed.
+* **`ordered`:** each topic-partition's records from the current poll form one work unit. A runner processes those records sequentially before releasing its slot. At most one callback per partition runs at a time, while different partitions can run concurrently.
+
+In ordered mode, maximum callback concurrency is:
+
+```
+min(runner_count, assigned partitions with records in the current poll)
+```
+
+| Ordered-mode configuration            | Behavior                                                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| 3 assigned partitions, 8 runners      | At most 3 callbacks run concurrently. Extra runner capacity goes unused; partition ordering remains intact. |
+| 8 assigned partitions, 3 runners      | Up to 3 partitions are processed concurrently. Other partition work units wait for a slot.                  |
+| Several assigned partitions, 1 runner | Partition work units execute sequentially, but their cross-partition order is not guaranteed.               |
+
+Only partitions assigned to this instance matter, not the topic's total partition count. Concurrency can be lower if some assigned partitions have no records in the current poll. In unordered mode, eight runners can process eight records concurrently even from a single partition.
+
+A slow partition holds its ordered-mode slot until its fetched records finish processing. Reducing runner count can therefore increase waiting and lag for other partitions. Gosoline waits for all admitted work from the current poll to finish and commits before polling again.
+
+Keep callbacks safe for concurrent use even in ordered mode. A separate retry input can invoke the same callback independently, adding concurrency beyond the Kafka runner limit; ordered Kafka processing does not order work redelivered through that retry queue.
+
+Gosoline waits for admitted work from a poll to finish before committing and allowing a rebalance. Tune poll size, runner count, delay, and callback duration together so the full processing and commit cycle fits the rebalance budget. Consumer poll batches are independent of producer-daemon batches.
+
+### Isolation and group tuning[​](#isolation-and-group-tuning "Direct link to Isolation and group tuning")
+
+These additional settings belong under `stream.input.<name>`:
+
+| Setting                 | Default                | Purpose                                                                                                           |
+| ----------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `fetch_isolation_level` | `read_uncommitted`     | Use `read_committed` to exclude aborted transactional records and wait for transactions to resolve                |
+| `balancers`             | `[cooperative-sticky]` | Ordered list of supported partition assignment strategies: `cooperative-sticky`, `sticky`, `round-robin`, `range` |
+| `session_timeout`       | `45s`                  | Consumer-group session timeout for detecting missing members                                                      |
+| `heartbeat_interval`    | `3s`                   | Interval between group heartbeats; keep below the session timeout                                                 |
+| `idle_wait_time`        | `500ms`                | Additional wait after a poll returns no records                                                                   |
+| `healthcheck.timeout`   | `5m`                   | Input progress health timeout                                                                                     |
+
+Choose balancers compatible with the other members of the group and timing values accepted by the broker. `read_committed` concerns visibility of transactional Kafka records; it does not make callbacks, retries, and offset commits an atomic transaction or provide exactly-once business processing.
+
+Idle polling, rebalancing, and intentional consume delays are handled so they do not by themselves indicate an unhealthy input. Consumer-level `stream.consumer.<name>.healthcheck.timeout` separately checks each active message's processing duration (default `5m`); one stuck callback can make the consumer unhealthy even while other callbacks finish. Health checks report a problem rather than imposing a callback deadline.
+
+### Delayed consumption[​](#delayed-consumption "Direct link to Delayed consumption")
+
+`consume_delay` holds a record until its timestamp is old enough; it does not add a fixed sleep to every record. Old backlog passes immediately. For Kafka `CreateTime` timestamps, age depends on the producer's clock. Future timestamps are clamped so the wait is at most `consume_delay`; records without timestamps are not delayed.
+
+The delay must be nonnegative and strictly less than `rebalance_timeout`. That validation alone does not ensure the whole poll batch completes within the rebalance budget. Shutdown can interrupt the delay and allow already admitted work to process early.
+
+## Offsets, failures, and retries[​](#offsets-failures-and-retries "Direct link to Offsets, failures, and retries")
+
+Kafka inputs join a consumer group and disable automatic offset commits. Gosoline explicitly commits offsets after processing the admitted records from a poll.
+
+**A successful offset commit does not mean the business operation succeeded.** Records handed to processing are commit-eligible even when the callback returns `false` or panics. Returning `false` does not rewind the Kafka partition or prevent its offset commit.
+
+Enable `stream.consumer.<name>.retry.enabled` for application failures that should be retried. This sends failed callback messages to a separate retry queue rather than seeking Kafka offsets backwards. Retry publication is not atomic with committing Kafka offsets: publication failure is logged and does not prevent the commit. Model-selection or decoding errors return before the normal callback-retry path, so malformed records are not guaranteed to reach that queue. Make processing idempotent, since failed commits or process termination can also cause Kafka redelivery.
+
+Missing topics fail consumption immediately. Retryable partition fetch errors are logged while records accompanying the errors are retained for processing; nonretryable fetch errors terminate consumption. Fetch and commit operations use their respective retry executors and the input's `backoff` settings. These retries address transport failures, not failed business operations.
+
+`start_offset` supplies the starting/reset offset when no usable committed group offset exists. It does not override valid committed offsets on every startup.
+
+## Shutdown[​](#shutdown "Direct link to Shutdown")
+
+`stream.consumer.<name>.grace_time` is the shared processing deadline after shutdown begins, including processing from the retry input. Kafka stops admitting new work and drains admitted work. When that deadline expires, callback contexts are canceled.
+
+The input's separate `stream.input.<name>.grace_time` grants final offset commits a cancellation grace window after processing finishes. It does not extend the callback processing deadline. If that commit window expires, Gosoline logs possible redelivery and completes cancellation-related shutdown normally.
+
+Shutdown commits preserve a gap-free processed prefix within each partition. The first record of an admitted work unit may still reach processing after Stop to avoid an offset gap. Records handed to processing remain commit-eligible even when their callback fails or its context is canceled. A callback that ignores cancellation can still block completion; size kernel and deployment shutdown timeouts for processing plus final commits.
+
+## Producer configuration[​](#producer-configuration "Direct link to Producer configuration")
+
+Encoding and compression are producer settings; broker batching and request settings belong to the output:
+
+```
+stream:
+
+  producer:
+
+    audit:
+
+      output: audit
+
+      encoding: application/json
+
+      compression: application/zstd
+
+
+
+  output:
+
+    audit:
+
+      type: kafka
+
+      connection: default
+
+      topic_id: audit
+
+      linger_timeout: 0s
+
+      request_timeout: 10s
+
+      max_batch_size: 10000
+
+      max_batch_bytes: 1000012
+```
+
+| Output setting    | Default   | franz-go behavior                                                                                      |
+| ----------------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| `linger_timeout`  | `0s`      | Time to wait for additional records before sending a batch                                             |
+| `request_timeout` | `10s`     | Timeout for a Kafka produce request; not an overall deadline for the application write                 |
+| `max_batch_size`  | `10000`   | Maximum buffered record count (`MaxBufferedRecords`), not a fixed number of records per broker request |
+| `max_batch_bytes` | `1000012` | Maximum per-partition producer batch bytes (`ProducerBatchMaxBytes`), including record/batch overhead  |
+
+franz-go splits records into partition-specific batches; one `producer.Write` call need not become one broker request. Match batch bytes to the broker/topic size limits and allow for overhead. The producer daemon also derives its size limits from these output settings; see [Producer Daemon usage](#producer-daemon-usage).
+
+### Write completion and failures[​](#write-completion-and-failures "Direct link to Write completion and failures")
+
+Without the producer daemon, Kafka output uses `ProduceSync`: `WriteOne` and `Write` wait for the records' produce results and return an error if any result fails. Pass a bounded context for an application-level deadline; `request_timeout` alone does not bound the complete operation, including buffering and retries.
+
+A batch can partially succeed. Gosoline returns the first produce error, not per-record results, while metrics count successful and failed records separately. An error is not evidence that the whole batch was rejected. Retrying the entire batch can duplicate records that succeeded; use idempotent business identifiers or downstream deduplication where retries are possible. The streaming output API does not expose transactional writes.
+
+With the producer daemon, the application write confirms admission to its in-process buffer. Remote produce results arrive later in background workers and failures are logged rather than returned to the original caller. See [producer-daemon backpressure and errors](/docs/pr-4/how-to/streaming-applications/use-the-producer-daemon/.md#backpressure-and-errors).
+
 ## Compression[​](#compression "Direct link to Compression")
 
 Compression is handled entirely by the franz-go kafka library.
@@ -10210,6 +10837,29 @@ Aggregation is not supported with Kafka as an aggregated message would not match
 
 Batching will still be done by the producer daemon, but it will use the `max_batch_size` and `max_batch_bytes` settings specified on the `KafkaOutputConfiguration`. This is to have a single source of truth for the settings and because the Kafka library has an internal process to batch messages and would possibly break up our batches if we ignore these settings.
 
+## Operations[​](#operations "Direct link to Operations")
+
+### Metrics[​](#metrics "Direct link to Metrics")
+
+Enable Gosoline's metric collection and a writer to export Kafka metrics. The following are framework metric names; the exported naming/representation depends on the configured writer:
+
+| Area                               | Metrics                                                                                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consumer                           | `RecordsConsumed`, `RecordsConsumedFailed`, `PollCount`, `PollDuration`, `ProcessDuration`, `CommitDuration`, `RebalanceCount`, `SleepDuration` |
+| Producer                           | `RecordsSent`, `RecordsSentFailed`, `ProduceBatchSize`, `ProduceDuration`                                                                       |
+| Broker connectivity and throttling | `BrokerConnects`, `BrokerConnectsFailed`, `BrokerThrottleCount`, `BrokerThrottleTime`                                                           |
+| Wire batches                       | `ProduceBatchRecords`, `ProduceBatchBytes`, `ProduceBatchBytesCompressed`, `FetchBatchRecords`, `FetchBatchBytes`, `FetchBatchBytesCompressed`  |
+
+Client/topic metrics use `ClientType`, `Client`, and `Topic` dimensions. Wire-batch metrics include both topic totals and partition-level values with `Partition`; broker metrics use `Broker`. `Client` is the configured input/output name. Consumed counts and committed offsets do not establish business success; correlate failure counts, retry logs, and commit errors. Monitor application consumer metrics alongside Kafka-specific metrics for decoding and callback failures.
+
+### Topic creation and metadata[​](#topic-creation-and-metadata "Direct link to Topic creation and metadata")
+
+Kafka inputs and outputs register resource lifecycle managers. When `resource_lifecycles.create.enabled` is enabled, they check for the resolved topic and create it if absent with **one partition, replication factor one, and no topic-specific configuration**. Existing topics are left unchanged. Provision production topics separately when different partitioning, replication, or retention settings are needed.
+
+The lifecycle admin client currently receives broker addresses only; it does not inherit the connection's TLS/SASL settings. For secured brokers, provision topics externally and disable lifecycle creation rather than expecting it to use the authenticated reader/writer connection.
+
+When lifecycle registration is enabled (`resource_lifecycles.register.enabled`, default `true`), application metadata includes `kafka.consumers` and `kafka.producers`. Entries contain the configured component `name`, resolved `topic`, and `bootstrap_servers`. This metadata describes registered resources, not live consumer lag or delivery success.
+
 ## Schema Registry[​](#schema-registry "Direct link to Schema Registry")
 
 You can optionally use the Kafka schema registry.
@@ -10221,17 +10871,91 @@ Check this guide for more details on the schema registry usage: [How to use the 
 
 # How to use the Kafka Schema Registry
 
-Gosoline provides the option to use the Kafka schema registry when reading from or writing to a Kafka topic. This will ensure that changes to your schema do not break compatability with the previous schemas according to the specified compatability mode.
+Gosoline provides the option to use the Kafka schema registry when reading from or writing to a Kafka topic. The registry checks schema registration against the subject's configured compatibility mode. Gosoline resolves the supplied schema and configures its serializer during initialization; this is not broker-side validation of every message.
 
-Using the shema registry is optional and gosoline will let you read and write anything if you choose to.
+Using the schema registry is optional; without it, Gosoline uses the configured encoding without registry compatibility checks.
 
 Moreover, keep in mind that the Apache Kafka broker does not have any server side schema validation and will still let you write anything to a topic if you do not configure gosoline to use the schema registry, even if there are already existing consumers and producers of that topic which do use the schema registry.
 
+## Configure the registry connection[​](#configure-the-registry-connection "Direct link to Configure the registry connection")
+
+Set `schema_registry_address` on the Kafka connection selected by the input or output. Both select `default` unless their `connection` setting specifies another name:
+
+```
+kafka:
+
+  connection:
+
+    analytics:
+
+      brokers:
+
+        - kafka.example.com:9093
+
+      tls_enabled: true
+
+      schema_registry_address: https://schemas.example.com
+
+
+
+stream:
+
+  output:
+
+    producerName:
+
+      type: kafka
+
+      connection: analytics
+
+      topic_id: example-events
+
+
+
+  input:
+
+    example-events:
+
+      type: kafka
+
+      connection: analytics
+
+      topic_id: example-events
+
+      group_id: example-reader
+
+
+
+  consumer:
+
+    default:
+
+      input: example-events
+```
+
+The registry uses an HTTP client configured from this URL; Kafka broker `username`, `password`, `tls_enabled`, and `insecure_skip_verify` are not forwarded to it. Broker SASL credentials therefore do not authenticate registry requests. See [connection configuration](/docs/pr-4/how-to/kafka/general/.md#connection-configuration) for broker settings.
+
 ## Registering a schema[​](#registering-a-schema "Direct link to Registering a schema")
 
-Gosoline itself will not register your schema and expects that any provided schema is already registered, as otherwise your app may crash on runtime when trying to register an incompatible schema.
+By default, Gosoline looks up the supplied schema and expects it to be registered already. A missing schema causes initialization to fail. Register schemas and check compatibility externally, for example in a CI/CD pipeline, to detect incompatibilities before deploying.
 
-Thus, you will have to externally register every schema that you want to use and check for compatability, e.g. via a CI/CD pipeline.
+Alternatively, set `AutoRegister: true` on `stream.SchemaSettings` to look up or create the schema during producer or consumer initialization:
+
+```
+schemaSettings := stream.SchemaSettings{
+
+    Subject:      "exampleEvent",
+
+    Schema:       exampleEventSchema,
+
+    Model:        &exampleEvent{},
+
+    AutoRegister: true,
+
+}
+```
+
+This opt-in requires registry write permissions and can fail initialization if the registry rejects the schema under its compatibility policy. Consumers can opt in through the settings returned by `GetSchemaSettings()` as well.
 
 ## Configure a Producer/Publisher to use the schema registry[​](#configure-a-producerpublisher-to-use-the-schema-registry "Direct link to Configure a Producer/Publisher to use the schema registry")
 
@@ -10277,6 +11001,66 @@ Where the `ExampleEvent.avsc` file would contain the avro schema.
 
 Note that depending on whether your model is specified as a struct (`exampleEvent{}`) or a pointer to a struct (`&exampleEvent{}`) you will also need to write your events accordingly via `producer.Write`/`producer.WriteOne` because the internal serializer of the franz-go kafka library will otherwise complain that there is no registered encoder for your model if you mix it up.
 
+## Protobuf message selection[​](#protobuf-message-selection "Direct link to Protobuf message selection")
+
+For `application/x-protobuf`, `SchemaSettings.ProtobufMessageIndex` selects the message within the registered `.proto` schema. Indices are zero-based and follow declaration order. Omitting the field selects `[0]`, the first top-level message.
+
+For example, this schema contains two top-level messages:
+
+```
+syntax = "proto3";
+
+package events;
+
+
+
+message OrderCreated {
+
+  string id = 1;
+
+}
+
+
+
+message OrderCancelled {
+
+  string id = 1;
+
+}
+```
+
+To write `OrderCancelled`, use index `[1]` and the matching generated Go model (here imported as `eventspb`):
+
+```
+//go:embed events.proto
+
+var eventsSchema string
+
+
+
+schemaSettings := stream.SchemaSettings{
+
+    Subject:              "order-events",
+
+    Schema:               eventsSchema,
+
+    Model:                &eventspb.OrderCancelled{},
+
+    ProtobufMessageIndex: []int{1},
+
+}
+
+
+
+producer, err := stream.NewProducer(ctx, config, logger, "producerName",
+
+    stream.WithSchemaSettings(schemaSettings),
+
+)
+```
+
+Set `stream.producer.producerName.encoding: application/x-protobuf` and write `*eventspb.OrderCancelled` values. The consumer must select the matching index/model in `GetSchemaSettings()` and use the same encoding. For nested messages, provide the full declaration path, for example `[1, 0]` for the first nested message inside the second top-level message. The path is encoded in the registry wire framing; it is not a topic partition, schema version, or Protobuf field number.
+
 ## Configure a Consumer to use the schema registry[​](#configure-a-consumer-to-use-the-schema-registry "Direct link to Configure a Consumer to use the schema registry")
 
 Configure the encoding in your config.
@@ -10308,6 +11092,12 @@ func (c consumer) GetSchemaSettings() (*stream.SchemaSettings, error) {
 
 }
 ```
+
+Implement this method on the callback passed to the typed or untyped consumer factory. The typed callback wrapper forwards the schema settings automatically.
+
+Schema registration compatibility and historical-record decoding are separate concerns. Gosoline registers the resolved schema ID and model with its serializer during initialization; do not assume that every historical schema version is automatically registered for decoding. Verify representative old records against your consumer before deployment.
+
+Kafka offsets are committed for records handed to processing even if decoding or the callback fails. Decoding errors occur before the normal callback-retry path, so `retry.enabled` alone does not guarantee retention of malformed or incompatible records. See [offsets, failures, and retries](/docs/pr-4/how-to/kafka/general/.md#offsets-failures-and-retries).
 
 ## Configure a Subscriber to use the schema registry[​](#configure-a-subscriber-to-use-the-schema-registry "Direct link to Configure a Subscriber to use the schema registry")
 
@@ -10357,7 +11147,7 @@ func (t transformer) GetSchemaSettings() (*stream.SchemaSettings, error) {
 }
 ```
 
-Note that gosoline will only allow you to have one transformer per model when using the schema registry as proper schema evolution via the registry should make versioning with multiple transformers obsolete.
+Gosoline allows only one transformer per input model when using the schema registry. Evolve the schema and transformer together, and verify that the deployed transformer can handle the records it will encounter.
 
 
 ---
@@ -11031,8 +11821,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -11151,7 +11939,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11185,13 +11973,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11203,7 +11991,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -11215,7 +12003,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -11291,8 +12079,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -11411,7 +12197,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11445,13 +12231,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11463,7 +12249,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -11475,7 +12261,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -11525,8 +12311,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -11645,7 +12429,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11679,13 +12463,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11697,7 +12481,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -11709,7 +12493,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -11778,8 +12562,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -11898,7 +12680,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11932,13 +12714,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11950,7 +12732,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -11962,7 +12744,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -12014,8 +12796,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -12134,7 +12914,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -12168,13 +12948,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -12186,7 +12966,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -12198,7 +12978,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -13088,15 +13868,25 @@ func (c *consumer) Consume(ctx context.Context, order OrderCreated, attributes m
 }
 ```
 
-The boolean controls acknowledgement:
+The boolean reports whether processing succeeded. The input determines how that result affects acknowledgement or redelivery:
 
-| Return       | Meaning                                                                    |
-| ------------ | -------------------------------------------------------------------------- |
-| `true, nil`  | Processing succeeded; acknowledge the message                              |
-| `false, nil` | Processing did not complete; do not acknowledge and retry where configured |
-| `false, err` | Processing failed; record the error and retry where configured             |
+| Return       | Meaning                                                                            |
+| ------------ | ---------------------------------------------------------------------------------- |
+| `true, nil`  | Processing succeeded                                                               |
+| `false, nil` | Processing did not complete; use native redelivery or the configured retry handler |
+| `false, err` | Processing failed; record the error and retry where configured                     |
 
-Only return `true` after the business operation is complete. The transport determines how an unacknowledged message is redelivered. When the input has no native retry mechanism, configure the consumer retry handler.
+Only return `true` after the business operation is complete. The boolean controls the retry decision independently of the error: `true, err` logs the error but still reports success.
+
+| Input                  | Failure behavior                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| SQS / SNS subscription | Failed messages are not deleted and can be redelivered after their visibility timeout. Native retry is selected automatically.      |
+| Kafka                  | Records handed to processing are committed even if processing fails. Enable the consumer retry handler for application failures.    |
+| Kinesis                | Records handed to processing are checkpointed even if processing fails. Enable the consumer retry handler for application failures. |
+| Redis list             | Reading removes the message from the list. Enable the consumer retry handler for application failures.                              |
+| File / in-memory       | Failed messages are not automatically read again. Enable the consumer retry handler when retries are needed.                        |
+
+For an input without native retry, configure `stream.consumer.<name>.retry.enabled: true`; the default retry transport is SQS. This writes failed callback messages to a separate retry queue rather than rewinding the original transport. Retry publication errors are logged; publication is not atomic with Kafka commits or Kinesis checkpoints. Model-selection and decoding errors return before this normal callback-retry path, so enabling retries is not a dead-letter guarantee for malformed messages. Make business operations idempotent because transport redelivery and retries can repeat them.
 
 ## Run the consumer[​](#run-the-consumer "Direct link to Run the consumer")
 
@@ -13148,8 +13938,6 @@ stream:
       type: file
 
       filename: events.jsonl
-
-      blocking: false
 ```
 
 The file input expects one serialized `stream.Message` per line, not a bare domain object:
@@ -13172,10 +13960,6 @@ stream:
     default:
 
       input: orders
-
-      retry:
-
-        enabled: true
 
 
 
@@ -13270,17 +14054,37 @@ Run it from `docs/docs/how-to/streaming-applications/src/consumer`:
 go run .
 ```
 
-The non-blocking file input closes after both records are consumed, so the example application exits by itself.
+The file input finishes at EOF after its workers finish processing both records, so the example application exits by itself.
+
+The commands use the Gosoline version pinned in the docs repository's `go.mod`. To exercise an unreleased branch in a sibling `gosoline` checkout, create a local Go workspace from the docs repository root with `go work init . ../gosoline` (or add both modules to an existing workspace). Then run the example from its directory. Keep the local workspace out of commits.
 
 ## Concurrency and batches[​](#concurrency-and-batches "Direct link to Concurrency and batches")
 
-`stream.consumer.<name>.runner_count` controls concurrent processing for a normal consumer. Increase it only when callback operations are safe to run concurrently and message ordering is not required.
+Configure concurrency on **the input**, using `stream.input.<name>.runner_count`; the default is `1`. The callback instance is shared by its runners, so its state and downstream operations must be safe for concurrent use.
 
-Use `application.RunBatchConsumer` or `RunBatchConsumers` when the callback should receive batches. Batch consumers have separate callback interfaces and settings; they are not equivalent to increasing `runner_count`.
+| Input                    | Concurrency and ordering                                                                                                                                                      |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SQS / SNS subscription   | Each runner receives a batch and processes its messages sequentially. Multiple runners can process different batches concurrently.                                            |
+| Kafka                    | The runner count limits concurrent record callbacks. `processing_mode: ordered` preserves processing order within each partition; `unordered` is the default.                 |
+| Kinesis                  | The runner count limits concurrent record callbacks across owned shards. `processing_mode: ordered` preserves processing order within each shard; `unordered` is the default. |
+| File / Redis / in-memory | The runner count controls concurrent callback workers; there is no `processing_mode` setting.                                                                                 |
+
+Kafka and Kinesis ordered mode still allows concurrency across partitions or shards. With several unordered runners, records from the same partition or shard may execute concurrently.
+
+Callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
 
 ## Graceful processing[​](#graceful-processing "Direct link to Graceful processing")
 
-The consumer derives a delayed cancellation context for each callback. `consume_grace_time` gives in-flight processing a short grace period after shutdown begins. `acknowledge_grace_time` and retry grace settings similarly allow final acknowledgement or retry writes. Keep callback work bounded and always pass its context to downstream calls.
+`stream.consumer.<name>.grace_time` defaults to `10s` and defines one shared processing deadline after shutdown begins, covering both the primary input and the retry input. Inputs stop fetching new messages; already fetched or admitted work may still reach the callback while draining. When the deadline expires, in-flight callback contexts are canceled.
+
+Final transport operations have separate windows:
+
+* SQS/SNS input `grace_time` allows final deletions after cancellation (default `10s`).
+* Kafka input `grace_time` allows final offset commits after processing finishes (default `10s`); see [Kafka shutdown](/docs/pr-4/how-to/kafka/general/.md#shutdown).
+* Kinesis input `release_delay` allows final checkpoint persistence, shard release, and client deregistration after processing ends (default `5s`).
+* Consumer `retry.grace_time` allows final retry writes; it defaults from `kernel.kill_timeout`.
+
+These windows rely on cooperative cancellation. Keep callback work bounded, pass its context to downstream calls, and give the kernel and deployment shutdown timeouts enough room for processing and final transport operations. Cancellation does not undo an operation or guarantee redelivery: the transport rules above still apply.
 
 ## What's next?[​](#whats-next "Direct link to What's next?")
 
@@ -13362,7 +14166,7 @@ err := producer.WriteOne(ctx, order, map[string]string{
 })
 ```
 
-Attributes carry transport metadata and application routing information. Transport-specific helpers or constants should be used where available, such as Kafka keys or Kinesis partition keys.
+Attributes carry transport metadata and application routing information. Transport-specific helpers or constants should be used where available, such as Kafka keys or Kinesis partition keys. For Kafka, see [message format, keys, and headers](/docs/pr-4/how-to/kafka/general/.md#message-format-keys-and-headers) for `stream.AttributeKafkaKey`, partition routing, and header conversion examples.
 
 ## Configure encoding and output[​](#configure-encoding-and-output "Direct link to Configure encoding and output")
 
@@ -13571,7 +14375,7 @@ model -> Producer -> Output -> queue, topic, or stream -> Input -> Consumer -> c
 * An **output** writes encoded messages to a transport.
 * A **producer** encodes Go values and delegates to an output.
 * An **input** reads messages from a transport.
-* A **consumer** decodes those messages, calls your callback, and handles acknowledgement, retries, health checks, metrics, and tracing.
+* A **consumer** decodes those messages, calls your callback, selects the retry mechanism, and handles health checks, metrics, tracing, and the shared processing shutdown deadline. The input executes transport acknowledgement or checkpointing.
 
 Most applications should use `Producer` and a typed consumer rather than operate an `Input` or `Output` directly.
 
@@ -13619,7 +14423,7 @@ stream:
       encoding: application/json
 ```
 
-`stream.consumer.orders.input` selects the input named `orders`. `stream.producer.notifications.output` selects the output named `notifications`. When omitted, both links default to the component's own name.
+`stream.consumer.orders.input` selects the input named `orders`. When omitted, a consumer's input defaults to the literal name `consumer`, regardless of the consumer's name. `stream.producer.notifications.output` selects the output named `notifications`; when omitted, a producer's output defaults to the producer's own name.
 
 This indirection lets you change transports without changing application code. A producer named `orders` is created the same way whether its configured output is a file, SQS queue, SNS topic, Kinesis stream, Kafka topic, or Redis list.
 
@@ -13641,23 +14445,27 @@ Each transport has additional settings such as `queue_id`, `topic_id`, `stream_n
 
 ## Input and output interfaces[​](#input-and-output-interfaces "Direct link to Input and output interfaces")
 
-An input exposes a channel of `*stream.Message` and lifecycle methods:
+An input delivers `*stream.Message` values through a processing callback and exposes lifecycle methods:
 
 ```
+type InputProcess func(ctx context.Context, msg *Message) (ack bool)
+
+
+
 type Input interface {
 
-    Run(ctx context.Context) error
+    Run(ctx context.Context, process InputProcess) error
 
     Stop(ctx context.Context)
-
-    Data() <-chan *Message
 
     IsHealthy() bool
 
 }
 ```
 
-The consumer owns this lifecycle. It runs the configured input, decodes its messages, and acknowledges them when the transport supports acknowledgement.
+The consumer runs the configured input and supplies the decoding and business-processing callback. The input owns fetching, concurrency, and transport acknowledgement. `Stop` stops fetching and allows already fetched work to drain; finite inputs such as files can finish on their own. `Run` should only be called once.
+
+The callback result is transport-specific: SQS/SNS can leave failed messages undeleted for native redelivery, while Kafka/Kinesis commit or checkpoint records handed to processing even when processing fails. Redis reads remove messages from the list. See [consumer retry, concurrency, and shutdown behavior](/docs/pr-4/how-to/streaming-applications/create-a-consumer/.md) before selecting a transport.
 
 An output accepts values that already implement `WritableMessage`:
 
@@ -15981,7 +16789,7 @@ This configuration ensures all resource names resolve identically to the old def
 
 # Migrating to the Standalone HTTP Server Package
 
-This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.5.6`.
+This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.6.4`.
 
 The new package keeps the Gin-based server lifecycle and middleware model, but it changes the application-facing API. Instead of building and returning a `*httpserver.Definitions` tree, you receive a `*httpserver.Router` and register routes on it directly. Instead of implementing handler interfaces and manually unpacking an `httpserver.Request`, handlers are plain functions or methods registered through `Bind`, `BindN`, `BindR`, or SSE binding helpers.
 
@@ -15990,7 +16798,7 @@ The new package keeps the Gin-based server lifecycle and middleware model, but i
 Add the standalone module:
 
 ```
-go get github.com/gosoline-project/httpserver@v0.5.6
+go get github.com/gosoline-project/httpserver@v0.6.4
 ```
 
 Update imports:
@@ -16295,10 +17103,10 @@ func (h *listUsersHandler) Handle(ctx context.Context, request *httpserver.Reque
 }
 ```
 
-New handlers without request input use `BindN` and return `httpserver.Response`:
+New handlers without request input use `BindN` and return a typed result:
 
 ```
-func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
 
     users, err := h.store.List(ctx)
 
@@ -16310,7 +17118,7 @@ func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error
 
 
 
-    return httpserver.NewJsonResponse(users), nil
+    return users, nil
 
 }
 ```
@@ -16382,19 +17190,19 @@ type GetUserInput struct {
 
 
 
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
 
     user, err := h.store.Get(ctx, input.Id)
 
     if err != nil {
 
-        return nil, err
+        return User{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 
 }
 ```
@@ -16408,6 +17216,8 @@ r.GET("/:id", httpserver.Bind(h.GetUser))
 ## 6. Migrate Request Binding[​](#6-migrate-request-binding "Direct link to 6. Migrate Request Binding")
 
 The old package selected a binding helper explicitly:
+
+Bound handlers registered with `Bind`, `BindR`, `BindN`, or `BindNR` accept a typed result `O`. Return ordinary results directly. See the response migration section for explicit response cases.
 
 | Old helper                      | Typical new migration                                               |
 | ------------------------------- | ------------------------------------------------------------------- |
@@ -16433,22 +17243,40 @@ type CreateUserInput struct {
 
 
 
-func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+type CreatedUser struct {
+
+    User
+
+}
+
+
+
+func (CreatedUser) StatusCode() int {
+
+    return http.StatusCreated
+
+}
+
+
+
+func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (CreatedUser, error) {
 
     user, err := h.store.Create(ctx, input.Name, input.Email)
 
     if err != nil {
 
-        return nil, err
+        return CreatedUser{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+    return CreatedUser{User: user}, nil
 
 }
 ```
+
+The typed output preserves the old `201 Created` status without forcing a JSON response.
 
 You can combine URI, query, and body fields in one input struct:
 
@@ -16515,19 +17343,19 @@ type GetUserInput struct {
 
 
 
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
 
     user, err := h.store.Get(ctx, input.Id)
 
     if err != nil {
 
-        return nil, err
+        return User{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 
 }
 ```
@@ -16583,7 +17411,19 @@ r.POST("/import", httpserver.BindNR(h.ImportUsers))
 For typed input plus raw request access, use `BindR`:
 
 ```
-func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input *UploadAvatarInput) (httpserver.Response, error) {
+type NoContent struct{}
+
+
+
+func (NoContent) StatusCode() int {
+
+    return http.StatusNoContent
+
+}
+
+
+
+func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input *UploadAvatarInput) (NoContent, error) {
 
     contentType := req.Header.Get("Content-Type")
 
@@ -16591,7 +17431,7 @@ func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input
 
 
 
-    return httpserver.NewStatusResponse(http.StatusNoContent), nil
+    return NoContent{}, nil
 
 }
 ```
@@ -16601,13 +17441,13 @@ func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input
 The old `httpserver.Request` exposed `request.ClientIp`. In the standalone package, use raw request access and resolve the client IP explicitly:
 
 ```
-func (h *UserHandler) GetUser(ctx context.Context, req *http.Request, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, req *http.Request, input *GetUserInput) (User, error) {
 
     clientIP, err := httpserver.ResolveClientIP(req)
 
     if err != nil {
 
-        return nil, err
+        return User{}, err
 
     }
 
@@ -16617,7 +17457,17 @@ func (h *UserHandler) GetUser(ctx context.Context, req *http.Request, input *Get
 
 
 
-    // ...
+    user, err := h.store.Get(ctx, input.Id)
+
+    if err != nil {
+
+        return User{}, err
+
+    }
+
+
+
+    return user, nil
 
 }
 ```
@@ -16626,51 +17476,39 @@ Register handlers that need both typed input and the raw request with `BindR`. U
 
 ## 9. Migrate Responses[​](#9-migrate-responses "Direct link to 9. Migrate Responses")
 
-The new package returns a `Response` interface instead of the old concrete `*Response` struct.
+Bound handlers in `v0.6.4` accept typed result values. Return ordinary results directly, and the server negotiates their response format. The default negotiator supports JSON only. Register other representations explicitly. A missing `Accept` header selects JSON, while an unsupported `Accept` value returns `406 Not Acceptable`.
 
-### JSON Responses[​](#json-responses "Direct link to JSON Responses")
+For example, a JSON handler returns the domain value:
 
 ```
-return httpserver.NewJsonResponse(user), nil
+return user, nil
 ```
 
-### Text Responses[​](#text-responses "Direct link to Text Responses")
+See [Customizing responses](/docs/pr-4/how-to/http-server/build-an-http-service/.md#customizing-responses) for typed status or header methods and explicit `Response` overrides.
 
-Old low-level response:
+### Fixed response formats and bodyless responses[​](#fixed-response-formats-and-bodyless-responses "Direct link to Fixed response formats and bodyless responses")
+
+Keep an explicit response when the route must return a fixed media type or no body.
+
+Old low-level text response:
 
 ```
 return httpserver.NewResponse("ok", httpserver.ContentTypeText, http.StatusOK, make(http.Header)), nil
 ```
 
-New response:
+New fixed text response:
 
 ```
 return httpserver.NewTextResponse("ok"), nil
 ```
 
-### Status Responses[​](#status-responses "Direct link to Status Responses")
+For a bodyless status such as `204 No Content`, use:
 
 ```
 return httpserver.NewStatusResponse(http.StatusNoContent), nil
 ```
 
-### Custom Status Codes and Headers[​](#custom-status-codes-and-headers "Direct link to Custom Status Codes and Headers")
-
-Old response options were limited and the constructor accepted status and headers directly. New responses use options consistently:
-
-```
-return httpserver.NewJsonResponse(
-
-    user,
-
-    httpserver.WithStatusCode(http.StatusCreated),
-
-    httpserver.WithHeader("X-User-Id", strconv.FormatUint(uint64(user.Id), 10)),
-
-), nil
-```
-
-For raw bodies, use `NewResponse` with options:
+For raw bytes with a required media type, keep `NewResponse` with options:
 
 ```
 return httpserver.NewResponse(
@@ -16686,10 +17524,10 @@ return httpserver.NewResponse(
 
 ## 10. Migrate Error Handling[​](#10-migrate-error-handling "Direct link to 10. Migrate Error Handling")
 
-For unexpected errors, keep returning `nil, err`:
+For unexpected errors, return the zero value for the typed result and the error:
 
 ```
-func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
 
     users, err := h.store.List(ctx)
 
@@ -16701,38 +17539,40 @@ func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error
 
 
 
-    return httpserver.NewJsonResponse(users), nil
+    return users, nil
 
 }
 ```
 
-For handled client errors, return an error response and a nil Go error:
+For an expected client error with a specific status, return the zero result and `NewErrorWithStatus`:
 
 ```
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
 
     user, err := h.store.Get(ctx, input.Id)
 
     if errors.Is(err, ErrUserNotFound) {
 
-        return httpserver.GetErrorHandler()(http.StatusNotFound, err), nil
+        return User{}, httpserver.NewErrorWithStatus(http.StatusNotFound, err)
 
     }
 
     if err != nil {
 
-        return nil, fmt.Errorf("could not get user: %w", err)
+        return User{}, fmt.Errorf("could not get user: %w", err)
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 
 }
 ```
 
-In `v0.5.6`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
+Custom error-body callbacks return `any`. Return ordinary values for negotiated responses, or an explicit `httpserver.Response` to bypass negotiation.
+
+In `v0.6.4`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
 
 The 5xx behavior is controlled by `httpserver.<name>.errors.privacy`. The default is `private`, which hides internal error details. Set it to `public` only when clients should receive the original internal error message:
 
@@ -17087,13 +17927,13 @@ The standalone JWT helper validates `Authorization: Bearer <token>` headers usin
 Successful authenticators attach an `auth.Subject` to the request context. In bound handlers, retrieve it with `auth.GetSubject(ctx)`:
 
 ```
-func (h *UserHandler) Me(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) Me(ctx context.Context) (auth.Subject, error) {
 
     subject := auth.GetSubject(ctx)
 
 
 
-    return httpserver.NewJsonResponse(subject), nil
+    return subject, nil
 
 }
 ```
@@ -17236,25 +18076,7 @@ func (s *UserApiSuite) SetupHttpServerRouter() httpserver.RouterFactory {
 }
 ```
 
-For handler-level tests, prefer testing handler methods directly where possible:
-
-```
-func TestGetUser(t *testing.T) {
-
-    handler := &UserHandler{store: fakeStore}
-
-
-
-    response, err := handler.GetUser(context.Background(), &GetUserInput{Id: 1})
-
-
-
-    require.NoError(t, err)
-
-    assert.Equal(t, http.StatusOK, response.StatusCode())
-
-}
-```
+Assert typed output values and domain behavior through handler methods. Test negotiation, headers, and status codes through HTTP requests.
 
 For binding and routing tests, use the package test helpers or an application test case with `SetupHttpServerRouter`.
 
@@ -17371,7 +18193,7 @@ type CreateUserInput struct {
 
 
 
-func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
 
     users, err := h.store.List(ctx)
 
@@ -17383,65 +18205,93 @@ func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error
 
 
 
-    return httpserver.NewJsonResponse(users), nil
+    return users, nil
 
 }
 
 
 
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
 
     user, err := h.store.Get(ctx, input.Id)
 
     if errors.Is(err, ErrUserNotFound) {
 
-        return httpserver.GetErrorHandler()(http.StatusNotFound, err), nil
+        return User{}, httpserver.NewErrorWithStatus(http.StatusNotFound, err)
 
     }
 
     if err != nil {
 
-        return nil, err
+        return User{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 
 }
 
 
 
-func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+type CreatedUser struct {
+
+    User
+
+}
+
+
+
+func (CreatedUser) StatusCode() int {
+
+    return http.StatusCreated
+
+}
+
+
+
+func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (CreatedUser, error) {
 
     user, err := h.store.Create(ctx, input.Name, input.Email)
 
     if err != nil {
 
-        return nil, err
+        return CreatedUser{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+    return CreatedUser{User: user}, nil
 
 }
 
 
 
-func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+type NoContent struct{}
+
+
+
+func (NoContent) StatusCode() int {
+
+    return http.StatusNoContent
+
+}
+
+
+
+func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (NoContent, error) {
 
     if err := h.store.Delete(ctx, input.Id); err != nil {
 
-        return nil, err
+        return NoContent{}, err
 
     }
 
 
 
-    return httpserver.NewStatusResponse(http.StatusNoContent), nil
+    return NoContent{}, nil
 
 }
 ```
@@ -17458,11 +18308,9 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 * Replace path parameter helpers with `uri` tags on input structs.
 * Replace `CreateRawHandler` and `CreateReaderHandler` with `BindR` or `BindNR` and explicit `req.Body` handling.
 * Replace `request.ClientIp` with `ResolveClientIP(req)` in `BindR` or `BindNR` handlers.
-* Replace low-level `NewResponse(body, contentType, statusCode, header)` calls with `NewTextResponse`, `NewJsonResponse`, `NewStatusResponse`, or `NewResponse` options.
-* Replace old `pkg/httpserver/auth` imports with `github.com/gosoline-project/httpserver/auth`, move auth config below `httpserver.<name>.auth`, and pass the server name to auth constructors.
-* Move old global CORS config from `api_cors_*` keys to `httpserver.<name>.cors.*`, and register package CORS with `router.UseFactory(httpserver.CorsFactory)` or `httpserver.Cors(config, name)`.
-* Review `max_body_bytes`; keep the v0.5.6 default 10 MiB limit, raise it, or set it to `0` intentionally.
-* Update tests for v0.5.6 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
+* Return typed values directly from ordinary bound handlers. Keep explicit responses for fixed media types, raw bodies, and bodyless status responses. See [Customizing responses](/docs/pr-4/how-to/http-server/build-an-http-service/.md#customizing-responses).
+* Review `max_body_bytes`; keep the v0.6.4 default 10 MiB limit, raise it, or set it to `0` intentionally.
+* Update tests for v0.6.4 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
 * Update test suites from definition setup to router factory setup.
 * Run your HTTP tests and exercise validation errors, client errors, and middleware behavior after migration.
 
@@ -17756,7 +18604,7 @@ Preserve required joins, grouping, ordering, pagination, and client-dependent `L
 
 Use `DeleteScope` to hide inactive rows and a custom `Delete` callback for soft deletion or other domain rules. The scope applies to default read, list, count, update, PATCH, and delete lookups. When DELETE returns a body, set `definition.DeleteOutput = definition.Output` and manually bind `handler.Delete`. `DeleteNoContent` never calls `DeleteOutput`.
 
-Set `Identity` when a public ID uses a non-primary-key column or when public `Id` and stored key `K` have different Go types. SQLH rejects differing `Id` and `K` types when `Identity` is nil. Use the default lookup only when the types and key semantics match. In a custom lookup, use the supplied repository and transaction. Add the public-ID predicate, apply the supplied scope, return any scope error, and apply the builder. Return `sqlr.ErrNotFound` when no row matches. Do not drop the builder. Update, PATCH, and delete lookups use it for relation preloads and `FOR UPDATE`. SQLR locks root and preloaded rows in the same transaction, including nested and many-to-many preloads.
+Set `Identity` when a public ID uses a non-primary-key column or when public `Id` and stored key `K` have different Go types. SQLH rejects differing `Id` and `K` types when `Identity` is nil. Use the default lookup only when the types and key semantics match. In a custom lookup, use the supplied repository and transaction. Add the public-ID predicate. For every lookup, apply the supplied scope, return its error before repository work, and apply the supplied builder. Return `sqlr.ErrNotFound` when no row matches. Ordinary GET lookups use the builder for relation preloads, but not for row locking. Default Update, PATCH, and Delete lookups also use it for `FOR UPDATE`. SQLR locks the root and preloaded rows in the same transaction, including nested and many-to-many preloads.
 
 ## 8. Preserve Transactions, Background Work, and Events[​](#8-preserve-transactions-background-work-and-events "Direct link to 8. Preserve Transactions, Background Work, and Events")
 
@@ -17781,6 +18629,352 @@ Copy AI migration instructions
 * [sqlh - SQL HTTP Handlers](/docs/pr-4/how-to/databases-sql/sqlh/.md)
 * [sqlr - SQL Repository](/docs/pr-4/how-to/databases-sql/sqlr/.md)
 * [sqlc - SQL Client](/docs/pr-4/how-to/databases-sql/sqlc/.md)
+
+
+---
+
+# Migrating to the Callback-Based Stream Consumer Lifecycle
+
+This guide covers the breaking stream changes introduced in Gosoline **v0.66.0** by commit [`04b54462`](https://github.com/justtrackio/gosoline/commit/04b54462dfb9cfa789577d3972d6098cd7d69860), **stream: unify input processing and shutdown**. Follow this guide when upgrading from an earlier release to v0.66.0 or later.
+
+Previously, inputs delivered messages through `Input.Data()`, and the consumer controlled callback concurrency and acknowledgement. Inputs now invoke a processing callback directly and own acknowledgement, offset commits, or checkpoints. The consumer supplies a shared shutdown processing deadline for its primary and retry inputs.
+
+Normal typed and untyped application callbacks retain their `Consume` contract. Most applications need configuration and behavior changes rather than a callback rewrite. Batch consumers, custom inputs, and direct Kafka or Kinesis integrations also have API changes.
+
+## 1. Discover Consumers and Their Inputs[​](#1-discover-consumers-and-their-inputs "Direct link to 1. Discover Consumers and Their Inputs")
+
+Before editing, map each `stream.consumer.<name>.input` to its `stream.input.<input-name>` configuration. Include retry handlers, model subscribers, custom input factories, tests, and every deployment configuration source: YAML, Helm values, Terraform templates, and environment-variable mappings.
+
+Classify these findings:
+
+| Finding                                            | Migration action                                                                                                     |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Consumer `consume_grace_time`                      | Rename to consumer `grace_time`, then review the shared deadline.                                                    |
+| Consumer `runner_count`                            | Move the desired concurrency to the referenced input, after reviewing existing input settings and retry concurrency. |
+| Consumer `acknowledge_grace_time`                  | Remove; use transport-specific cleanup settings as described below.                                                  |
+| Batch consumer APIs or `batch_size`                | Choose record-at-a-time processing or application-owned batching.                                                    |
+| Kafka connection `is_read_only`                    | Select replacement behavior before removing the setting.                                                             |
+| File input `blocking`                              | Remove and review completion at end of file.                                                                         |
+| Custom `Input`, `Data`, `Ack`, or `AckBatch` usage | Review the integration API changes before migrating.                                                                 |
+
+An input configuration name is not necessarily a shared input instance. Normal consumer construction calls `NewConfigurableInput`; `ProvideConfigurableInput` caches instances, and in-memory wiring can also share them. If several consumers reference the same configuration, check both their desired settings and their actual instance wiring. Kafka and SQS inputs cannot simply be run twice on the same instance.
+
+## 2. Migrate Consumer Settings[​](#2-migrate-consumer-settings "Direct link to 2. Migrate Consumer Settings")
+
+### Processing Grace Time[​](#processing-grace-time "Direct link to Processing Grace Time")
+
+Replace `stream.consumer.<name>.consume_grace_time` with `stream.consumer.<name>.grace_time`. Use the old duration as the initial value, but review its new meaning.
+
+The old setting delayed cancellation separately for each callback. The new setting, defaulting to `10s`, is one shared processing window for both primary and retry work. During shutdown, the consumer calls `Stop` on both inputs and then starts the drain timer. Already-fetched work may still be passed to callbacks. When the timer expires, callback contexts are cancelled.
+
+This is cooperative cancellation, not a hard execution cutoff. A callback that ignores cancellation can keep shutdown waiting. A custom input whose `Stop` blocks can delay the timer itself.
+
+### Concurrency[​](#concurrency "Direct link to Concurrency")
+
+Remove `stream.consumer.<name>.runner_count`. Callback concurrency belongs to the input at `stream.input.<input-name>.runner_count`.
+
+| Input      | Meaning of input `runner_count`                                                       |
+| ---------- | ------------------------------------------------------------------------------------- |
+| SQS / SNS  | Number of receive loops; each loop processes callbacks inline, one message at a time. |
+| Kafka      | Maximum callback concurrency across assigned partitions.                              |
+| Kinesis    | Maximum callback concurrency across the kinsumer's owned shards.                      |
+| Redis list | Number of callback workers processing popped messages.                                |
+| File       | Number of callback workers processing file records.                                   |
+| In-memory  | Number of callback workers processing buffered messages.                              |
+
+Configured primary inputs default to one runner. Use the old consumer count as a starting point, not as an automatic behavior-preserving mapping. SQS and SNS could already have an input runner count; resolve any conflicting values rather than overwriting them mechanically.
+
+**Primary and retry callbacks now run independently.** The old consumer runner pool limited their combined work. A primary input with four runners and an SQS retry input with one runner can now execute five callbacks at once. Review connection pools, rate limits, shared state, and callback thread safety against that combined concurrency.
+
+## 3. Migrate SQS and SNS Inputs[​](#3-migrate-sqs-and-sns-inputs "Direct link to 3. Migrate SQS and SNS Inputs")
+
+SNS delivery uses an SQS-backed input, so these settings and acknowledgement semantics apply to both transports.
+
+| Input setting          | Default      | Meaning                                                                                  |
+| ---------------------- | ------------ | ---------------------------------------------------------------------------------------- |
+| `runner_count`         | `1`          | Receive loops and maximum inline callback concurrency.                                   |
+| `grace_time`           | `10s`        | Delayed cancellation allowance for acknowledgement operations.                           |
+| `acknowledgement_mode` | `individual` | Delete after each successful callback, or batch successful deletions per receive result. |
+
+Move the old consumer `acknowledge_grace_time` value to the referenced SQS or SNS input's `grace_time` as the initial acknowledgement allowance, then remove the old consumer key.
+
+Individual acknowledgement deletes each successful message immediately after its callback. With `acknowledgement_mode: batch`, a receive loop processes the entire receive result before deleting any of its successful messages. This reduces delete requests but extends visibility-timeout exposure for messages processed early in the result. It does not turn record callbacks into batch callbacks.
+
+Input `grace_time` does not extend callback processing and is not a single global post-drain deadline. Each delete operation uses a delayed-cancellation context derived from the input's `Run` context. Calling `Stop` alone does not cancel that context or start an acknowledgement countdown. Account for AWS client request timeouts and retries when budgeting shutdown.
+
+Keep visibility timeout large enough for time spent waiting within a receive result, processing, and deletion. Deletion failures can cause successful work to be delivered again; acknowledgement uses the configured AWS client retries, and the input generally logs failures and continues. Preserve idempotency.
+
+### Old Configuration[​](#old-configuration "Direct link to Old Configuration")
+
+```
+stream:
+
+  consumer:
+
+    orders:
+
+      input: order-events
+
+      runner_count: 4
+
+      consume_grace_time: 30s
+
+      acknowledge_grace_time: 10s
+
+  input:
+
+    order-events:
+
+      type: sqs
+
+      queue_id: order-events
+
+      runner_count: 1
+
+      visibility_timeout: 120
+```
+
+### New Configuration[​](#new-configuration "Direct link to New Configuration")
+
+```
+stream:
+
+  consumer:
+
+    orders:
+
+      input: order-events
+
+      grace_time: 30s
+
+  input:
+
+    order-events:
+
+      type: sqs
+
+      queue_id: order-events
+
+      runner_count: 4
+
+      grace_time: 10s
+
+      acknowledgement_mode: individual
+
+      visibility_timeout: 120
+```
+
+This example deliberately chooses four inline receive workers. Confirm that this concurrency and visibility timeout fit your workload; the old input and consumer counts represented separate stages.
+
+SQS and SNS inputs provide native redelivery for messages whose callback returns `ack=false`: those messages are not deleted. Preserve redrive policy and dead-letter queue configuration.
+
+## 4. Migrate Kafka Inputs[​](#4-migrate-kafka-inputs "Direct link to 4. Migrate Kafka Inputs")
+
+Kafka gains these input settings:
+
+| Setting           | Default     | Meaning                                                                                  |
+| ----------------- | ----------- | ---------------------------------------------------------------------------------------- |
+| `runner_count`    | `1`         | Maximum concurrent callback work across assigned partitions.                             |
+| `processing_mode` | `unordered` | Concurrent processing within a topic-partition, or sequential processing with `ordered`. |
+| `grace_time`      | `10s`       | Commit allowance after processing finishes, including during shutdown.                   |
+| `consume_delay`   | `0`         | Optional delay based on record timestamp; disabled by default.                           |
+
+Set `processing_mode: ordered` when side effects must be sequential within each topic-partition. Unordered processing permits concurrent callbacks and out-of-order completion within a partition. Ordered mode is not global ordering across partitions, nor does it order work redelivered through a separate retry queue.
+
+Kafka commits records handed to the processing callback even when the stream consumer returns `ack=false`. Transport commits are not a success-only acknowledgement mechanism. Enable `stream.consumer.<name>.retry.enabled` whenever ordinary failed callbacks must be retried; with retries disabled, those failures are committed without Gosoline redelivery.
+
+Retry publication is not atomic with offset commit. Failed publication does not prevent the commit. Non-ignorable `GetModel` errors, nil models, and decoding errors return before retry publication. Define how such records are detected and recovered rather than treating `retry.enabled: true` as a guarantee for every failure.
+
+### Configuration Example[​](#configuration-example "Direct link to Configuration Example")
+
+```
+stream:
+
+  consumer:
+
+    orders:
+
+      input: order-events
+
+      grace_time: 30s
+
+      retry:
+
+        enabled: true
+
+        type: sqs
+
+        runner_count: 1
+
+  input:
+
+    order-events:
+
+      type: kafka
+
+      connection: default
+
+      topic_id: order-events
+
+      group_id: orders
+
+      runner_count: 4
+
+      processing_mode: ordered
+
+      grace_time: 10s
+```
+
+The example chooses per-partition ordering and separate SQS retries. Review whether retrying a failed record later is compatible with your ordering requirements. Preserve all other connection, topic, offset, and retry settings during migration.
+
+Remove the old consumer `acknowledge_grace_time`; explicitly review input `grace_time` for commits rather than assuming the old setting controlled the same operation.
+
+Do not add `consume_delay` just for migration. When used, it must be nonnegative and strictly less than `rebalance_timeout`. Record timestamps may come from the producer's clock under Kafka's `CreateTime` policy. Future timestamps are delayed by at most the configured delay; records without timestamps are not delayed.
+
+Rebalance blocking now includes callback processing and commits. Even a valid `consume_delay` does not guarantee the rebalance budget is sufficient. Review `max_poll_records`, callback latency, concurrency, commit retries, and rebalance/session timeouts together.
+
+## 5. Migrate Kinesis Inputs[​](#5-migrate-kinesis-inputs "Direct link to 5. Migrate Kinesis Inputs")
+
+Kinesis adds input `runner_count` and `processing_mode`, defaulting to `1` and `unordered`. Choose `ordered` when sequential callbacks within each shard are required. Unordered mode permits concurrent processing within a shard; checkpoints advance only through the contiguous handled prefix.
+
+Kinesis checkpoints records handed to the processing callback even when its result is `ack=false`. Enable consumer retries for ordinary callback failures that require redelivery, subject to the same decoding and retry-publication limitations as Kafka. Kinesis stream-envelope unmarshalling errors can also be logged and checkpointed without reaching the consumer callback.
+
+Keep `release_delay`, which defaults to `5s`, as the Kinesis cleanup window. It starts after processing drains and covers final checkpoint persistence, shard release, and client deregistration. Do not replace it with consumer `grace_time`. Remove consumer `acknowledge_grace_time` and review `release_delay` separately.
+
+Successful later records may be replayed if an earlier record leaves a gap during shutdown. Checkpoint failure can also cause redelivery. Preserve idempotency even with ordered processing.
+
+Kinesis also supports optional `consume_delay`. Keep it unchanged unless delay behavior is intentionally required.
+
+## 6. Migrate Redis, File, and In-Memory Inputs[​](#6-migrate-redis-file-and-in-memory-inputs "Direct link to 6. Migrate Redis, File, and In-Memory Inputs")
+
+Set callback concurrency through each input's `runner_count`, defaulting to one worker, and remove the consumer runner count. Remove consumer `acknowledge_grace_time`; these inputs do not have an equivalent acknowledgement setting.
+
+File input `blocking` is removed. A file input now finishes at end of file, which allows its consumer to complete and stop the retry input. Remove the key and verify that exhaustion is intended to finish the workload.
+
+Check tests and local development wiring that previously read `Input.Data()` directly. They must now receive messages through the processing callback passed to `Run`.
+
+## 7. Review Retry Configuration and Callback Results[​](#7-review-retry-configuration-and-callback-results "Direct link to 7. Review Retry Configuration and Callback Results")
+
+Preserve existing `stream.consumer.<name>.retry` settings, including queue identifiers, delay, maximum attempts, and dead-letter behavior.
+
+For SQS retry handlers, settings remain below `stream.consumer.<name>.retry`:
+
+| Setting                | Default                                    | Purpose                                                       |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------------------- |
+| `runner_count`         | `1`                                        | Independent retry-input callback concurrency.                 |
+| `ack_grace_time`       | `10s`                                      | Delayed cancellation allowance for retry-message deletion.    |
+| `acknowledgement_mode` | `individual`                               | Individual deletion or batching per receive result.           |
+| `grace_time`           | `10s`, or configured `kernel.kill_timeout` | Delayed cancellation allowance for publishing retry messages. |
+
+Do not confuse consumer processing `grace_time`, retry-publication `retry.grace_time`, and retry-message deletion `retry.ack_grace_time`.
+
+The acknowledgement boolean remains significant in application callbacks:
+
+| Callback result              | Consumer behavior                                                          |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| `true, nil`                  | Successful processing.                                                     |
+| `false, err` or `false, nil` | Native redelivery where available, otherwise retry publication if enabled. |
+| `true, err`                  | Error is logged, but the consumer does not request retry.                  |
+
+For Kafka and Kinesis, returning false does not hold the original record's offset or checkpoint back. For SQS retry messages, returning false leaves the retry message available for native redelivery.
+
+## 8. Replace Removed Batch Consumers[​](#8-replace-removed-batch-consumers "Direct link to 8. Replace Removed Batch Consumers")
+
+Batch callbacks, factories, runners, mocks, and `batch_size` configuration are removed. Discover `RunBatchConsumer`, `RunBatchConsumers`, `RunUntypedBatchConsumer`, `RunUntypedBatchConsumers`, `BatchConsumerCallback`, `UntypedBatchConsumerCallback`, their runnable variants, and batch consumer constructors/factories.
+
+There is no automatic replacement. Choose one path for each consumer:
+
+1. **Record-at-a-time processing:** use normal typed or untyped callbacks and the corresponding non-batch runner or module factory. Confirm the former batch operation is correct and economically acceptable for each record.
+2. **Application-owned batching:** own buffering, flush timing, partial failures, shutdown flushing, idempotency, and how each record's callback result corresponds to the batch result.
+
+Do not mechanically convert operations that rely on transactions, aggregate validation, rate limits, or per-item results. Returning success merely because a record entered an in-memory buffer can acknowledge it before durable processing.
+
+Runnable callback `Run` contexts are cancelled only after both inputs have returned, including processing and transport cleanup. A batch flush needed to finish `Consume` must not wait for that cancellation: this can deadlock shutdown.
+
+## 9. Review Aggregate Messages[​](#9-review-aggregate-messages "Direct link to 9. Review Aggregate Messages")
+
+Aggregate envelopes are separate from the removed batch consumer APIs. Their acknowledgement behavior also changes:
+
+| `aggregate_message_mode` | Old behavior                                              | New callback result for the envelope                                                      |
+| ------------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `atMostOnce` (default)   | Acknowledged before processing children.                  | True after processing if any child succeeds; false if all fail or the aggregate is empty. |
+| `atLeastOnce`            | Acknowledged after iteration regardless of child results. | True only if every child succeeds; an empty aggregate returns true.                       |
+
+On SQS/SNS, an `atLeastOnce` partial failure can redeliver successful children alongside failed ones. Review duplicate side effects and idempotency. On Kafka/Kinesis, envelope results do not prevent transport commit/checkpoint; review failed-child retry publication separately.
+
+Keep the existing mode until its intended partial-failure behavior is understood. Test aggregate handling independently of any batch-consumer replacement.
+
+## 10. Replace Kafka Read-Only Behavior[​](#10-replace-kafka-read-only-behavior "Direct link to 10. Replace Kafka Read-Only Behavior")
+
+Kafka connection `is_read_only` is removed. Previously it suppressed Kafka output writes and permitted consumption without consumer-group commits. After migration, outputs produce normally and inputs use consumer groups with explicit commits.
+
+For every former read-only connection, identify its purpose before deleting the key:
+
+* **Suppress writes:** use explicit environment-specific output wiring or appropriate credentials; production wiring now writes normally.
+* **Inspect or replay:** use a dedicated consumer group and explicit offset policy when committing consumption is acceptable.
+* **Avoid consumer-group participation or commits:** select a separate inspection mechanism; the stream Kafka input no longer offers this mode.
+* **Use read-only credentials:** verify that the selected consumption mode and its group/commit permissions match the principal.
+
+Do not silently enable output writes or change group participation while removing obsolete configuration.
+
+## 11. Review Shutdown and Observability[​](#11-review-shutdown-and-observability "Direct link to 11. Review Shutdown and Observability")
+
+Review `kernel.kill_timeout` and the deployment termination budget together. Allow for outstanding receives or Redis pops, shared callback drain, retry publication, transport cleanup, and any other modules shutting down. SQS `Stop` does not interrupt an outstanding receive. These operations can overlap, so grace settings are not a universal formula for maximum shutdown duration.
+
+Verify callback dependencies also respect cancellation. Successful `Run` termination does not prove that deletion, commit, or checkpoint persistence succeeded; some shutdown cleanup failures are logged without failing the run.
+
+Update monitoring and metadata clients:
+
+| Change                                                                                            | Migration action                                                                                      |
+| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Kafka metrics use consumer/topic granularity rather than partition dimensions.                    | Update queries and alerts using `Partition`.                                                          |
+| Kafka `WaitDuration` and `CommitFailures` are no longer emitted.                                  | Replace dashboards and alerts relying on those names.                                                 |
+| Kafka/Kinesis expose `SleepDuration` with consumption delay; it contributes to `ProcessDuration`. | Account for deliberate delay in latency and lag alerts.                                               |
+| Kafka `ProcessDuration` also includes commit work.                                                | Review comparisons with previous callback timings.                                                    |
+| Health tracks active processing independently.                                                    | A slow callback can make the consumer unhealthy while others succeed; review health-check thresholds. |
+| Consumer metadata no longer includes `runner_count`.                                              | Update metadata consumers and assertions.                                                             |
+
+Counters are not evidence of successful durable effects: stream `ProcessedCount` counts processing attempts, retry-put count counts publication attempts, and Kafka `RecordsConsumed` counts fetched records, including work skipped during shutdown. Correlate them with errors, queue depth, commits/checkpoints, and application outcomes.
+
+## 12. Review Message and Integration Compatibility[​](#12-review-message-and-integration-compatibility "Direct link to 12. Review Message and Integration Compatibility")
+
+Consumed Kafka keys are represented by the `KafkaKey` stream message attribute so they can be preserved when a stream message is written back to Kafka. Internal original-record metadata is removed. Review code or tests using `KafkaSourceMessage`, `MetaDataKafkaOriginalMessage`, or `NewKafkaMessageAttrs`.
+
+Custom inputs and direct transport integrations require a separate API review:
+
+| Integration              | Change                                                                                                                                                                                   |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stream.Input`           | `Run` now takes `stream.InputProcess`, a callback receiving context and message and returning an acknowledgement boolean. `Data()` is removed; `Stop` and `IsHealthy` remain.            |
+| `AcknowledgeableInput`   | Interface and consumer-driven `Ack` / `AckBatch` are removed. Inputs own acknowledgement and must wait for outstanding work before returning.                                            |
+| Processing drain         | `exec.WithDrainContext` / `DrainContextFrom` carry the caller-owned drain signal. Inputs must preserve that shared processing cancellation contract.                                     |
+| Direct Kafka consumer    | `Run` receives a per-record context-aware callback returning bool; handler/channel plumbing and read-only arguments are removed. Constructors and readers also change.                   |
+| Direct Kinesis consumer  | `Run` receives a context-aware raw-record handler returning error; channel-handler and `Done` plumbing are removed. Ordinary handler failures are not a success-only checkpoint barrier. |
+| Low-level consumer tests | Base-consumer APIs are removed; `NewUntypedConsumerWithInterfaces` receives dependencies directly, including a retry input.                                                              |
+
+Read the exact constructor signatures in the target Gosoline version and regenerate affected mocks. Config defaults are applied through configuration unmarshalling, not automatically to Go settings literals: explicitly initialize runner counts, processing modes, and cleanup durations in direct integrations. In particular, zero Kinesis runners are not a supported configuration and can stall processing or skip handlers depending on the mode.
+
+The application migration instructions below flag these integrations for separate review rather than prescribing a mechanical framework rewrite.
+
+## Migration Checklist[​](#migration-checklist "Direct link to Migration Checklist")
+
+* Map every consumer to its primary and retry inputs across application and deployment configuration.
+* Replace consumer `consume_grace_time` with `grace_time`; remove consumer `runner_count` and `acknowledge_grace_time`.
+* Choose primary-input and retry-input concurrency together; resolve conflicting or shared settings.
+* Choose Kafka/Kinesis ordering explicitly and review retry behavior, decoding failures, and retry-publication failures.
+* Configure transport cleanup separately: SQS/SNS acknowledgement allowance, Kafka commit allowance, or Kinesis `release_delay`.
+* Review SQS/SNS deletion mode, visibility timeout, redrive policy, and idempotency.
+* Resolve each removed batch consumer and review aggregate-envelope semantics independently.
+* Replace former Kafka read-only behavior deliberately.
+* Remove file `blocking` and verify completion at end of file.
+* Review callback cancellation, runnable-callback flushing, kernel timeout, and deployment shutdown budget.
+* Update tests, mocks, metadata clients, dashboards, and alerts affected by the lifecycle changes.
+* Run application checks and verify transport resume, retries, and application progress after rollout.
+
+## AI Agent Migration Instructions[​](#ai-agent-migration-instructions "Direct link to AI Agent Migration Instructions")
+
+Copy the prepared instructions to give an AI agent an operational migration task. They include discovery, configuration mappings, behavior decisions, validation, and stop conditions.
+
+Copy AI migration instructions
 
 
 ---
@@ -19875,16 +21069,18 @@ func NewMyHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*M
 
 ### Bind functions[​](#bind-functions "Direct link to Bind functions")
 
-| Function      | Handler signature                            | Use case                       |
-| ------------- | -------------------------------------------- | ------------------------------ |
-| `Bind[I]`     | `(ctx, *I) (Response, error)`                | Bind request to input struct   |
-| `BindR[I]`    | `(ctx, *http.Request, *I) (Response, error)` | Bind with raw request access   |
-| `BindN`       | `(ctx) (Response, error)`                    | No input binding               |
-| `BindNR`      | `(ctx, *http.Request) (Response, error)`     | No input, with raw request     |
-| `BindSse[I]`  | `(ctx, *I, *SseWriter) error`                | SSE with input binding         |
-| `BindSseR[I]` | `(ctx, *http.Request, *I, *SseWriter) error` | SSE with input + raw request   |
-| `BindSseN`    | `(ctx, *SseWriter) error`                    | SSE with no input              |
-| `BindSseNR`   | `(ctx, *http.Request, *SseWriter) error`     | SSE with raw request, no input |
+| Function          | Handler signature                                                       | Use case                                      |
+| ----------------- | ----------------------------------------------------------------------- | --------------------------------------------- |
+| `Bind[I, O any]`  | `func(ctx context.Context, input *I) (O, error)`                        | Bind request to input and render typed output |
+| `BindR[I, O any]` | `func(ctx context.Context, request *http.Request, input *I) (O, error)` | Bind with raw request access                  |
+| `BindN[O any]`    | `func(ctx context.Context) (O, error)`                                  | No input binding                              |
+| `BindNR[O any]`   | `func(ctx context.Context, request *http.Request) (O, error)`           | No input, with raw request                    |
+| `BindSse[I]`      | `(ctx, *I, *SseWriter) error`                                           | SSE with input binding                        |
+| `BindSseR[I]`     | `(ctx, *http.Request, *I, *SseWriter) error`                            | SSE with input + raw request                  |
+| `BindSseN`        | `(ctx, *SseWriter) error`                                               | SSE with no input                             |
+| `BindSseNR`       | `(ctx, *http.Request, *SseWriter) error`                                | SSE with raw request, no input                |
+
+The four response binding helpers accept a typed result `O` and negotiate its representation from the request's `Accept` header. The default renderer supports JSON only, uses JSON when `Accept` is missing, and returns `406 Not Acceptable` when no accepted media type is supported. See [Customizing responses in Build an HTTP service](/docs/pr-4/how-to/http-server/build-an-http-service/.md#customizing-responses) for response metadata and explicit `Response` overrides.
 
 ### Binding tags[​](#binding-tags "Direct link to Binding tags")
 
@@ -19945,33 +21141,33 @@ Binding and validation failures return `400 Bad Request`. Validation bind failur
 
 ## Error handling[​](#error-handling "Direct link to Error handling")
 
-### [WithErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#witherrorhandler "Direct link to witherrorhandler")
+### [WithErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/server_options.go)[​](#witherrorhandler "Direct link to witherrorhandler")
 
 ```
-httpserver.WithErrorHandler(func(statusCode int, err error) httpserver.Response {
+httpserver.WithErrorHandler(func(statusCode int, err error) any {
 
-    return httpserver.NewJsonResponse(
-
-        map[string]any{"error": err.Error()},
-
-        httpserver.WithStatusCode(statusCode),
-
-    )
+    return map[string]any{"error": err.Error()}
 
 })
 ```
 
-Sets a custom global error handler. By default, 4xx responses return `{"err":"<message>"}` and 5xx responses return `{"err":"internal server error"}`. Set `httpserver.<name>.errors.privacy` to `public` to expose 5xx error messages.
+Configures the error-body handler for the server that receives this option. Ordinary values use response negotiation. By default, 4xx responses return `{"err":"<message>"}` and 5xx responses return `{"err":"internal server error"}`. Set `httpserver.<name>.errors.privacy` to `public` to expose default 5xx error messages.
 
-### [GetErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#geterrorhandler "Direct link to geterrorhandler")
+### [NewErrorWithStatus()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#newerrorwithstatus "Direct link to newerrorwithstatus")
+
+Return a zero output and a wrapped error to set an expected client-error status:
 
 ```
-return httpserver.GetErrorHandler()(http.StatusBadRequest, err), nil
+return nil, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
 ```
 
-Returns the current error handler, useful for returning client errors with specific status codes.
+For a struct output, replace `nil` with that struct's zero value.
 
-Use `NewErrorWithStatus(statusCode, err)` when middleware attaches an error to the Gin context and the response should use a status other than 500.
+Middleware can attach the same wrapped error to the Gin context:
+
+```
+ginCtx.Error(httpserver.NewErrorWithStatus(http.StatusBadRequest, err))
+```
 
 ## Middleware[​](#middleware "Direct link to Middleware")
 

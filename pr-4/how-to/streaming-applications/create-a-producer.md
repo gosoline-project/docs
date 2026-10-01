@@ -70,7 +70,7 @@ err := producer.WriteOne(ctx, order, map[string]string{
 })
 ```
 
-Attributes carry transport metadata and application routing information. Transport-specific helpers or constants should be used where available, such as Kafka keys or Kinesis partition keys.
+Attributes carry transport metadata and application routing information. Transport-specific helpers or constants should be used where available, such as Kafka keys or Kinesis partition keys. For Kafka, see [message format, keys, and headers](/docs/pr-4/how-to/kafka/general/.md#message-format-keys-and-headers) for `stream.AttributeKafkaKey`, partition routing, and header conversion examples.
 
 ## Configure encoding and output[​](#configure-encoding-and-output "Direct link to Configure encoding and output")
 
