@@ -60,6 +60,29 @@ func (t *AuthorMapper) TransformOutput(_ context.Context, entity *Author) (*Auth
 	return entity, nil
 }
 
+// snippet-start: reporting list input
+const (
+	reportingAuthorOrderBy      = "created_at DESC"
+	reportingAuthorDefaultLimit = 100
+)
+
+type reportingAuthorListInput struct {
+	sqlh.ListInput
+}
+
+func (i reportingAuthorListInput) ApplyQueryModifiers(qb *sqlr.QueryBuilderSelect) {
+	qb.OrderBy(reportingAuthorOrderBy)
+}
+
+func (i reportingAuthorListInput) ApplyPagination(qb *sqlr.QueryBuilderSelect) {
+	i.ListInput.ApplyPagination(qb)
+	if i.Page.Limit == 0 {
+		qb.Limit(reportingAuthorDefaultLimit)
+	}
+}
+
+// snippet-end: reporting list input
+
 // snippet-start: repository wrapper
 type ReportingAuthorRepository struct {
 	delegate sqlr.RepositoryTx[int64, Author]
@@ -84,8 +107,8 @@ func (r *ReportingAuthorRepository) Read(tx sqlr.TTx, id int64, opts ...func(qb 
 
 func (r *ReportingAuthorRepository) Query(tx sqlr.TTx, opts ...func(qb *sqlr.QueryBuilderSelect)) ([]Author, error) {
 	return r.delegate.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
-		qb.OrderBy("created_at DESC")
-		qb.Limit(100)
+		qb.OrderBy(reportingAuthorOrderBy)
+		qb.Limit(reportingAuthorDefaultLimit)
 		for _, opt := range opts {
 			opt(qb)
 		}
@@ -118,12 +141,15 @@ func main() {
 		application.WithModuleFactory("http", httpserver.NewServer(
 			"default",
 			func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-				definition := sqlh.NewCrudDefinition(
-					(&AuthorMapper{}).TransformCreateInput,
-					(&AuthorMapper{}).TransformUpdateInput,
-					(&AuthorMapper{}).TransformPatchInputFromEntity,
-					(&AuthorMapper{}).TransformOutput,
-				)
+				mapper := &AuthorMapper{}
+				definition := sqlh.CrudDefinition[
+					int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, reportingAuthorListInput, *Author,
+				]{
+					CreateInput:          mapper.TransformCreateInput,
+					UpdateInput:          mapper.TransformUpdateInput,
+					PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
+					Output:               mapper.TransformOutput,
+				}
 				router.HandleWith(sqlh.WithCrudHandlers(
 					1,
 					"author",
@@ -131,7 +157,6 @@ func main() {
 					sqlh.WithClientName[int64, Author]("reporting"),
 					sqlh.WithRepositoryTxFactory[int64, Author](NewReportingAuthorRepository),
 				))
-
 				return nil
 			},
 		)),

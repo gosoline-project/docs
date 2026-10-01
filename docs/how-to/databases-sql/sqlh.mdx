@@ -564,6 +564,14 @@ The custom factory receives the same `sqlc.Client` that SQLH uses to start trans
 
 <CodeBlock title="main.go" language="go" snippet="repository wrapper">{CustomRepositoryMain}</CodeBlock>
 
+The repository wrapper retains its defaults for direct queries, but SQLH v0.8.0 prepares the list builder and copies it into the repository query, so those defaults alone do not affect the list route. The example also applies them through a custom `ListInputSource`: it adds the newest-first order as a query modifier and applies the 100-row fallback only when no page limit was requested. It embeds `sqlh.ListInput` to preserve native filters, force filters, and offsets. The default count does not apply pagination, so its total remains uncapped.
+
+<CodeBlock title="main.go" language="go" snippet="reporting list input">{CustomRepositoryMain}</CodeBlock>
+
+The custom list input is selected by the CRUD definition:
+
+<CodeBlock title="main.go" language="go" snippet="custom repository">{CustomRepositoryMain}</CodeBlock>
+
 This configuration enables migrations for the selected `reporting` client.
 
 <CodeBlock title="config.dist.yml" language="yaml" snippet="config">{CustomRepositoryConfig}</CodeBlock>

@@ -103,7 +103,7 @@ Response migration rules:
 - NewResponse("text", ContentTypeText, code, header) becomes NewTextResponse(text, WithStatusCode(code), WithHeaders(header)).
 - NewResponse([]byte(...), contentType, code, header) becomes NewResponse(WithBody(...), WithHeader("Content-Type", contentType), WithStatusCode(code), WithHeaders(header)).
 - A typed result that is a httpserver.Response bypasses response negotiation. Use it only when the handler must control the response directly.
-- Keep NewTextResponse for a fixed text representation, NewStatusResponse for a bodyless response, and NewResponse options for raw bytes or a required media type.
+- Keep NewTextResponse for a fixed text representation, NewStatusResponse for bodyless responses that must bypass negotiation (for example, to preserve 204 for an unsupported Accept value), and NewResponse options for raw bytes or a required media type.
 - Do not use Header() to replace the negotiated Content-Type. The response negotiator sets that header.
 - The Response interface exposes ContentType(), Body(), Header(), and StatusCode(). Do not access fields such as resp.StatusCode or resp.Header in tests.
 - For errors, return the zero value for O and the error. Use NewErrorWithStatus(status, err) when the error must set an explicit status.

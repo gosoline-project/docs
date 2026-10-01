@@ -56,12 +56,6 @@ func (CreatedUserOutput) StatusCode() int {
 	return http.StatusCreated
 }
 
-type DeletedUserOutput struct{}
-
-func (DeletedUserOutput) StatusCode() int {
-	return http.StatusNoContent
-}
-
 type Handler struct {
 	users map[int]*User
 	next  int
@@ -109,9 +103,9 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error
 	return user, nil
 }
 
-func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (DeletedUserOutput, error) {
+func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
 	delete(h.users, input.Id)
-	return DeletedUserOutput{}, nil
+	return httpserver.NewStatusResponse(http.StatusNoContent), nil
 }
 
 func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
