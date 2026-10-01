@@ -173,6 +173,8 @@ func NewMyHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*M
 
 The four response binding helpers accept a typed result `O` and negotiate its representation from the request's `Accept` header. The default renderer supports JSON only, uses JSON when `Accept` is missing, and returns `406 Not Acceptable` when no accepted media type is supported. See [Customizing responses in Build an HTTP service](/docs/pr-4/how-to/http-server/build-an-http-service/.md#customizing-responses) for response metadata and explicit `Response` overrides.
 
+Typed outputs are negotiated before their `StatusCode()` metadata is applied. For a bodyless `204 No Content` response that must be preserved when `Accept` is unsupported, return `NewStatusResponse(http.StatusNoContent)`; explicit responses bypass negotiation. Other typed outputs, including those with custom status codes, remain negotiated.
+
 ### Binding tags[​](#binding-tags "Direct link to Binding tags")
 
 Input structs use standard tags to specify the data source:

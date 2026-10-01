@@ -1197,9 +1197,9 @@ func (r *ReportingAuthorRepository) Query(tx sqlr.TTx, opts ...func(qb *sqlr.Que
 
   return r.delegate.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
 
-    qb.OrderBy("created_at DESC")
+    qb.OrderBy(reportingAuthorOrderBy)
 
-    qb.Limit(100)
+    qb.Limit(reportingAuthorDefaultLimit)
 
     for _, opt := range opts {
 
@@ -1240,6 +1240,112 @@ func (r *ReportingAuthorRepository) Delete(tx sqlr.TTx, id int64, opts ...func(q
 func (r *ReportingAuthorRepository) Close() error {
 
   return r.delegate.Close()
+
+}
+```
+
+The repository wrapper retains its defaults for direct queries, but SQLH v0.8.0 prepares the list builder and copies it into the repository query, so those defaults alone do not affect the list route. The example also applies them through a custom `ListInputSource`: it adds the newest-first order as a query modifier and applies the 100-row fallback only when no page limit was requested. It embeds `sqlh.ListInput` to preserve native filters, force filters, and offsets. The default count does not apply pagination, so its total remains uncapped.
+
+main.go
+
+```
+const (
+
+  reportingAuthorOrderBy      = "created_at DESC"
+
+  reportingAuthorDefaultLimit = 100
+
+)
+
+
+
+type reportingAuthorListInput struct {
+
+  sqlh.ListInput
+
+}
+
+
+
+func (i reportingAuthorListInput) ApplyQueryModifiers(qb *sqlr.QueryBuilderSelect) {
+
+  qb.OrderBy(reportingAuthorOrderBy)
+
+}
+
+
+
+func (i reportingAuthorListInput) ApplyPagination(qb *sqlr.QueryBuilderSelect) {
+
+  i.ListInput.ApplyPagination(qb)
+
+  if i.Page.Limit == 0 {
+
+    qb.Limit(reportingAuthorDefaultLimit)
+
+  }
+
+}
+```
+
+The custom list input is selected by the CRUD definition:
+
+main.go
+
+```
+func main() {
+
+  application.New(
+
+    application.WithConfigFile("config.dist.yml", "yml"),
+
+    application.WithLoggerHandlersFromConfig,
+
+    application.WithModuleFactory("http", httpserver.NewServer(
+
+      "default",
+
+      func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+
+        mapper := &AuthorMapper{}
+
+        definition := sqlh.CrudDefinition[
+
+          int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, reportingAuthorListInput, *Author,
+
+        ]{
+
+          CreateInput:          mapper.TransformCreateInput,
+
+          UpdateInput:          mapper.TransformUpdateInput,
+
+          PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
+
+          Output:               mapper.TransformOutput,
+
+        }
+
+        router.HandleWith(sqlh.WithCrudHandlers(
+
+          1,
+
+          "author",
+
+          sqlh.SimpleCrudDefinition(definition),
+
+          sqlh.WithClientName[int64, Author]("reporting"),
+
+          sqlh.WithRepositoryTxFactory[int64, Author](NewReportingAuthorRepository),
+
+        ))
+
+        return nil
+
+      },
+
+    )),
+
+  ).Run()
 
 }
 ```

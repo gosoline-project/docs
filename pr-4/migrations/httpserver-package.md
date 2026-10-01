@@ -622,19 +622,7 @@ r.POST("/import", httpserver.BindNR(h.ImportUsers))
 For typed input plus raw request access, use `BindR`:
 
 ```
-type NoContent struct{}
-
-
-
-func (NoContent) StatusCode() int {
-
-    return http.StatusNoContent
-
-}
-
-
-
-func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input *UploadAvatarInput) (NoContent, error) {
+func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input *UploadAvatarInput) (httpserver.Response, error) {
 
     contentType := req.Header.Get("Content-Type")
 
@@ -642,7 +630,7 @@ func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input
 
 
 
-    return NoContent{}, nil
+    return httpserver.NewStatusResponse(http.StatusNoContent), nil
 
 }
 ```
@@ -699,7 +687,7 @@ See [Customizing responses](/docs/pr-4/how-to/http-server/build-an-http-service/
 
 ### Fixed response formats and bodyless responses[​](#fixed-response-formats-and-bodyless-responses "Direct link to Fixed response formats and bodyless responses")
 
-Keep an explicit response when the route must return a fixed media type or no body.
+Keep an explicit response when the route must return a fixed media type or no body. Typed outputs are negotiated before their `StatusCode()` method is applied, so even a typed output with `204 No Content` can return `406 Not Acceptable` for an unsupported `Accept` value. An explicit `httpserver.Response` bypasses negotiation; use `NewStatusResponse(http.StatusNoContent)` to preserve `204` regardless of `Accept`. Ordinary typed outputs, including outputs with custom statuses, remain subject to negotiation.
 
 Old low-level text response:
 
@@ -1138,7 +1126,7 @@ The standalone JWT helper validates `Authorization: Bearer <token>` headers usin
 Successful authenticators attach an `auth.Subject` to the request context. In bound handlers, retrieve it with `auth.GetSubject(ctx)`:
 
 ```
-func (h *UserHandler) Me(ctx context.Context) (auth.Subject, error) {
+func (h *UserHandler) Me(ctx context.Context) (*auth.Subject, error) {
 
     subject := auth.GetSubject(ctx)
 
@@ -1480,29 +1468,17 @@ func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (C
 
 
 
-type NoContent struct{}
-
-
-
-func (NoContent) StatusCode() int {
-
-    return http.StatusNoContent
-
-}
-
-
-
-func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (NoContent, error) {
+func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
 
     if err := h.store.Delete(ctx, input.Id); err != nil {
 
-        return NoContent{}, err
+        return nil, err
 
     }
 
 
 
-    return NoContent{}, nil
+    return httpserver.NewStatusResponse(http.StatusNoContent), nil
 
 }
 ```

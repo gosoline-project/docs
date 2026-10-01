@@ -5399,9 +5399,9 @@ func (r *ReportingAuthorRepository) Query(tx sqlr.TTx, opts ...func(qb *sqlr.Que
 
   return r.delegate.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
 
-    qb.OrderBy("created_at DESC")
+    qb.OrderBy(reportingAuthorOrderBy)
 
-    qb.Limit(100)
+    qb.Limit(reportingAuthorDefaultLimit)
 
     for _, opt := range opts {
 
@@ -5442,6 +5442,112 @@ func (r *ReportingAuthorRepository) Delete(tx sqlr.TTx, id int64, opts ...func(q
 func (r *ReportingAuthorRepository) Close() error {
 
   return r.delegate.Close()
+
+}
+```
+
+The repository wrapper retains its defaults for direct queries, but SQLH v0.8.0 prepares the list builder and copies it into the repository query, so those defaults alone do not affect the list route. The example also applies them through a custom `ListInputSource`: it adds the newest-first order as a query modifier and applies the 100-row fallback only when no page limit was requested. It embeds `sqlh.ListInput` to preserve native filters, force filters, and offsets. The default count does not apply pagination, so its total remains uncapped.
+
+main.go
+
+```
+const (
+
+  reportingAuthorOrderBy      = "created_at DESC"
+
+  reportingAuthorDefaultLimit = 100
+
+)
+
+
+
+type reportingAuthorListInput struct {
+
+  sqlh.ListInput
+
+}
+
+
+
+func (i reportingAuthorListInput) ApplyQueryModifiers(qb *sqlr.QueryBuilderSelect) {
+
+  qb.OrderBy(reportingAuthorOrderBy)
+
+}
+
+
+
+func (i reportingAuthorListInput) ApplyPagination(qb *sqlr.QueryBuilderSelect) {
+
+  i.ListInput.ApplyPagination(qb)
+
+  if i.Page.Limit == 0 {
+
+    qb.Limit(reportingAuthorDefaultLimit)
+
+  }
+
+}
+```
+
+The custom list input is selected by the CRUD definition:
+
+main.go
+
+```
+func main() {
+
+  application.New(
+
+    application.WithConfigFile("config.dist.yml", "yml"),
+
+    application.WithLoggerHandlersFromConfig,
+
+    application.WithModuleFactory("http", httpserver.NewServer(
+
+      "default",
+
+      func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+
+        mapper := &AuthorMapper{}
+
+        definition := sqlh.CrudDefinition[
+
+          int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, reportingAuthorListInput, *Author,
+
+        ]{
+
+          CreateInput:          mapper.TransformCreateInput,
+
+          UpdateInput:          mapper.TransformUpdateInput,
+
+          PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
+
+          Output:               mapper.TransformOutput,
+
+        }
+
+        router.HandleWith(sqlh.WithCrudHandlers(
+
+          1,
+
+          "author",
+
+          sqlh.SimpleCrudDefinition(definition),
+
+          sqlh.WithClientName[int64, Author]("reporting"),
+
+          sqlh.WithRepositoryTxFactory[int64, Author](NewReportingAuthorRepository),
+
+        ))
+
+        return nil
+
+      },
+
+    )),
+
+  ).Run()
 
 }
 ```
@@ -8466,11 +8572,45 @@ Install the middleware on a router or group:
 router.Use(httpserver.ResponseNegotiationMiddleware(negotiator))
 ```
 
-In this example, JSON is the default and XML is available. XML encoding requires output types that Go's `encoding/xml` package supports. To configure a server, include `WithResponseNegotiator(negotiator)` in the options passed to `RunServerWithOptions`.
+In this example, JSON is the default and XML is available. XML encoding requires output types that Go's `encoding/xml` package supports. Pass the negotiator as a server option through `RunServers`:
+
+```
+httpserver.RunServers(map[string]httpserver.ServerDefinition{
+
+    "default": {
+
+        RouterFactory: func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+
+            type HelloResponse struct {
+
+                Message string `json:"message" xml:"message"`
+
+            }
+
+            router.GET("/hello", httpserver.BindN(func(ctx context.Context) (HelloResponse, error) {
+
+                return HelloResponse{Message: "Hello, World!"}, nil
+
+            }))
+
+            return nil
+
+        },
+
+        Options: []httpserver.ServerOption{
+
+            httpserver.WithResponseNegotiator(negotiator),
+
+        },
+
+    },
+
+})
+```
 
 ### Customizing responses[​](#customizing-responses "Direct link to Customizing responses")
 
-A typed output can implement `StatusCode() int` to set its HTTP status. The default status is `200 OK`. The complete example returns `201 Created` from `CreateUser` and `204 No Content` from `DeleteUser`:
+A typed output can implement `StatusCode() int` to set its HTTP status. The default status is `200 OK`. The complete example uses this for `201 Created` from `CreateUser`; `DeleteUser` uses an explicit bodyless response, described below.
 
 ```
 type CreatedUserOutput struct {
@@ -8484,18 +8624,6 @@ type CreatedUserOutput struct {
 func (CreatedUserOutput) StatusCode() int {
 
     return http.StatusCreated
-
-}
-
-
-
-type DeletedUserOutput struct{}
-
-
-
-func (DeletedUserOutput) StatusCode() int {
-
-    return http.StatusNoContent
 
 }
 ```
@@ -8517,6 +8645,14 @@ func (CreatedUserOutput) Header() http.Header {
 httpserver negotiates the typed output before it applies these methods. The selected representation controls `Content-Type`. A `Header` method cannot override `Content-Type`. A `ContentType() string` method by itself does not change the selected representation.
 
 A full `httpserver.Response` bypasses negotiation. An explicit `Response` implements `ContentType() string`, `Body() ([]byte, error)`, `Header() http.Header`, and `StatusCode() int`. The server does not compare its content type with the request's `Accept` header.
+
+For a bodyless response such as `204 No Content`, use `NewStatusResponse(http.StatusNoContent)`. A typed output with that status is negotiated first and can return `406 Not Acceptable` if `Accept` excludes supported representations; the explicit response preserves `204` regardless of `Accept`.
+
+```
+return httpserver.NewStatusResponse(http.StatusNoContent), nil
+```
+
+This is specific to explicit responses; ordinary typed outputs, including those with custom status codes, remain subject to negotiation.
 
 ```
 func (h *Handler) PlainText(ctx context.Context) (httpserver.Response, error) {
@@ -8722,18 +8858,6 @@ func (CreatedUserOutput) StatusCode() int {
 
 
 
-type DeletedUserOutput struct{}
-
-
-
-func (DeletedUserOutput) StatusCode() int {
-
-	return http.StatusNoContent
-
-}
-
-
-
 type Handler struct {
 
 	users map[int]*User
@@ -8828,11 +8952,11 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error
 
 
 
-func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (DeletedUserOutput, error) {
+func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
 
 	delete(h.users, input.Id)
 
-	return DeletedUserOutput{}, nil
+	return httpserver.NewStatusResponse(http.StatusNoContent), nil
 
 }
 
@@ -8910,11 +9034,21 @@ curl http://localhost:8088/api/users/99
 
 
 
-# Delete a user
+# Delete a user; the explicit bodyless response preserves 204 for this unsupported representation
 
-curl -X DELETE http://localhost:8088/api/users/1 -v
+curl -X DELETE http://localhost:8088/api/users/1 -H "Accept: text/plain" -v
 
 # HTTP/1.1 204 No Content
+
+
+
+# The user was deleted
+
+curl -i http://localhost:8088/api/users/1
+
+# HTTP/1.1 404 Not Found
+
+# {"err":"user not found"}
 
 
 
@@ -17411,19 +17545,7 @@ r.POST("/import", httpserver.BindNR(h.ImportUsers))
 For typed input plus raw request access, use `BindR`:
 
 ```
-type NoContent struct{}
-
-
-
-func (NoContent) StatusCode() int {
-
-    return http.StatusNoContent
-
-}
-
-
-
-func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input *UploadAvatarInput) (NoContent, error) {
+func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input *UploadAvatarInput) (httpserver.Response, error) {
 
     contentType := req.Header.Get("Content-Type")
 
@@ -17431,7 +17553,7 @@ func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input
 
 
 
-    return NoContent{}, nil
+    return httpserver.NewStatusResponse(http.StatusNoContent), nil
 
 }
 ```
@@ -17488,7 +17610,7 @@ See [Customizing responses](/docs/pr-4/how-to/http-server/build-an-http-service/
 
 ### Fixed response formats and bodyless responses[​](#fixed-response-formats-and-bodyless-responses "Direct link to Fixed response formats and bodyless responses")
 
-Keep an explicit response when the route must return a fixed media type or no body.
+Keep an explicit response when the route must return a fixed media type or no body. Typed outputs are negotiated before their `StatusCode()` method is applied, so even a typed output with `204 No Content` can return `406 Not Acceptable` for an unsupported `Accept` value. An explicit `httpserver.Response` bypasses negotiation; use `NewStatusResponse(http.StatusNoContent)` to preserve `204` regardless of `Accept`. Ordinary typed outputs, including outputs with custom statuses, remain subject to negotiation.
 
 Old low-level text response:
 
@@ -17927,7 +18049,7 @@ The standalone JWT helper validates `Authorization: Bearer <token>` headers usin
 Successful authenticators attach an `auth.Subject` to the request context. In bound handlers, retrieve it with `auth.GetSubject(ctx)`:
 
 ```
-func (h *UserHandler) Me(ctx context.Context) (auth.Subject, error) {
+func (h *UserHandler) Me(ctx context.Context) (*auth.Subject, error) {
 
     subject := auth.GetSubject(ctx)
 
@@ -18269,29 +18391,17 @@ func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (C
 
 
 
-type NoContent struct{}
-
-
-
-func (NoContent) StatusCode() int {
-
-    return http.StatusNoContent
-
-}
-
-
-
-func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (NoContent, error) {
+func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
 
     if err := h.store.Delete(ctx, input.Id); err != nil {
 
-        return NoContent{}, err
+        return nil, err
 
     }
 
 
 
-    return NoContent{}, nil
+    return httpserver.NewStatusResponse(http.StatusNoContent), nil
 
 }
 ```
@@ -21081,6 +21191,8 @@ func NewMyHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*M
 | `BindSseNR`       | `(ctx, *http.Request, *SseWriter) error`                                | SSE with raw request, no input                |
 
 The four response binding helpers accept a typed result `O` and negotiate its representation from the request's `Accept` header. The default renderer supports JSON only, uses JSON when `Accept` is missing, and returns `406 Not Acceptable` when no accepted media type is supported. See [Customizing responses in Build an HTTP service](/docs/pr-4/how-to/http-server/build-an-http-service/.md#customizing-responses) for response metadata and explicit `Response` overrides.
+
+Typed outputs are negotiated before their `StatusCode()` metadata is applied. For a bodyless `204 No Content` response that must be preserved when `Accept` is unsupported, return `NewStatusResponse(http.StatusNoContent)`; explicit responses bypass negotiation. Other typed outputs, including those with custom status codes, remain negotiated.
 
 ### Binding tags[​](#binding-tags "Direct link to Binding tags")
 

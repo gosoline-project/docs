@@ -434,11 +434,45 @@ Install the middleware on a router or group:
 router.Use(httpserver.ResponseNegotiationMiddleware(negotiator))
 ```
 
-In this example, JSON is the default and XML is available. XML encoding requires output types that Go's `encoding/xml` package supports. To configure a server, include `WithResponseNegotiator(negotiator)` in the options passed to `RunServerWithOptions`.
+In this example, JSON is the default and XML is available. XML encoding requires output types that Go's `encoding/xml` package supports. Pass the negotiator as a server option through `RunServers`:
+
+```
+httpserver.RunServers(map[string]httpserver.ServerDefinition{
+
+    "default": {
+
+        RouterFactory: func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+
+            type HelloResponse struct {
+
+                Message string `json:"message" xml:"message"`
+
+            }
+
+            router.GET("/hello", httpserver.BindN(func(ctx context.Context) (HelloResponse, error) {
+
+                return HelloResponse{Message: "Hello, World!"}, nil
+
+            }))
+
+            return nil
+
+        },
+
+        Options: []httpserver.ServerOption{
+
+            httpserver.WithResponseNegotiator(negotiator),
+
+        },
+
+    },
+
+})
+```
 
 ### Customizing responses[​](#customizing-responses "Direct link to Customizing responses")
 
-A typed output can implement `StatusCode() int` to set its HTTP status. The default status is `200 OK`. The complete example returns `201 Created` from `CreateUser` and `204 No Content` from `DeleteUser`:
+A typed output can implement `StatusCode() int` to set its HTTP status. The default status is `200 OK`. The complete example uses this for `201 Created` from `CreateUser`; `DeleteUser` uses an explicit bodyless response, described below.
 
 ```
 type CreatedUserOutput struct {
@@ -452,18 +486,6 @@ type CreatedUserOutput struct {
 func (CreatedUserOutput) StatusCode() int {
 
     return http.StatusCreated
-
-}
-
-
-
-type DeletedUserOutput struct{}
-
-
-
-func (DeletedUserOutput) StatusCode() int {
-
-    return http.StatusNoContent
 
 }
 ```
@@ -485,6 +507,14 @@ func (CreatedUserOutput) Header() http.Header {
 httpserver negotiates the typed output before it applies these methods. The selected representation controls `Content-Type`. A `Header` method cannot override `Content-Type`. A `ContentType() string` method by itself does not change the selected representation.
 
 A full `httpserver.Response` bypasses negotiation. An explicit `Response` implements `ContentType() string`, `Body() ([]byte, error)`, `Header() http.Header`, and `StatusCode() int`. The server does not compare its content type with the request's `Accept` header.
+
+For a bodyless response such as `204 No Content`, use `NewStatusResponse(http.StatusNoContent)`. A typed output with that status is negotiated first and can return `406 Not Acceptable` if `Accept` excludes supported representations; the explicit response preserves `204` regardless of `Accept`.
+
+```
+return httpserver.NewStatusResponse(http.StatusNoContent), nil
+```
+
+This is specific to explicit responses; ordinary typed outputs, including those with custom status codes, remain subject to negotiation.
 
 ```
 func (h *Handler) PlainText(ctx context.Context) (httpserver.Response, error) {
@@ -690,18 +720,6 @@ func (CreatedUserOutput) StatusCode() int {
 
 
 
-type DeletedUserOutput struct{}
-
-
-
-func (DeletedUserOutput) StatusCode() int {
-
-	return http.StatusNoContent
-
-}
-
-
-
 type Handler struct {
 
 	users map[int]*User
@@ -796,11 +814,11 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error
 
 
 
-func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (DeletedUserOutput, error) {
+func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
 
 	delete(h.users, input.Id)
 
-	return DeletedUserOutput{}, nil
+	return httpserver.NewStatusResponse(http.StatusNoContent), nil
 
 }
 
@@ -878,11 +896,21 @@ curl http://localhost:8088/api/users/99
 
 
 
-# Delete a user
+# Delete a user; the explicit bodyless response preserves 204 for this unsupported representation
 
-curl -X DELETE http://localhost:8088/api/users/1 -v
+curl -X DELETE http://localhost:8088/api/users/1 -H "Accept: text/plain" -v
 
 # HTTP/1.1 204 No Content
+
+
+
+# The user was deleted
+
+curl -i http://localhost:8088/api/users/1
+
+# HTTP/1.1 404 Not Found
+
+# {"err":"user not found"}
 
 
 
