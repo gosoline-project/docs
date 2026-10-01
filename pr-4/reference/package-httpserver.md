@@ -244,7 +244,15 @@ httpserver.WithErrorHandler(func(statusCode int, err error) any {
 })
 ```
 
-Configures the error-body handler for the server that receives this option. Ordinary values use response negotiation. By default, 4xx responses return `{"err":"<message>"}` and 5xx responses return `{"err":"internal server error"}`. Set `httpserver.<name>.errors.privacy` to `public` to expose default 5xx error messages.
+Pass this option to `NewServer` or `NewServerWithSettings`, or add it to `ServerDefinition.Options` for `RunServers`. The callback runs after middleware selects a status from the last recorded error.
+
+Status selection checks `ErrorWithStatus` first, then the first matching `WithErrorMapper`. Validation errors use `400 Bad Request`. All other errors use `500 Internal Server Error`.
+
+The callback returns the body to send to the client, not another Go error. The endpoint still returns its error through its normal `(output, error)` result. A returned struct or map keeps the selected HTTP status. Private 5xx privacy passes `internal server error` to the callback.
+
+A struct, map, or other serializable value that does not implement `httpserver.Response` uses the server's response negotiator. It selects a format from `Accept`, serializes the value, and sets `Content-Type`. JSON is the default. XML needs a negotiator that includes `XMLRepresentation()` and a value that `encoding/xml` can encode. In `v0.6.4`, error middleware falls back to JSON with the selected status if negotiation or encoding fails.
+
+An explicit `httpserver.Response` bypasses negotiation and sends its format regardless of `Accept`. It owns the status and headers, including `Content-Type`. It does not inherit the selected error status. For fixed JSON with that status, return `httpserver.NewJsonResponse(body, httpserver.WithStatusCode(statusCode))`.
 
 ### [NewErrorWithStatus()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#newerrorwithstatus "Direct link to newerrorwithstatus")
 
