@@ -428,13 +428,7 @@ if err != nil {
 }
 ```
 
-Install the middleware on a router or group:
-
-```
-router.Use(httpserver.ResponseNegotiationMiddleware(negotiator))
-```
-
-In this example, JSON is the default and XML is available. XML encoding requires output types that Go's `encoding/xml` package supports. Pass the negotiator as a server option through `RunServers`:
+Configure the negotiator for the whole server with `WithResponseNegotiator`. Pass this server option to `NewServer` or `NewServerWithSettings`. When using the application helper, put it in `ServerDefinition.Options` passed to `RunServers`:
 
 ```
 httpserver.RunServers(map[string]httpserver.ServerDefinition{
@@ -469,6 +463,22 @@ httpserver.RunServers(map[string]httpserver.ServerDefinition{
 
 })
 ```
+
+In this example, JSON is the default and XML is available. XML encoding requires output types that Go's `encoding/xml` package supports.
+
+Use `ResponseNegotiationMiddleware` only when a router or group needs to override the server negotiator. For example, this group uses JSON only, while other routes retain the server's JSON and XML representations:
+
+```
+group := router.Group("/json-only")
+
+group.Use(httpserver.ResponseNegotiationMiddleware(
+
+    httpserver.NewDefaultResponseNegotiator(),
+
+))
+```
+
+Register the group's routes after installing the middleware. You do not need this middleware to configure the server-wide negotiator.
 
 ### Customizing responses[​](#customizing-responses "Direct link to Customizing responses")
 
