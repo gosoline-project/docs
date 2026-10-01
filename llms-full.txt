@@ -29,11 +29,11 @@
 - [Test your consumer](/getting-started/testing/test-your-consumer.md): In this tutorial, you'll create an integration test for a message queue consumer that reads from an input and writes to an output.
 - [Working with Relational Databases](/how-to/databases-sql.md): The gosoline framework provides three layered packages for working with relational databases, each building on top of the previous one:
 - [sqlc - SQL Client](/how-to/databases-sql/sqlc.md): The sqlc package provides a fluent API for building and executing SQL queries against relational databases. It supports MySQL and PostgreSQL, and offers connection management, query building, and transaction handling.
-- [sqlh - SQL HTTP Handlers](/how-to/databases-sql/sqlh.md): The sqlh package exposes database entities as REST API endpoints. Built on top of sqlr and sqlc, it provides automatic CRUD handler generation, a transformer pattern for input/output mapping, repository customization hooks, and transaction middleware for wrapping HTTP requests in database transactions.
+- [sqlh - SQL HTTP Handlers](/how-to/databases-sql/sqlh.md): The sqlh package provides typed CRUD handlers for SQLR entities. It uses the current httpserver, sqlc, and sqlr APIs.
 - [sqlr - SQL Repository](/how-to/databases-sql/sqlr.md): The sqlr package provides a generic, type-safe repository layer built on top of sqlc. It offers CRUD operations, relationship management, eager loading via joins and preloads, and transaction support — all using Go generics for compile-time type safety.
 - [Add middleware](/how-to/http-server/add-middleware.md): The httpserver includes a built-in middleware chain and supports custom middleware at both the router and route-group level.
 - [Authenticate requests](/how-to/http-server/authentication.md): The github.com/gosoline-project/httpserver/auth package provides Gin-compatible middleware for common HTTP authentication patterns. You can attach auth middleware to the whole server, to a route group, or to selected routes.
-- [Build an HTTP service](/how-to/http-server/build-an-http-service.md): In this guide, you'll build a complete HTTP service from scratch. You'll start with the basics of defining routes, then level up to type-safe handlers with dependency injection, request binding, and structured responses.
+- [Build an HTTP service](/how-to/http-server/build-an-http-service.md): In this guide, you will build an HTTP service from scratch. You will add routes, typed handlers, dependency injection, request binding, and negotiated responses.
 - [Chaos middleware](/how-to/http-server/chaos-middleware.md): The httpserver includes an optional chaos middleware for resilience testing. When enabled, it randomly introduces failures to exercise client retry logic, circuit breakers, and timeout handling in non-production environments.
 - [Concurrency and connection pressure](/how-to/http-server/concurrency-and-connection-pressure.md): The httpserver provides three complementary mechanisms to protect your service under load:
 - [Configure your server](/how-to/http-server/configure-your-server.md): The httpserver package provides flexible configuration options through YAML config files. All settings live under httpserver. where ` is the server name you pass to NewServer`.
@@ -55,7 +55,8 @@
 - [Build a CLI tool](/how-to/use-cli.md): The pkg/cli package lets you build multi-command CLI tools that run inside the gosoline application lifecycle, giving each command access to the same config, logger, and kernel modules as any other gosoline application.
 - [Implement health checks](/how-to/write-health-checks.md): You can check the health of a running gosoline application.
 - [Migrating to Identity and Naming Patterns](/migrations/app-identity-and-naming-patterns.md): This guide details how to migrate your gosoline application to the new Identity system and dynamic resource naming.
-- [Migrating to the Standalone HTTP Server Package](/migrations/httpserver-package.md): This guide explains how to migrate from the old github.com/justtrackio/gosoline/pkg/httpserver package directly to the standalone github.com/gosoline-project/httpserver module at v0.5.6.
+- [Migrating to the Standalone HTTP Server Package](/migrations/httpserver-package.md): This guide explains how to migrate from the old github.com/justtrackio/gosoline/pkg/httpserver package directly to the standalone github.com/gosoline-project/httpserver module at v0.6.4.
+- [Migrating an Existing Service to SQLH CRUD](/migrations/sqlh-crud.md): This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers.
 - [Migrating to the Callback-Based Stream Consumer Lifecycle](/migrations/stream-consumer-lifecycle.md): This guide covers the breaking stream changes introduced in Gosoline v0.66.0 by commit 04b54462, stream: unify input processing and shutdown. Follow this guide when upgrading from an earlier release to v0.66.0 or later.
 - [Naming patterns](/reference/naming-patterns.md): Gosoline uses naming patterns to generate consistent names for resources (SQS queues, SNS topics, DynamoDB tables, Kafka topics, Redis keys, metric namespaces, tracing service names, ...).
 - [cfg package](/reference/package-cfg.md): With the cfg package, you can configure and use configurations in your gosoline project.
@@ -650,6 +651,8 @@ The HTTP server has always been one of the most commonly used parts of gosoline.
 
 <!-- -->
 
+The updated examples below target `httpserver` v0.6.4.
+
 As part of the ongoing modularization of gosoline, the HTTP server is now available as a standalone package:
 
 <https://github.com/gosoline-project/httpserver>
@@ -796,37 +799,37 @@ The `httpserver.With` pattern is useful because many APIs are organized around c
 The handler methods stay focused on individual endpoints:
 
 ```
-func (h *ReportHandler) Overview(ctx context.Context) (httpserver.Response, error) {
+func (h *ReportHandler) Overview(ctx context.Context) (ReportOverview, error) {
 
     overview, err := h.reports.GetOverview(ctx)
 
     if err != nil {
 
-        return nil, err
+        return ReportOverview{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(overview), nil
+    return overview, nil
 
 }
 
 
 
-func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (httpserver.Response, error) {
+func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (ReportResult, error) {
 
     result, err := h.reports.Run(ctx, input.ReportType, input.Parameters)
 
     if err != nil {
 
-        return nil, err
+        return ReportResult{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(result), nil
+    return result, nil
 
 }
 
@@ -854,6 +857,10 @@ func (h *ReportHandler) Export(ctx context.Context, input *ExportReportInput) (h
 
 }
 ```
+
+`Overview` and `Run` return typed values for response negotiation. `Export` keeps an explicit response because it sends file bytes with a selected media type.
+
+See [Customizing responses](/docs/how-to/http-server/build-an-http-service/.md#customizing-responses) for status, header, and explicit `Response` rules.
 
 This consolidation is not required for every route. Separate handlers are still fine when routes have genuinely different dependencies or lifecycle requirements. But for most cohesive route groups, one handler service with multiple endpoint methods is the cleaner shape.
 
@@ -918,19 +925,19 @@ type RunReportInput struct {
 
 
 
-func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (httpserver.Response, error) {
+func (h *ReportHandler) Run(ctx context.Context, input *RunReportInput) (ReportResult, error) {
 
     result, err := h.reports.Run(ctx, input.ReportType, input.Parameters)
 
     if err != nil {
 
-        return nil, err
+        return ReportResult{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(result), nil
+    return result, nil
 
 }
 ```
@@ -1405,7 +1412,7 @@ Copyright © 2026 justtrack
 
 ## [📄️Build an HTTP service](/docs/how-to/http-server/build-an-http-service/.md)
 
-[In this guide, you'll build a complete HTTP service from scratch. You'll start with the basics of defining routes, then level up to type-safe handlers with dependency injection, request binding, and structured responses.](/docs/how-to/http-server/build-an-http-service/.md)
+[In this guide, you will build an HTTP service from scratch. You will add routes, typed handlers, dependency injection, request binding, and negotiated responses.](/docs/how-to/http-server/build-an-http-service/.md)
 
 
 ---
@@ -2924,28 +2931,31 @@ The `sqlr` package provides an ORM-like experience built on top of `sqlc`. It us
 
 **Key capabilities:**
 
-* Generic Repository pattern with Create, Read, Update, Delete, Query operations
+* Generic Repository pattern with Create, Read, Update, Delete, Query, and Count operations
 * Entity definition with struct tags for schema mapping
 * Relationship support: HasOne, HasMany, BelongsTo, ManyToMany
 * Eager loading via Preload for related entities
 * Join support for HasOne, HasMany, BelongsTo relations
+* Row locking with `ForUpdate()` inside transactions
 * Transaction-aware repository variant
 
 ## sqlh - SQL HTTP Handlers[​](#sqlh---sql-http-handlers "Direct link to sqlh - SQL HTTP Handlers")
 
-The `sqlh` package exposes repository CRUD operations through HTTP endpoints. It integrates with the gosoline HTTP server.
+The `sqlh` package provides typed, transaction-aware CRUD handlers for SQLR entities. It integrates with the gosoline HTTP server.
 
 **When to use sqlh:**
 
 * Building REST APIs for entity management
-* Need quick CRUD endpoints without boilerplate
-* Want consistent API patterns across entities
+* Need CRUD endpoints without repetitive transaction and repository code
+* Need JSON Merge Patch, server-owned filters, or custom identity and delete behavior
 
 **Key capabilities:**
 
-* Automatic CRUD handler generation for entities
-* Transformer pattern for input/output mapping
-* JSON filter support for query endpoints
+* Typed CRUD definitions with create, update, patch, list, and delete operations
+* Automatic transactions with commit and rollback behavior
+* JSON Merge Patch with selective association synchronization
+* Typed list results with shared query and count scopes
+* Force filters for authorization and tenant restrictions
 * Integration with gosoline HTTP server routing
 
 ## Choosing the Right Layer[​](#choosing-the-right-layer "Direct link to Choosing the Right Layer")
@@ -2973,7 +2983,7 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```
-go get github.com/gosoline-project/sqlc@v0.3.0
+go get github.com/gosoline-project/sqlc@v0.4.0
 ```
 
 Then import the package in your Go code:
@@ -3403,6 +3413,44 @@ if err := rows.Err(); err != nil {
 }
 ```
 
+## SELECT FOR UPDATE[​](#select-for-update "Direct link to SELECT FOR UPDATE")
+
+`ForUpdate()` adds a typed `FOR UPDATE` clause to a SELECT query. The database holds the selected row locks until the current transaction ends. Outside a transaction, the database releases the locks when the statement ends.
+
+`ForUpdate()` follows the immutable builder pattern. It returns a new builder and does not change the original query. SQLC writes the clause after `LIMIT` and `OFFSET`:
+
+```
+query := sqlc.From("experiments").
+
+    Where(sqlc.Col("status").Eq("scheduled")).
+
+    Limit(10).
+
+    Offset(20).
+
+    ForUpdate()
+
+
+
+sql, args, err := query.ToSql()
+
+// sql: SELECT * FROM `experiments` WHERE `status` = ? LIMIT ? OFFSET ? FOR UPDATE
+
+// args: []any{"scheduled", 10, 20}
+```
+
+The generic builder exposes the same method:
+
+```
+query := sqlc.FromG[Experiment]("experiments").
+
+    Where(sqlc.Col("status").Eq("scheduled")).
+
+    ForUpdate()
+```
+
+Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. SQLR v0.9.1 also applies a repository query's `ForUpdate()` setting to its preloads.
+
 ## UPDATE Operations[​](#update-operations "Direct link to UPDATE Operations")
 
 Use `Update()` to create an UPDATE builder. Chain `Set()` for column values and `Where()` for conditions:
@@ -3730,33 +3778,35 @@ When creating a client from a wrapped handle, make sure the `QueryBuilderConfig`
 ## Integration Notes[​](#integration-notes "Direct link to Integration Notes")
 
 * `sqlr.RepositoryTx` can reuse prepared statements inside transactions, but the repository client must come from the same connection source that opens the transaction.
-* `sqlh.WithTx()` currently opens request-scoped transactions from the `default` sqlc client. If your handlers or repositories use another named client, use matching middleware or a custom transaction setup.
-* In `sqlh`, the request-scoped transaction created by `WithTx()` is consumed by the `BindTx*` helpers. Generated CRUD handlers use repositories directly and do not automatically switch to that request transaction.
+* SQLH creates one transaction for each default CRUD operation and uses a transaction-aware SQLR repository built from the same SQL client.
+* SQLH `*Operation` callbacks already receive the active `sqlr.TTx`. Use it directly. Do not start another transaction.
+* For a separate typed handler outside SQLH CRUD, use `sqlh.TxRunner` or `sqlc.Client.WithTx()`. `TxRunner` supplies `sqlr.TTx`. `WithTx()` supplies `sqlc.Tx`. Wrap `sqlc.Tx` with `sqlr.NewTx(tx)` for SQLR calls. Use the raw `sqlc.Tx` for SQLC calls.
+* SQLR `Count()` strips row locking and pagination. Apply the same filters and scope to the list query and count query.
 
 
 ---
 
 # sqlh - SQL HTTP Handlers
 
-The `sqlh` package exposes database entities as REST API endpoints. Built on top of [`sqlr`](/docs/how-to/databases-sql/sqlr/.md) and [`sqlc`](/docs/how-to/databases-sql/sqlc/.md), it provides automatic CRUD handler generation, a transformer pattern for input/output mapping, repository customization hooks, and transaction middleware for wrapping HTTP requests in database transactions.
+The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the current `httpserver`, `sqlc`, and `sqlr` APIs. SQLH runs each default CRUD operation in a database transaction and returns a typed value. That transaction does not make external effects or non-transactional DDL atomic.
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
-Add the dependency to your Go module:
+Install SQLH v0.8.0:
 
 ```
-go get github.com/gosoline-project/sqlh@v0.7.0
+go get github.com/gosoline-project/sqlh@v0.8.0
 ```
 
-Then import the package in your Go code:
+SQLH v0.8.0 uses `httpserver` v0.6.4, `sqlc` v0.4.0, and `sqlr` v0.9.1. Use these versions for the examples. SQLH v0.8.0 requires Go 1.27.0 or newer.
+
+Then import the package:
 
 ```
 import "github.com/gosoline-project/sqlh"
 ```
 
-## Configuration[​](#configuration "Direct link to Configuration")
-
-The `sqlh` package requires both an HTTP server and a database client. Configure them under the `httpserver` and `sqlc` keys respectively:
+Configure the HTTP server and the SQL client before the handler starts:
 
 config.dist.yml
 
@@ -3798,15 +3848,36 @@ sqlc:
       path: migrations
 ```
 
-The HTTP server configuration is described in the httpserver documentation. The database configuration follows the same format described in the [sqlc documentation](/docs/how-to/databases-sql/sqlc/.md#configuration).
+Each runnable example loads `config.dist.yml` from disk in the current working directory. Run each example from its own directory. The migration path in its config is relative to that directory.
 
-## CRUD Handlers[​](#crud-handlers "Direct link to CRUD Handlers")
+## CRUD Model[​](#crud-model "Direct link to CRUD Model")
 
-The `WithCrudHandlers` function generates a complete set of REST endpoints for an entity. It connects an `sqlr` repository with a transformer to handle input/output mapping, and accepts optional configuration for custom repository setup.
+SQLH separates four concerns:
 
-### Defining Entities[​](#defining-entities "Direct link to Defining Entities")
+| Concern        | Callback                                                                    |
+| -------------- | --------------------------------------------------------------------------- |
+| Create mapping | `CreateInput` maps an HTTP input to a new entity.                           |
+| Update mapping | `UpdateInput` applies a complete input to a loaded entity.                  |
+| Patch mapping  | `PatchInputFromEntity` creates the complete input used by JSON Merge Patch. |
+| Output mapping | `Output` maps an entity to a typed response value.                          |
 
-Entities use the same `sqlr.Entity` base struct described in the [sqlr documentation](/docs/how-to/databases-sql/sqlr/.md#defining-entities):
+The update input must expose the route identity. Embed `sqlh.InputById[Id]`, where `Id` is the public route key type. Its `Id` field binds from the `id` URI parameter, not JSON. The stored SQL key type `K` can differ only when the definition supplies a custom `Identity`. SQLH rejects different Go types for `Id` and `K` without it.
+
+```
+type AuthorUpdateInput struct {
+
+    sqlh.InputById[int64]
+
+    Name string `json:"name" binding:"required"`
+
+}
+```
+
+`InputById` also carries server-owned force filters. Use it when the read, update, patch, or delete lookup must respect request-specific authorization restrictions.
+
+### Define an Entity and Callbacks[​](#define-an-entity-and-callbacks "Direct link to Define an Entity and Callbacks")
+
+The following example uses one definition for create, update, patch, and output mapping:
 
 main.go
 
@@ -3822,10 +3893,6 @@ type Author struct {
 }
 ```
 
-### Input Types[​](#input-types "Direct link to Input Types")
-
-Define separate types for create and update input. These decouple the HTTP API from the database entity:
-
 main.go
 
 ```
@@ -3833,7 +3900,7 @@ type AuthorCreateInput struct {
 
   Name  string `json:"name" binding:"required"`
 
-  Email string `json:"email" binding:"required"`
+  Email string `json:"email" binding:"required,email"`
 
 }
 
@@ -3841,28 +3908,39 @@ type AuthorCreateInput struct {
 
 type AuthorUpdateInput struct {
 
+  sqlh.InputById[int64]
+
   Name string `json:"name" binding:"required"`
+
+}
+
+
+
+type AuthorOutput struct {
+
+  Id        int64     `json:"id"`
+
+  Name      string    `json:"name"`
+
+  Email     string    `json:"email"`
+
+  CreatedAt time.Time `json:"created_at"`
+
+  UpdatedAt time.Time `json:"updated_at"`
 
 }
 ```
 
-Using separate input types lets you:
-
-* Validate input with `binding` tags (e.g., `binding:"required"`)
-* Exclude internal fields (like `Id` or `CreatedAt`) from create/update payloads
-
-### Implementing the Transformer[​](#implementing-the-transformer "Direct link to Implementing the Transformer")
-
-The `Transformer[K, E, IC, IU]` interface converts between input types and entity types, and controls how responses are rendered. Implement `TransformCreateInput`, `TransformUpdateInput`, `RenderEntityResponse`, and `RenderQueryResponse`:
+`NewCrudDefinition` accepts the four required callbacks. `SimpleCrudDefinition` wraps the definition in the application factory shape:
 
 main.go
 
 ```
-type AuthorTransformer struct{}
+type AuthorMapper struct{}
 
 
 
-func (t *AuthorTransformer) TransformCreateInput(_ context.Context, input *AuthorCreateInput) (*Author, error) {
+func (t *AuthorMapper) TransformCreateInput(_ context.Context, input *AuthorCreateInput) (*Author, error) {
 
   return &Author{
 
@@ -3876,7 +3954,15 @@ func (t *AuthorTransformer) TransformCreateInput(_ context.Context, input *Autho
 
 
 
-func (t *AuthorTransformer) TransformUpdateInput(_ context.Context, entity *Author, input *AuthorUpdateInput) (*Author, error) {
+func (t *AuthorMapper) TransformUpdateInput(_ context.Context, entity *Author, input *AuthorUpdateInput) (*Author, error) {
+
+  if err := binding.Validator.ValidateStruct(input); err != nil {
+
+    return nil, validation.NewError(err)
+
+  }
+
+
 
   entity.Name = input.Name
 
@@ -3888,203 +3974,42 @@ func (t *AuthorTransformer) TransformUpdateInput(_ context.Context, entity *Auth
 
 
 
-func (t *AuthorTransformer) RenderEntityResponse(_ context.Context, entity *Author) (httpserver.Response, error) {
+func (t *AuthorMapper) TransformPatchInputFromEntity(_ context.Context, entity *Author) (*AuthorUpdateInput, error) {
 
-  return httpserver.NewJsonResponse(entity), nil
+  return &AuthorUpdateInput{
 
-}
+    InputById: sqlh.InputById[int64]{Id: entity.Id},
 
+    Name:      entity.Name,
 
-
-func (t *AuthorTransformer) RenderQueryResponse(_ context.Context, entities []Author) (httpserver.Response, error) {
-
-  return httpserver.NewJsonResponse(entities), nil
+  }, nil
 
 }
-```
-
-The type parameters are:
-
-| Parameter | Description                                   |
-| --------- | --------------------------------------------- |
-| `K`       | Primary key type (e.g., `int64`)              |
-| `E`       | Entity type (e.g., `Author`)                  |
-| `IC`      | Create input type (e.g., `AuthorCreateInput`) |
-| `IU`      | Update input type (e.g., `AuthorUpdateInput`) |
-
-The interface requires four methods:
-
-| Method                 | Description                                                  |
-| ---------------------- | ------------------------------------------------------------ |
-| `TransformCreateInput` | Converts a create input DTO into a new entity                |
-| `TransformUpdateInput` | Merges an update input DTO into an existing entity           |
-| `RenderEntityResponse` | Serialises a single entity into an `httpserver.Response`     |
-| `RenderQueryResponse`  | Serialises a slice of entities into an `httpserver.Response` |
-
-In the simple case above, `RenderEntityResponse` and `RenderQueryResponse` return the entity directly as JSON. See [Customizing Output Transformers](#customizing-output-transformers) for approaches when you need a separate output shape.
-
-### Registering CRUD Handlers[​](#registering-crud-handlers "Direct link to Registering CRUD Handlers")
-
-Use `WithCrudHandlers` to generate all endpoints and register them with the HTTP server:
-
-main.go
-
-```
-func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-
-  router.HandleWith(sqlh.WithCrudHandlers(1, "author", sqlh.SimpleTransformer(&AuthorTransformer{})))
 
 
 
-  return nil
+func (t *AuthorMapper) TransformOutput(_ context.Context, entity *Author) (AuthorOutput, error) {
 
-},
-```
+  return AuthorOutput{
 
-The arguments are:
+    Id:        entity.Id,
 
-| Argument             | Description                                                             |
-| -------------------- | ----------------------------------------------------------------------- |
-| `version`            | API version number, used in the URL path (e.g., `1` produces `/v1/...`) |
-| `entityName`         | Singular entity name for the URL path (e.g., `"author"`)                |
-| `transformerFactory` | Factory that creates the transformer instance                           |
-| `options`            | Optional `sqlh.Option` values that customize repository creation        |
+    Name:      entity.Name,
 
-By default, CRUD handlers create an `sqlr.Repository` against the `default` SQL client. Pass additional options to change that behavior:
+    Email:     entity.Email,
 
-* `sqlh.WithClientName[K, E](name)` selects a different configured SQL client for the default repository factory.
-* `sqlh.WithRepositoryFactory[K, E](factory)` replaces repository construction entirely.
+    CreatedAt: entity.CreatedAt,
 
-### Generated Endpoints[​](#generated-endpoints "Direct link to Generated Endpoints")
+    UpdatedAt: entity.UpdatedAt,
 
-`WithCrudHandlers` registers five endpoints:
-
-| Method   | Path                 | Handler        | Description                                       |
-| -------- | -------------------- | -------------- | ------------------------------------------------- |
-| `POST`   | `/v{n}/{entity}`     | `HandleCreate` | Creates an entity from `IC` input                 |
-| `GET`    | `/v{n}/{entity}/:id` | `HandleRead`   | Reads a single entity by ID                       |
-| `PUT`    | `/v{n}/{entity}/:id` | `HandleUpdate` | Updates an entity from `IU` input                 |
-| `DELETE` | `/v{n}/{entity}/:id` | `HandleDelete` | Deletes an entity by ID; returns `204 No Content` |
-| `POST`   | `/v{n}/{entities}`   | `HandleQuery`  | Queries entities with a JSON filter               |
-
-The query endpoint uses the **plural** form of the entity name (e.g., `"author"` becomes `"/v1/authors"`). Pluralization is handled automatically.
-
-### Handler Behavior[​](#handler-behavior "Direct link to Handler Behavior")
-
-All generated CRUD handlers follow the same high-level pattern: bind input, delegate persistence to `sqlr.Repository`, and render the result through the configured transformer.
-
-| Handler        | Flow                                                                                                                                                                          |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HandleCreate` | Binds `IC`, calls `TransformCreateInput`, persists via `repo.Create()`, then renders the created entity (including any post-create preloads configured on the create builder) |
-| `HandleRead`   | Loads a single entity via `repo.Read()` and renders it                                                                                                                        |
-| `HandleQuery`  | Converts the JSON filter into an `sqlc.Expression`, calls `repo.Query()`, then renders the result list                                                                        |
-| `HandleUpdate` | Loads the existing entity via `repo.Read()`, applies `TransformUpdateInput`, persists via `repo.Update()`, then renders the entity returned by `Update()`                     |
-| `HandleDelete` | Deletes the entity via `repo.Delete()` and returns `204 No Content`                                                                                                           |
-
-The update flow is slightly different from the others: `HandleUpdate` renders the rehydrated entity returned by `sqlr.Update()` rather than issuing a separate follow-up `Read()` call. That means post-update preloads configured on the update builder are reflected directly in the HTTP response. See [`sqlr` Update with Post-Update Preloading](/docs/how-to/databases-sql/sqlr/.md#update-with-post-update-preloading) for the underlying repository behavior.
-
-### Query with JSON Filter[​](#query-with-json-filter "Direct link to Query with JSON Filter")
-
-The query endpoint accepts a JSON body with a `filter` field that maps to `sqlc.JsonFilter`:
-
-```
-{
-
-  "filter": {
-
-    "column": "name",
-
-    "operator": "=",
-
-    "value": "Alice"
-
-  }
+  }, nil
 
 }
 ```
 
-The filter is converted to an `sqlc.Expression` and applied as a WHERE condition on the query. See the [sqlc JSON filter documentation](/docs/how-to/databases-sql/sqlc/.md) for the full filter syntax.
+The `Output` callback returns a Go value. `httpserver.Bind` negotiates its representation from the request's `Accept` header. A typed output can implement `StatusCode() int` and `Header() http.Header` to set its status and headers. An explicit `httpserver.Response` bypasses negotiation. See [Customizing responses](/docs/how-to/http-server/build-an-http-service/.md#customizing-responses) for response overrides and content types.
 
-### Association Tags[​](#association-tags "Direct link to Association Tags")
-
-CRUD handlers can also configure association loading and syncing directly from entity relationship fields with the `sqlh` struct tag:
-
-```
-type Author struct {
-
-    sqlr.Entity[int64]
-
-    ProfileID int64         `db:"profile_id"`
-
-    Profile   Profile       `db:"-" sqlr:"belongsTo:profile_id" sqlh:"preload:create,read,query,update"`
-
-    Tags      []Tag         `db:"-" sqlr:"many2many:author_tags" sqlh:"preload:create,read;sync:create,update,delete"`
-
-}
-```
-
-Supported directives are:
-
-| Directive | Phases                              | Effect                                                                                                                                    |
-| --------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `preload` | `create`, `read`, `query`, `update` | Adds `Preload()` to the matching CRUD builder; on `create` and `update`, it configures the post-write reload used for the returned entity |
-| `sync`    | `create`, `update`, `delete`        | Calls `SyncAssociation()` for the association while persisting or cleaning up the entity                                                  |
-
-`sqlh` tags are additive to the association behavior already defined by `sqlr`. The relationship itself must still be declared via an explicit `sqlr` relationship tag or discovered through [`sqlr` auto-detected relationships](/docs/how-to/databases-sql/sqlr/.md#auto-detected-relationships); the `sqlh` tag only adds CRUD-specific preload and sync behavior on top. `db:"-"` remains optional for relationship fields. In particular, `sqlh` preload phases are merged with any preload behavior already configured in `sqlr`, rather than replacing it.
-
-For creates, `sqlh:"preload:create"` is applied to the underlying `sqlr.Create()` builder, so the entity returned by the create handler is reloaded with those relations already hydrated. This follows the same post-create preload behavior described in [`sqlr` Create with Post-Create Preloading](/docs/how-to/databases-sql/sqlr/.md#create-with-post-create-preloading).
-
-For updates, `sqlh:"preload:update"` is applied to the underlying `sqlr.Update()` builder, so the entity returned by the update handler is reloaded with those relations already hydrated. This follows the same post-update preload behavior described in [`sqlr` Update with Post-Update Preloading](/docs/how-to/databases-sql/sqlr/.md#update-with-post-update-preloading).
-
-For delete operations, `sync:delete` configures the association cleanup passed to the underlying `sqlr.Delete()` call, following the same cleanup semantics described in [`sqlr` Delete with Association Cleanup](/docs/how-to/databases-sql/sqlr/.md#delete-with-association-cleanup).
-
-Tags are only valid on association fields recognised by [`sqlr` relationships](/docs/how-to/databases-sql/sqlr/.md#relationships); using them on scalar fields causes startup to fail with an error. Tagged associations are traversed recursively, so nested paths such as `Child.Nested` are picked up automatically when the related entity also declares `sqlh` tags.
-
-For the underlying `sqlr` behavior behind these options, see [Read with Association Loading](/docs/how-to/databases-sql/sqlr/.md#read-with-association-loading), [Eager Loading with Preload](/docs/how-to/databases-sql/sqlr/.md#eager-loading-with-preload), [Create with Selective Association Persistence](/docs/how-to/databases-sql/sqlr/.md#create-with-selective-association-persistence), [Create with Post-Create Preloading](/docs/how-to/databases-sql/sqlr/.md#create-with-post-create-preloading), [Update with Association Sync](/docs/how-to/databases-sql/sqlr/.md#update-with-association-sync), and [Delete with Association Cleanup](/docs/how-to/databases-sql/sqlr/.md#delete-with-association-cleanup).
-
-### Wiring into the Application[​](#wiring-into-the-application "Direct link to Wiring into the Application")
-
-Register handlers with the gosoline HTTP server using `router.HandleWith()`:
-
-main.go
-
-```
-func main() {
-
-  application.New(
-
-    application.WithConfigBytes(config, "yml"),
-
-    application.WithLoggerHandlersFromConfig,
-
-    application.WithModuleFactory("http", httpserver.NewServer(
-
-      "default",
-
-      func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-
-        router.HandleWith(sqlh.WithCrudHandlers(1, "author", sqlh.SimpleTransformer(&AuthorTransformer{})))
-
-
-
-        return nil
-
-      },
-
-    )),
-
-  ).Run()
-
-}
-```
-
-## Customizing Output Transformers[​](#customizing-output-transformers "Direct link to Customizing Output Transformers")
-
-The `Transformer` interface is the primary extension point for controlling how entities are serialised in API responses. Because it is a plain Go interface, a single implementation can be written once and reused across multiple entities — or shared as an internal library across services. This makes it straightforward to enforce consistent response shapes, pagination envelopes, or field-level access control in one place.
-
-### JsonResultsTransformer[​](#jsonresultstransformer "Direct link to JsonResultsTransformer")
-
-`JsonResultsTransformer[K, E, IC, IU]` is a simplified variant of `Transformer` for the common case where you want to map entities to a dedicated output type and return them as JSON, without needing to construct `httpserver.Response` values manually. Implement three methods — `TransformCreateInput`, `TransformUpdateInput`, and a single `TransformOutput` that converts one entity to any JSON-serialisable value — and pass the implementation to `NewJsonResultsTransformer`. The wrapping of single and multi-entity responses into JSON is handled automatically, and optional CRUD builder hooks implemented by the transformer — including create hooks, delete hooks, and the split update read/write hooks — are forwarded too:
+For a dedicated response DTO, map the entity in the output callback:
 
 user\_crud.go
 
@@ -4098,6 +4023,8 @@ type (
   }
 
   UserUpdateInput struct {
+
+    sqlh.InputById[int]
 
     Name string `json:"name"`
 
@@ -4129,11 +4056,11 @@ type (
 user\_crud.go
 
 ```
-type UserTransformer struct{}
+type UserMapper struct{}
 
 
 
-func (t *UserTransformer) TransformCreateInput(ctx context.Context, input *UserCreateInput) (*User, error) {
+func (t *UserMapper) TransformCreateInput(_ context.Context, input *UserCreateInput) (*User, error) {
 
   return &User{
 
@@ -4145,7 +4072,15 @@ func (t *UserTransformer) TransformCreateInput(ctx context.Context, input *UserC
 
 
 
-func (t *UserTransformer) TransformUpdateInput(ctx context.Context, user *User, input *UserUpdateInput) (*User, error) {
+func (t *UserMapper) TransformUpdateInput(_ context.Context, user *User, input *UserUpdateInput) (*User, error) {
+
+  if err := binding.Validator.ValidateStruct(input); err != nil {
+
+    return nil, validation.NewError(err)
+
+  }
+
+
 
   user.Name = input.Name
 
@@ -4157,7 +4092,21 @@ func (t *UserTransformer) TransformUpdateInput(ctx context.Context, user *User, 
 
 
 
-func (t *UserTransformer) TransformOutput(ctx context.Context, user *User) (any, error) {
+func (t *UserMapper) TransformPatchInputFromEntity(_ context.Context, user *User) (*UserUpdateInput, error) {
+
+  return &UserUpdateInput{
+
+    InputById: sqlh.InputById[int]{Id: user.Id},
+
+    Name:      user.Name,
+
+  }, nil
+
+}
+
+
+
+func (t *UserMapper) TransformOutput(_ context.Context, user *User) (UserOutput, error) {
 
   return UserOutput{
 
@@ -4174,63 +4123,224 @@ func (t *UserTransformer) TransformOutput(ctx context.Context, user *User) (any,
 }
 ```
 
-user\_crud.go
+### Register Standard Routes[​](#register-standard-routes "Direct link to Register Standard Routes")
+
+Use `WithCrudHandlers` when the standard route paths and delete response meet your API contract:
+
+main.go
 
 ```
-func NewUserCrud() httpserver.RegisterFactoryFunc {
+func NewAuthorCrud() httpserver.RegisterFactoryFunc {
 
-  return sqlh.WithCrudHandlers(0, "user", sqlh.NewJsonResultsTransformer(&UserTransformer{}))
+  transformer := &AuthorMapper{}
+
+  definition := sqlh.NewCrudDefinition(
+
+    transformer.TransformCreateInput,
+
+    transformer.TransformUpdateInput,
+
+    transformer.TransformPatchInputFromEntity,
+
+    transformer.TransformOutput,
+
+  )
+
+
+
+  return sqlh.WithCrudHandlers(1, "author", sqlh.SimpleCrudDefinition(definition))
 
 }
 ```
 
-Because `TransformOutput` receives a single entity, the same function is used for both single-entity and list responses — there is no duplication. Use the full `Transformer` interface directly when you need control over HTTP status codes, headers, or non-JSON response bodies.
+The generated routes are:
 
-### Wiring Transformers[​](#wiring-transformers "Direct link to Wiring Transformers")
+| Method   | Path                          | Operation                    |
+| -------- | ----------------------------- | ---------------------------- |
+| `POST`   | `/v{version}/{entity}`        | Create                       |
+| `GET`    | `/v{version}/{entity}/:id`    | Read                         |
+| `PUT`    | `/v{version}/{entity}/:id`    | Complete update              |
+| `PATCH`  | `/v{version}/{entity}/:id`    | JSON Merge Patch             |
+| `DELETE` | `/v{version}/{entity}/:id`    | Delete with `204 No Content` |
+| `POST`   | `/v{version}/{plural-entity}` | List and count               |
 
-Use `sqlh.SimpleTransformer()` to wrap an already-constructed transformer into a factory when it has no startup dependencies:
+For example, version `1` and entity name `author` produce `/v1/author` and `/v1/authors`.
+
+The default delete route uses `DeleteNoContent`. Use `NewCrudHandler` for a delete route that returns the entity:
+
+main.go
 
 ```
-sqlh.SimpleTransformer[K, E, IC, IU](&MyTransformer{})
+type AuthorCrudHandler = sqlh.CrudHandler[int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, sqlh.ListInput, AuthorOutput]
+
+
+
+func NewAuthorHandler() httpserver.HandlerFactory[AuthorCrudHandler] {
+
+  transformer := &AuthorMapper{}
+
+  definition := sqlh.NewCrudDefinition(
+
+    transformer.TransformCreateInput,
+
+    transformer.TransformUpdateInput,
+
+    transformer.TransformPatchInputFromEntity,
+
+    transformer.TransformOutput,
+
+  )
+
+  definition.DeleteOutput = definition.Output
+
+
+
+  return sqlh.NewCrudHandler(sqlh.SimpleCrudDefinition(definition))
+
+}
 ```
 
-For transformers that require configuration or other dependencies at startup, implement `TransformerFactory` directly:
+```
+router.HandleWith(httpserver.With(NewAuthorHandler(), func(router *httpserver.Router, handler *AuthorCrudHandler) {
+
+    router.DELETE("/v1/resources/:id", httpserver.Bind(handler.Delete, httpserver.NoBodyBinding{}))
+
+}))
+```
+
+`NewAuthorHandler` sets `DeleteOutput` to the normal output mapper. Without `DeleteOutput`, `handler.Delete` cannot return a body.
+
+### Register Custom Paths[​](#register-custom-paths "Direct link to Register Custom Paths")
+
+Use `NewCrudHandler` when an existing API has different paths, singular and plural names, or response behavior:
 
 ```
-type TransformerFactory[K, E, IC, IU] func(ctx context.Context, config cfg.Config, logger log.Logger) (Transformer[K, E, IC, IU], error)
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+
+    router.HandleWith(httpserver.With(NewAuthorHandler(), func(router *httpserver.Router, handler *AuthorCrudHandler) {
+
+        router.POST("/v1/resource", httpserver.Bind(handler.Create))
+
+        router.POST("/v1/resources", httpserver.Bind(handler.List))
+
+        router.GET("/v1/resources/:id", httpserver.Bind(handler.Read, httpserver.NoBodyBinding{}))
+
+        router.PUT("/v1/resources/:id", httpserver.Bind(handler.Update))
+
+        router.PATCH("/v1/resources/:id", httpserver.Bind(handler.Patch))
+
+        router.DELETE("/v1/resources/:id", httpserver.Bind(handler.Delete, httpserver.NoBodyBinding{}))
+
+    }))
+
+
+
+    return nil
+
+}
 ```
 
-This follows the standard gosoline factory pattern and gives the transformer access to the application config and logger during initialisation.
+This pattern preserves existing public routes while SQLH owns the transaction and CRUD flow for each registered SQLH route.
 
-## CRUD Builder Hooks[​](#crud-builder-hooks "Direct link to CRUD Builder Hooks")
+## Transactions[​](#transactions "Direct link to Transactions")
 
-Both `Transformer` and `JsonResultsTransformer` implementations can optionally customize generated CRUD queries by implementing one or more builder-aware interfaces:
+SQLH creates one transaction for every default CRUD operation. It loads the entity, applies the mapper, synchronizes selected associations, maps the output, and commits only after the operation succeeds. An operation, mapper, validation, repository, or output error rolls back SQL changes on that transaction. That rollback cannot undo blob-store or other external effects, and MySQL DDL may commit implicitly. Keep lifecycle effects outside SQLH CRUD when the old order or failure behavior requires it. The HTTP server renders the result after the commit.
 
-| Interface                 | Builder                   | Used for                                                                                                               |
-| ------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `BuilderCreateAware`      | `sqlr.QueryBuilderCreate` | Customize create persistence                                                                                           |
-| `BuilderReadAware`        | `sqlr.QueryBuilderRead`   | Customize single-entity reads                                                                                          |
-| `BuilderQueryAware`       | `sqlr.QueryBuilderSelect` | Customize list/query requests                                                                                          |
-| `BuilderDeleteAware`      | `sqlr.QueryBuilderDelete` | Customize delete cleanup                                                                                               |
-| `BuilderUpdateReadAware`  | `sqlr.QueryBuilderRead`   | Customize the read of the existing entity before `TransformUpdateInput` runs                                           |
-| `BuilderUpdateWriteAware` | `sqlr.QueryBuilderUpdate` | Customize the `Update()` call itself, including association sync and post-update preloads used for the returned entity |
+The SQLH repository must use the same SQL client that starts the transaction. This requirement is important when SQLR uses prepared statements. The default handler factory creates both objects from the configured client.
 
-The update flow is intentionally split across two hooks. Use `BuilderUpdateReadAware` when the transformer needs additional relations loaded before it merges the incoming update DTO into the existing entity. Use `BuilderUpdateWriteAware` when you need to change how `sqlr.Update()` executes, including which relations are synchronized and which associations are preloaded onto the rehydrated entity returned in the HTTP response.
+The old `sqlh.WithTx`, `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR` APIs are removed. SQLH `*Operation` callbacks already receive the active `sqlr.TTx`. Use it directly for SQL work. Do not start another transaction inside a callback. For another typed operation outside a CRUD definition, use `TxRunner` and adapt it to the handler signature:
 
-## Custom Repository Implementations[​](#custom-repository-implementations "Direct link to Custom Repository Implementations")
+main.go
 
-By default, `WithCrudHandlers` creates a regular `sqlr.Repository` using the `default` SQL client. When you need different startup behavior, you can customize repository creation with dedicated options instead of changing your handler logic.
+```
+type PostHandler struct {
 
-### Choosing an Option[​](#choosing-an-option "Direct link to Choosing an Option")
+  runner   *sqlh.TxRunner
 
-* Use `sqlh.WithClientName[K, E](name)` when the standard `sqlr.NewRepository()` behavior is correct and you only want to point it at a different configured SQL client.
-* Use `sqlh.WithRepositoryFactory[K, E](factory)` when you want full control over repository construction, such as wrapping the default repository, adding opinionated query defaults, or returning a completely custom implementation.
+  postRepo sqlr.RepositoryTx[int64, Post]
 
-The factory is called once during application startup and receives the application `context`, `config`, `logger`, and the selected client name.
+}
 
-### Example Configuration[​](#example-configuration "Direct link to Example Configuration")
 
-This example configures both a `default` and a `reporting` SQL client. The custom repository factory honors the configured client name, so the same wrapper can be reused with either connection:
+
+func NewPostHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*PostHandler, error) {
+
+  client, err := sqlc.ProvideClient(ctx, config, logger, "default")
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  postRepo, err := sqlr.NewRepositoryTxWithSettings[int64, Post](client, sqlr.DefaultSettings())
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  runner, err := sqlh.NewTxRunnerWithClient(client)
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  return &PostHandler{runner: runner, postRepo: postRepo}, nil
+
+}
+
+
+
+func (h *PostHandler) CreatePost(ctx context.Context, input *PostCreateInput) (PostOutput, error) {
+
+  return h.runner.RunValue(ctx, input, func(ctx context.Context, tx sqlr.TTx, input *PostCreateInput) (PostOutput, error) {
+
+    post := &Post{
+
+      Title:  input.Title,
+
+      Body:   input.Body,
+
+      Status: "draft",
+
+    }
+
+
+
+    if err := h.postRepo.Create(tx, post); err != nil {
+
+      return PostOutput{}, fmt.Errorf("failed to create post: %w", err)
+
+    }
+
+
+
+    return PostOutput{
+
+      Id:     post.Id,
+
+      Title:  post.Title,
+
+      Body:   post.Body,
+
+      Status: post.Status,
+
+    }, nil
+
+  })
+
+}
+```
 
 config.dist.yml
 
@@ -4270,6 +4380,780 @@ sqlc:
       reset: true
 
       path: migrations
+```
+
+`TxRunner.Run` rolls back transaction-bound SQL changes when the operation returns an error or panics. It cannot undo blob-store or other external effects. `RunValue` returns the value only after commit. `InTransaction` converts a transaction-aware operation to the function shape accepted by `httpserver.Bind`.
+
+## Input and Output Types[​](#input-and-output-types "Direct link to Input and Output Types")
+
+Use separate input types for create and update requests. This keeps database fields and server-owned values out of the HTTP request:
+
+```
+type AuthorCreateInput struct {
+
+    Name  string `json:"name" binding:"required"`
+
+    Email string `json:"email" binding:"required,email"`
+
+}
+
+
+
+type AuthorUpdateInput struct {
+
+    sqlh.InputById[int64]
+
+    Name string `json:"name" binding:"required"`
+
+}
+
+
+
+type AuthorOutput struct {
+
+    Id        int64     `json:"id"`
+
+    Name      string    `json:"name"`
+
+    Email     string    `json:"email"`
+
+    CreatedAt time.Time `json:"created_at"`
+
+    UpdatedAt time.Time `json:"updated_at"`
+
+}
+```
+
+HTTP binding validates `binding` tags on the bound request type. For PATCH, that type is `sqlh.PatchInput`, not the complete update input. Validate the merged input inside `UpdateInput` before changing the entity:
+
+```
+import (
+
+    "github.com/gin-gonic/gin/binding"
+
+    "github.com/justtrackio/gosoline/pkg/validation"
+
+)
+
+
+
+// Inside UpdateInput, before assigning entity fields:
+
+if err := binding.Validator.ValidateStruct(input); err != nil {
+
+    return nil, validation.NewError(err)
+
+}
+```
+
+This uses the same field and struct validators as Gin binding. `validation.NewError` makes the HTTP error mapper return 400. The examples use this check for both PUT and PATCH.
+
+The `Output` callback can return an entity, a response DTO, or another value that the HTTP server can render.
+
+The old `Transformer` and `JsonResultsTransformer` interfaces are removed. Replace their methods as follows:
+
+| Old method                                  | New callback                                                                      |
+| ------------------------------------------- | --------------------------------------------------------------------------------- |
+| `TransformCreateInput`                      | `CrudDefinition.CreateInput`                                                      |
+| `TransformUpdateInput`                      | `CrudDefinition.UpdateInput`                                                      |
+| `TransformOutput` or `RenderEntityResponse` | `CrudDefinition.Output`                                                           |
+| `RenderQueryResponse`                       | Per-entity `Output` plus `ListOutput[O]` or a route wrapper for the old envelope. |
+| No old equivalent                           | `CrudDefinition.PatchInputFromEntity`                                             |
+
+Use `NewCrudDefinition` for the standard `sqlh.ListInput`. Set optional identity, delete, or operation callbacks on the returned definition. A custom list input needs an explicitly parameterized `CrudDefinition`, as shown below.
+
+## JSON Merge Patch[​](#json-merge-patch "Direct link to JSON Merge Patch")
+
+The default `PATCH` operation follows RFC 7396 JSON Merge Patch. It uses the same update mapper as `PUT`:
+
+1. SQLH loads the entity with the update scope and update preloads.
+2. `PatchInputFromEntity` maps the entity to a complete update input.
+3. SQLH merges the request document into that input.
+4. `UpdateInput` validates and applies the merged input.
+5. SQLH synchronizes only associations selected by the original patch document.
+6. SQLH maps the result and commits the transaction.
+
+`PatchInputFromEntity` must populate every writable field that an omitted request field must preserve. An omitted scalar remains unchanged. Arrays replace the complete array.
+
+Explicit JSON `null` clears a pointer or nullable value. For non-nullable scalars, the merge produces the zero value. Reject forbidden values through request and domain validation.
+
+SQLH converts selected HasMany and many-to-many null or empty arrays to empty collections. SQLR deletes omitted owned HasMany children or removes many-to-many links. A selected HasOne `null` clears its owned child. For a selected, directly mapped BelongsTo path, SQLH also clears its nullable foreign key when PATCH sets it to `null`. For PUT or trigger-driven changes, the mapper must clear the foreign key because SQLR skips a nil target. An empty array is not valid for a pointer-shaped input.
+
+```
+func (t *AuthorMapper) PatchInputFromEntity(_ context.Context, author *Author) (*AuthorUpdateInput, error) {
+
+    return &AuthorUpdateInput{
+
+        InputById: sqlh.InputById[int64]{Id: author.Id},
+
+        Name:      author.Name,
+
+    }, nil
+
+}
+```
+
+SQLH derives direct association paths from update-input JSON tags and SQLR relation names. A relation must have `sqlh:"sync:update"` before SQLH can synchronize it during a patch. Use `PatchAssociations` when a JSON path does not match the relation name.
+
+Use `PatchAssociationTriggers` when a scalar request field changes an association indirectly:
+
+```
+definition.PatchAssociationTriggers = map[string]string{
+
+    "state": "Labels",
+
+}
+```
+
+The key is a path in the original patch document. The value is an SQLR relation path. A trigger selects the relation for persistence. It does not change merge-patch null behavior or mutate the relation.
+
+A custom `PatchOperation` replaces the complete default patch pipeline. Use it only when the default complete-input mapping and association selection cannot represent the API contract.
+
+A custom `PatchOperation` receives `*sqlh.PatchInput[Id]`. Read the parsed `sqlh.PatchDocument` from `input.Document`. Use `input.Document.MergeInto(completeInput)` to apply the patch. Use `input.Document.Has("status")` to check whether the request supplied a field. The old `input.Document()` method is not available in v0.8.0.
+
+## List Inputs, Filters, and Counts[​](#list-inputs-filters-and-counts "Direct link to List Inputs, Filters, and Counts")
+
+The standard list input contains a JSON SQLC filter, page limit, page offset, and server-owned force filters:
+
+```
+input := sqlh.ListInput{
+
+    Filter: sqlc.JsonFilter{
+
+        Type:   "eq",
+
+        Column: "status",
+
+        Value:  "active",
+
+    },
+
+    Page: sqlh.ListPage{
+
+        Limit:  50,
+
+        Offset: 100,
+
+    },
+
+}
+```
+
+The generated list endpoint accepts a body such as:
+
+```
+{
+
+  "filter": {
+
+    "type": "eq",
+
+    "column": "status",
+
+    "value": "active"
+
+  },
+
+  "page": {
+
+    "limit": 50,
+
+    "offset": 100
+
+  }
+
+}
+```
+
+SQLH returns a `ListOutput` value:
+
+```
+{
+
+  "results": [],
+
+  "total": 0
+
+}
+```
+
+The default list applies user filters, force filters, delete scope, and query modifiers to both the row and count builders. Only the row builder receives pagination. SQLR `Count` removes ordering, limit, offset, and locking, but preserves grouping and HAVING.
+
+### Force Filters[​](#force-filters "Direct link to Force Filters")
+
+Force filters are server-owned restrictions. They are not bound from HTTP input and the caller cannot remove them. Embed `sqlh.ForceFilters` through `sqlh.ListInput` or `sqlh.InputById`, then add filters after authentication:
+
+```
+input.AddForceFilter(func(qb *sqlr.QueryBuilderSelect) {
+
+    qb.Where(sqlc.Col("account_id").Eq(accountID))
+
+})
+```
+
+SQLH applies force filters to list, count, identity, update, PATCH, and delete lookups. A force filter must only add restrictive `WHERE` conditions.
+
+### Custom List Inputs[​](#custom-list-inputs "Direct link to Custom List Inputs")
+
+SQLH v0.7.1 `InputQuery` contained only `filter`. SQLH v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`. If the old endpoint had no pagination, use a custom `ListInputSource` with only the old fields. Preserve the old unknown-field behavior and implement every required phase. Use no-op query-modifier, pagination, and pagination-validation methods when the old API had none. Construct `CrudDefinition` with all type parameters because `NewCrudDefinition` fixes the input type to `sqlh.ListInput`.
+
+Embed `sqlh.ListInput` to retain native filters, pagination, and force filters. Override `ApplyFilters` to interpret additional request fields:
+
+```
+type AuthorListInput struct {
+
+    sqlh.ListInput
+
+    Name string `json:"name,omitempty"`
+
+}
+
+
+
+func (i AuthorListInput) ApplyFilters(qb *sqlr.QueryBuilderSelect) error {
+
+    if err := i.ListInput.ApplyFilters(qb); err != nil {
+
+        return err
+
+    }
+
+    if i.Name != "" {
+
+        qb.Where(sqlc.Col("name").Eq(i.Name))
+
+    }
+
+    return nil
+
+}
+```
+
+A custom list input must implement `ListInputSource`:
+
+* `ApplyFilters` adds user filters and joins.
+* `ApplyQueryModifiers` adds grouping and ordering.
+* `ApplyPagination` adds the page limit and offset.
+* `ValidatePagination` validates the input.
+* `GetForceFilters` exposes the embedded, server-owned filters.
+
+Custom `Query` callbacks must apply `QueryPlan.ApplyBuilder`, check `ApplyScope`, then apply query modifiers and pagination. Custom `Count` callbacks must apply the builder and scope, return scope errors, and not apply query modifiers or pagination. The default count applies query modifiers but not pagination. SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING. Write a custom count when joins or grouping change the old total.
+
+`NewCrudDefinition` fixes its list input to `sqlh.ListInput`. Construct the definition explicitly for `AuthorListInput`. Use the entity value type `Author` for `E`: callback signatures already use `*E`.
+
+```
+type AuthorListHandler = sqlh.CrudHandler[
+
+    int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, AuthorListInput, AuthorOutput,
+
+]
+
+
+
+func NewAuthorListHandler() httpserver.HandlerFactory[AuthorListHandler] {
+
+    mapper := &AuthorMapper{}
+
+    definition := sqlh.CrudDefinition[
+
+        int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, AuthorListInput, AuthorOutput,
+
+    ]{
+
+        CreateInput:          mapper.TransformCreateInput,
+
+        UpdateInput:          mapper.TransformUpdateInput,
+
+        PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
+
+        Output:               mapper.TransformOutput,
+
+    }
+
+    return sqlh.NewCrudHandler(sqlh.SimpleCrudDefinition(definition))
+
+}
+```
+
+### Preserve a Legacy List Envelope[​](#preserve-a-legacy-list-envelope "Direct link to Preserve a Legacy List Envelope")
+
+`ListOperation` and `handler.List` always return `ListOutput[O]` with outer JSON fields `results` and `total`. An entity output mapper cannot change that envelope. Use a typed wrapper and manual registration for another response shape:
+
+```
+type LegacyAuthorListOutput struct {
+
+    Items []AuthorOutput `json:"items"`
+
+    Count int            `json:"count"`
+
+}
+
+
+
+func RegisterLegacyAuthorList(router *httpserver.Router, handler *AuthorListHandler) {
+
+    router.POST("/v1/authors", httpserver.Bind(func(ctx context.Context, input *AuthorListInput) (LegacyAuthorListOutput, error) {
+
+        result, err := handler.List(ctx, input)
+
+        if err != nil {
+
+            return LegacyAuthorListOutput{}, err
+
+        }
+
+        return LegacyAuthorListOutput{Items: result.Results, Count: result.Total}, nil
+
+    }))
+
+}
+```
+
+Register it with `router.HandleWith(httpserver.With(NewAuthorListHandler(), RegisterLegacyAuthorList))`. The wrapper runs after `handler.List` commits its transaction.
+
+## SQLR and SQLH Relation Tags[​](#sqlr-and-sqlh-relation-tags "Direct link to SQLR and SQLH Relation Tags")
+
+Keep database mapping, relationship shape, HTTP input, and CRUD policy separate:
+
+| Tag                 | Purpose                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| `db:"column"`       | Maps an entity field to a database column. Use `db:"-"` on non-column relation fields.    |
+| `sqlr:"..."`        | Defines relationships and schema-wide preload or synchronization defaults.                |
+| `sqlh:"..."`        | Adds operation-specific preload and synchronization paths to SQLH's default builders.     |
+| `json:"field"`      | Defines the request field name and helps SQLH derive PATCH association paths.             |
+| `binding:"..."`     | Defines request validation. Validate the merged PATCH input explicitly.                   |
+| `uri:"id" json:"-"` | Binds the route identity without accepting it from JSON. `InputById` supplies these tags. |
+
+```
+type Project struct {
+
+    sqlr.Entity[uint]
+
+
+
+    PublicID  string     `db:"public_id"`
+
+    DeletedAt *time.Time `db:"deleted_at"`
+
+    OwnerID   *uint      `db:"owner_id"`
+
+
+
+    Owner  *Owner   `db:"-" sqlr:"belongsTo:owner_id" sqlh:"preload:read,query,update"`
+
+    Rules  []*Rule  `db:"-" sqlr:"foreignKey:project_id" sqlh:"preload:create,read,query,update;sync:create,update"`
+
+    Labels []*Label `db:"-" sqlr:"foreignKey:project_id" sqlh:"preload:create,read,query,update;sync:create,update"`
+
+    Tags   []*Tag   `db:"-" sqlr:"many2many:project_tags" sqlh:"preload:read,query,update;sync:update"`
+
+}
+```
+
+### SQLR Relationship Options[​](#sqlr-relationship-options "Direct link to SQLR Relationship Options")
+
+Separate SQLR options with semicolons. Choose only the options that match the existing persistence contract.
+
+| Option                                   | Meaning                                                                                                        |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `belongsTo:owner_id`                     | The foreign key is on the current entity. Declare its matching `db` field, such as `OwnerID`.                  |
+| `foreignKey:project_id`                  | The foreign key is on the related HasOne or HasMany entity. Declare that column on the child.                  |
+| `many2many:project_tags`                 | Names the join table for a slice relation.                                                                     |
+| `parentKey:project_id;relatedKey:tag_id` | Overrides the parent and related join-column names for a many-to-many relation.                                |
+| `preload`                                | Enables schema-wide automatic relation loading, including repository calls outside SQLH.                       |
+| `sync:create,update,delete`              | Adds default association paths for the selected repository operations.                                         |
+| `syncMode:many2many`                     | Enables updates to existing many-to-many target rows. Requires a many-to-many relation and SQLR `sync:update`. |
+
+### SQLH Phases[​](#sqlh-phases "Direct link to SQLH Phases")
+
+Separate directives with semicolons and phases with commas. There is no `patch` phase: PATCH uses the update policy.
+
+| Directive | Phase                        | Effect                                                                      |
+| --------- | ---------------------------- | --------------------------------------------------------------------------- |
+| `preload` | `create`                     | Reloads the relation after insertion.                                       |
+| `preload` | `read`                       | Loads the relation for read and delete identity lookups.                    |
+| `preload` | `query`                      | Loads the relation for list results.                                        |
+| `preload` | `update`                     | Loads the relation before PUT/PATCH mapping and reloads it after the write. |
+| `sync`    | `create`, `update`, `delete` | Adds association paths for persistence or owned-association cleanup.        |
+
+SQLH traverses nested relation tags. Paths use Go field names, such as `Labels` or `Rules.Owner`, not column names or JSON names. Unknown directives, unsupported phases, and `sqlh` tags on scalar or embedded fields fail during handler construction.
+
+### Defaults and PATCH Selection[​](#defaults-and-patch-selection "Direct link to Defaults and PATCH Selection")
+
+SQLR Create persists populated associations by default. Delete cleans up owned HasOne and HasMany rows and many-to-many links, not shared target rows.
+
+Adding the first create or delete sync path changes that operation to selected-path mode. SQLR schema paths and SQLH builder paths combine. `OmitAssociation` excludes a path even when a tag selects it.
+
+Update defaults to the root row only. SQLR `sync:update` defaults or per-call paths can also enable relation updates. Therefore PUT can persist relations without an SQLH tag.
+
+Default PATCH requires `sqlh:"sync:update"` for eligible association paths. It selects paths from the original document or configured triggers, then omits unselected SQLR auto-sync paths. Do not infer PATCH selection from the complete merged input.
+
+### Many-to-Many Target Updates[​](#many-to-many-target-updates "Direct link to Many-to-Many Target Updates")
+
+Existing many-to-many IDs are link-only by default. SQLR verifies target existence and reconciles join-table membership without updating those target rows. An ID-less target is inserted. Removing a target from the collection removes its link, not the shared row.
+
+Enable full target-row updates only when the API permits changes to shared targets:
+
+```
+Tags []*Tag `db:"-" sqlr:"many2many:project_tags;sync:update;syncMode:many2many" sqlh:"preload:read,query,update;sync:update"`
+```
+
+For custom repository operations, `SyncMany2many("Tags")` enables full synchronization for that call. Keep the same ownership and authorization rules as the existing API.
+
+## Custom Identity and Delete Behavior[​](#custom-identity-and-delete-behavior "Direct link to Custom Identity and Delete Behavior")
+
+The default identity lookup uses the SQL primary key. Set `CrudDefinition.Identity` when the public API uses another key, such as a public UUID:
+
+```
+definition.Identity = func(
+
+    ctx context.Context,
+
+    tx sqlr.TTx,
+
+    repository sqlr.RepositoryTx[uint, Project],
+
+    publicID string,
+
+    scope sqlh.QueryScope,
+
+    builder func(*sqlr.QueryBuilderSelect),
+
+) (*Project, error) {
+
+    var scopeErr error
+
+    entities, err := repository.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
+
+        qb.Where(sqlc.Col("projects", "public_id").Eq(publicID))
+
+        if scope != nil {
+
+            scopeErr = scope(qb)
+
+        }
+
+        if scopeErr == nil && builder != nil {
+
+            builder(qb)
+
+        }
+
+    })
+
+    if scopeErr != nil {
+
+        return nil, scopeErr
+
+    }
+
+    if err != nil {
+
+        return nil, err
+
+    }
+
+    if len(entities) == 0 {
+
+        return nil, fmt.Errorf("project %s: %w", publicID, sqlr.ErrNotFound)
+
+    }
+
+
+
+    return &entities[0], nil
+
+}
+```
+
+SQLH passes a builder to every custom identity lookup. Apply it, along with the public-ID predicate and supplied scope, before querying. Return scope errors before repository work. Ordinary GET builders can add relation preloads but do not include `FOR UPDATE`. Default Update, PATCH, and Delete builders include that lock.
+
+SQLH uses physical SQLR deletion by default. Use `DeleteScope` and `Delete` for soft deletion:
+
+```
+definition.DeleteScope = func(qb *sqlr.QueryBuilderSelect) {
+
+    qb.Where(sqlc.Col("deleted_at").IsNull())
+
+}
+
+
+
+definition.Delete = func(
+
+    ctx context.Context,
+
+    tx sqlr.TTx,
+
+    repository sqlr.RepositoryTx[uint, Project],
+
+    entity *Project,
+
+) error {
+
+    now := time.Now()
+
+    entity.DeletedAt = &now
+
+    entity.UpdatedAt = now
+
+
+
+    updated, err := repository.Update(tx, entity, func(qb *sqlr.QueryBuilderUpdate) {
+
+        qb.OmitAssociation("Rules", "Labels", "Tags")
+
+    })
+
+    if err != nil {
+
+        return err
+
+    }
+
+    *entity = *updated
+
+
+
+    return nil
+
+}
+
+
+
+definition.DeleteOutput = definition.Output
+```
+
+`DeleteScope` restricts default read, list, count, update, PATCH, and delete operations. `Delete` receives the entity after the scoped identity lookup. SQLH does not infer soft deletion from a field name.
+
+## Custom Repository Settings[​](#custom-repository-settings "Direct link to Custom Repository Settings")
+
+SQLH uses a transaction-aware `sqlr.RepositoryTx` by default. Use options when the handler needs another SQL client, repository settings, or a wrapper:
+
+* `sqlh.WithClientName[K, E](name)` selects a configured SQL client.
+* `sqlh.WithRepositorySettings[K, E](settings)` sets SQLR settings.
+* `sqlh.WithRepositoryTxFactory[K, E](factory)` replaces repository construction.
+
+The custom factory receives the same `sqlc.Client` that SQLH uses to start transactions:
+
+main.go
+
+```
+type ReportingAuthorRepository struct {
+
+  delegate sqlr.RepositoryTx[int64, Author]
+
+}
+
+
+
+func NewReportingAuthorRepository(client sqlc.Client, settings sqlr.Settings) (sqlr.RepositoryTx[int64, Author], error) {
+
+  repo, err := sqlr.NewRepositoryTxWithSettings[int64, Author](client, settings)
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  return &ReportingAuthorRepository{delegate: repo}, nil
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Create(tx sqlr.TTx, entity *Author, opts ...func(qb *sqlr.QueryBuilderCreate)) error {
+
+  return r.delegate.Create(tx, entity, opts...)
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Read(tx sqlr.TTx, id int64, opts ...func(qb *sqlr.QueryBuilderRead)) (*Author, error) {
+
+  return r.delegate.Read(tx, id, opts...)
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Query(tx sqlr.TTx, opts ...func(qb *sqlr.QueryBuilderSelect)) ([]Author, error) {
+
+  return r.delegate.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
+
+    qb.OrderBy(reportingAuthorOrderBy)
+
+    qb.Limit(reportingAuthorDefaultLimit)
+
+    for _, opt := range opts {
+
+      opt(qb)
+
+    }
+
+  })
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Count(tx sqlr.TTx, qb *sqlr.QueryBuilderSelect) (int, error) {
+
+  return r.delegate.Count(tx, qb)
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Update(tx sqlr.TTx, entity *Author, opts ...func(qb *sqlr.QueryBuilderUpdate)) (*Author, error) {
+
+  return r.delegate.Update(tx, entity, opts...)
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Delete(tx sqlr.TTx, id int64, opts ...func(qb *sqlr.QueryBuilderDelete)) error {
+
+  return r.delegate.Delete(tx, id, opts...)
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Close() error {
+
+  return r.delegate.Close()
+
+}
+```
+
+The repository wrapper retains its defaults for direct queries, but SQLH v0.8.0 prepares the list builder and copies it into the repository query, so those defaults alone do not affect the list route. The example also applies them through a custom `ListInputSource`: it adds the newest-first order as a query modifier and applies the 100-row fallback only when no page limit was requested. It embeds `sqlh.ListInput` to preserve native filters, force filters, and offsets. The default count does not apply pagination, so its total remains uncapped.
+
+main.go
+
+```
+const (
+
+  reportingAuthorOrderBy      = "created_at DESC"
+
+  reportingAuthorDefaultLimit = 100
+
+)
+
+
+
+type reportingAuthorListInput struct {
+
+  sqlh.ListInput
+
+}
+
+
+
+func (i reportingAuthorListInput) ApplyQueryModifiers(qb *sqlr.QueryBuilderSelect) {
+
+  qb.OrderBy(reportingAuthorOrderBy)
+
+}
+
+
+
+func (i reportingAuthorListInput) ApplyPagination(qb *sqlr.QueryBuilderSelect) {
+
+  i.ListInput.ApplyPagination(qb)
+
+  if i.Page.Limit == 0 {
+
+    qb.Limit(reportingAuthorDefaultLimit)
+
+  }
+
+}
+```
+
+The custom list input is selected by the CRUD definition:
+
+main.go
+
+```
+func main() {
+
+  application.New(
+
+    application.WithConfigFile("config.dist.yml", "yml"),
+
+    application.WithLoggerHandlersFromConfig,
+
+    application.WithModuleFactory("http", httpserver.NewServer(
+
+      "default",
+
+      func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+
+        mapper := &AuthorMapper{}
+
+        definition := sqlh.CrudDefinition[
+
+          int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, reportingAuthorListInput, *Author,
+
+        ]{
+
+          CreateInput:          mapper.TransformCreateInput,
+
+          UpdateInput:          mapper.TransformUpdateInput,
+
+          PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
+
+          Output:               mapper.TransformOutput,
+
+        }
+
+        router.HandleWith(sqlh.WithCrudHandlers(
+
+          1,
+
+          "author",
+
+          sqlh.SimpleCrudDefinition(definition),
+
+          sqlh.WithClientName[int64, Author]("reporting"),
+
+          sqlh.WithRepositoryTxFactory[int64, Author](NewReportingAuthorRepository),
+
+        ))
+
+        return nil
+
+      },
+
+    )),
+
+  ).Run()
+
+}
+```
+
+This configuration enables migrations for the selected `reporting` client.
+
+config.dist.yml
+
+```
+httpserver:
+
+  default:
+
+    port: 8080
+
+    mode: release
+
+
+
+sqlc:
 
   reporting:
 
@@ -4286,372 +5170,68 @@ sqlc:
       password: gosoline
 
       database: blog
+
+    migrations:
+
+      enabled: true
+
+      reset: true
+
+      path: migrations
 ```
 
-### Wrapping the Default Repository[​](#wrapping-the-default-repository "Direct link to Wrapping the Default Repository")
+A custom repository must implement the transaction-aware `sqlr.RepositoryTx` interface. The interface includes `Count` in addition to `Create`, `Read`, `Query`, `Update`, `Delete`, and `Close`.
 
-In most cases, the simplest custom implementation is a small wrapper around `sqlr.NewRepository()`. That lets you preserve the standard CRUD behavior while adding defaults in selected methods:
+## Custom Operations[​](#custom-operations "Direct link to Custom Operations")
 
-main.go
-
-```
-type ReportingAuthorRepository struct {
-
-  delegate sqlr.Repository[int64, Author]
-
-}
-
-
-
-func NewReportingAuthorRepository(ctx context.Context, config cfg.Config, logger log.Logger, name string) (sqlr.Repository[int64, Author], error) {
-
-  repo, err := sqlr.NewRepository[int64, Author](ctx, config, logger, name)
-
-  if err != nil {
-
-    return nil, err
-
-  }
-
-
-
-  return &ReportingAuthorRepository{delegate: repo}, nil
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Create(ctx context.Context, entity *Author, opts ...func(qb *sqlr.QueryBuilderCreate)) error {
-
-  return r.delegate.Create(ctx, entity, opts...)
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Read(ctx context.Context, id int64, opts ...func(qb *sqlr.QueryBuilderRead)) (*Author, error) {
-
-  return r.delegate.Read(ctx, id, opts...)
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Query(ctx context.Context, opts ...func(qb *sqlr.QueryBuilderSelect)) ([]Author, error) {
-
-  return r.delegate.Query(ctx, append(opts, func(qb *sqlr.QueryBuilderSelect) {
-
-    qb.OrderBy("created_at DESC")
-
-    qb.Limit(100)
-
-  })...)
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Update(ctx context.Context, entity *Author, opts ...func(qb *sqlr.QueryBuilderUpdate)) (*Author, error) {
-
-  return r.delegate.Update(ctx, entity, opts...)
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Delete(ctx context.Context, id int64, opts ...func(qb *sqlr.QueryBuilderDelete)) error {
-
-  return r.delegate.Delete(ctx, id, opts...)
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Close() error {
-
-  return r.delegate.Close()
-
-}
-```
-
-This pattern is useful when you want to add metrics, logging, tenant-aware setup, or query defaults without reimplementing the full `sqlr.Repository` interface.
-
-### Registering CRUD Handlers with a Custom Repository[​](#registering-crud-handlers-with-a-custom-repository "Direct link to Registering CRUD Handlers with a Custom Repository")
-
-Pass both options to `WithCrudHandlers` when you want to select a non-default SQL client and override how the repository is created:
-
-main.go
+A `CrudDefinition` can replace a complete operation when the default flow does not match the domain. Operation callbacks receive the active `sqlr.TTx`, the configured `sqlr.RepositoryTx`, and the typed input:
 
 ```
-func main() {
+type CrudOperation[K sqlr.KeyTypes, E sqlr.Entitier[K], I, O any] func(
 
-  application.New(
+    context.Context,
 
-    application.WithConfigBytes(config, "yml"),
+    sqlr.TTx,
 
-    application.WithLoggerHandlersFromConfig,
+    sqlr.RepositoryTx[K, E],
 
-    application.WithModuleFactory("http", httpserver.NewServer(
+    *I,
 
-      "default",
-
-      func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-
-        router.HandleWith(sqlh.WithCrudHandlers(
-
-          1,
-
-          "author",
-
-          sqlh.SimpleTransformer(&AuthorTransformer{}),
-
-          sqlh.WithClientName[int64, Author]("reporting"),
-
-          sqlh.WithRepositoryFactory[int64, Author](NewReportingAuthorRepository),
-
-        ))
-
-
-
-        return nil
-
-      },
-
-    )),
-
-  ).Run()
-
-}
+) (O, error)
 ```
 
-The custom repository must still satisfy `sqlr.Repository[K, E]`, so `sqlh` can continue to call `Create`, `Read`, `Query`, `Update`, and `Delete` normally.
+The definition supports `CreateOperation`, `ReadOperation`, `UpdateOperation`, `PatchOperation`, `ListOperation`, and `DeleteOperation`. An operation field replaces the complete default operation. `UpdateOperation` does not change the default PATCH pipeline. `PatchOperation` replaces the complete patch pipeline.
 
-## Transaction Middleware[​](#transaction-middleware "Direct link to Transaction Middleware")
+Use custom operations for domain rules that need direct control over persistence. An override owns authorization, validation, scope, locking, association policy, and persistence for its operation. Create, read, update, patch, and list overrides return their typed operation results. `DeleteOperation` instead returns the deleted `*E`. `handler.Delete` applies `DeleteOutput` to that entity. `handler.DeleteNoContent` skips the mapper and returns 204. SQLH wraps it in `TxRunner`; its transaction covers SQL work that uses the supplied transaction and repository. It cannot roll back blob-store or other external effects, and MySQL DDL may commit implicitly. Keep legacy lifecycle handlers outside SQLH CRUD when the old order or failure behavior requires it. Publish success events after commit, not from a pre-commit mapper.
 
-The `WithTx` function wraps a group of HTTP routes in a database transaction. Each request automatically begins a transaction before the handler runs, commits on success, and rolls back if any error occurs.
+## Migration Notes[​](#migration-notes "Direct link to Migration Notes")
 
-### Setting Up WithTx[​](#setting-up-withtx "Direct link to Setting Up WithTx")
+The SQLH CRUD redesign removes these APIs:
 
-Create a handler struct with a factory function, then use `WithTx` to register routes:
+* `Transformer` and `JsonResultsTransformer`
+* `WithTx`
+* `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR`
+* legacy Gin transaction binding files and builder-aware transformer interfaces
 
-main.go
+Use these replacements:
 
-```
-type PostHandler struct {
+| Old pattern                            | New pattern                                                                   |
+| -------------------------------------- | ----------------------------------------------------------------------------- |
+| Transformer factory                    | `CrudDefinitionFactory` with `NewCrudDefinition` or a custom `CrudDefinition` |
+| `RenderEntityResponse`                 | Typed `CrudDefinition.Output`                                                 |
+| `GetInput` and request body assertions | Typed callback input values                                                   |
+| Request-scoped `WithTx` middleware     | Default SQLH operation transactions or `TxRunner`                             |
+| Repository factory                     | `WithRepositoryTxFactory` returning `sqlr.RepositoryTx`                       |
+| Generic query list handler             | `ListInput`, `ListOutput`, `Query`, and `Count`                               |
+| Implicit patch association behavior    | `sqlh` relation tags and `PatchAssociationTriggers`                           |
 
-}
+Add parity tests before changing the implementation. Check routes, response bodies, status codes, authorization, association behavior, filters, pagination, and transaction rollback behavior.
 
+## See Also[​](#see-also "Direct link to See Also")
 
-
-func NewPostHandler() httpserver.HandlerFactory[PostHandler] {
-
-  return func(ctx context.Context, config cfg.Config, logger log.Logger) (*PostHandler, error) {
-
-    return &PostHandler{}, nil
-
-  }
-
-}
-```
-
-main.go
-
-```
-func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-
-  router.HandleWith(sqlh.WithTx(NewPostHandler(), func(router *httpserver.Router, handler *PostHandler) {
-
-    router.POST("/v1/authors/:id/posts", sqlh.BindTx(handler.HandleCreatePost))
-
-    router.GET("/v1/posts/:id", sqlh.BindTxN(handler.HandleReadPost))
-
-  }))
-
-
-
-  return nil
-
-},
-```
-
-Notice that the handler struct does not create or hold a repository. Instead of manually setting up database access, each handler receives an active `sqlc.Tx` directly through the `Bind*` helpers — the transaction is started automatically before the handler runs and committed or rolled back afterward.
-
-`WithTx` takes two arguments:
-
-| Argument         | Description                                                                    |
-| ---------------- | ------------------------------------------------------------------------------ |
-| `handlerFactory` | Factory that creates the handler struct (with access to `config` and `logger`) |
-| `register`       | Function that registers routes on the router, receiving the handler instance   |
-
-The middleware:
-
-1. Begins a transaction via `sqlClient.BeginTx()` before each request
-2. Stores the transaction in the gin context
-3. Calls the next handler
-4. **Commits** if no errors occurred
-5. **Rolls back** if any handler in the chain added an error to the gin context
-
-### Transaction Binding Helpers[​](#transaction-binding-helpers "Direct link to Transaction Binding Helpers")
-
-Inside a `WithTx`-wrapped route group, use the `BindTx` family of functions to extract the transaction and bind request input:
-
-#### BindTx — With Input[​](#bindtx--with-input "Direct link to BindTx — With Input")
-
-Use `BindTx` when the handler needs both the transaction and a parsed request body:
-
-main.go
-
-```
-func (h *PostHandler) HandleCreatePost(cttx sqlc.Tx, input *PostCreateInput) (httpserver.Response, error) {
-
-  // The transaction is automatically managed — commit on success, rollback on error.
-
-  // Use cttx.Q() to execute queries within the transaction scope.
-
-
-
-  post := &Post{
-
-    Title:  input.Title,
-
-    Body:   input.Body,
-
-    Status: "draft",
-
-  }
-
-
-
-  _, err := cttx.Q().Into("posts").Records(post).Exec(cttx)
-
-  if err != nil {
-
-    return nil, fmt.Errorf("failed to create post: %w", err)
-
-  }
-
-
-
-  return httpserver.NewJsonResponse(post), nil
-
-}
-```
-
-`BindTx` automatically:
-
-* Binds the request body to the input type `I`
-* Extracts the `sqlc.Tx` from the gin context
-* Calls the handler with both
-* Writes the response
-
-#### BindTxN — No Input[​](#bindtxn--no-input "Direct link to BindTxN — No Input")
-
-Use `BindTxN` when the handler only needs the transaction (no request body):
-
-main.go
-
-```
-func (h *PostHandler) HandleReadPost(cttx sqlc.Tx) (httpserver.Response, error) {
-
-  // BindTxN is used when no request body input is needed.
-
-  // The transaction is still available for database operations.
-
-
-
-  var posts []Post
-
-  err := cttx.Q().From("posts").Where(sqlc.Col("status").Eq("draft")).Select(cttx, &posts)
-
-  if err != nil {
-
-    return nil, fmt.Errorf("failed to query posts: %w", err)
-
-  }
-
-
-
-  return httpserver.NewJsonResponse(posts), nil
-
-}
-```
-
-Since `sqlc.Tx` implements `Querier`, you can pass it to `WithClient()` on query builders to execute queries within the transaction.
-
-#### BindTxR / BindTxNR — With Raw Request[​](#bindtxr--bindtxnr--with-raw-request "Direct link to BindTxR / BindTxNR — With Raw Request")
-
-For handlers that need access to the raw `*http.Request` (e.g., to read headers or query parameters), use the `R` variants:
-
-```
-// With input + raw request
-
-sqlh.BindTxR(func(cttx sqlc.Tx, req *http.Request, input *MyInput) (httpserver.Response, error) {
-
-    userAgent := req.Header.Get("User-Agent")
-
-    // ...
-
-})
-
-
-
-// No input + raw request
-
-sqlh.BindTxNR(func(cttx sqlc.Tx, req *http.Request) (httpserver.Response, error) {
-
-    // ...
-
-})
-```
-
-### Wiring into the Application[​](#wiring-into-the-application-1 "Direct link to Wiring into the Application")
-
-main.go
-
-```
-func main() {
-
-  application.New(
-
-    application.WithConfigBytes(config, "yml"),
-
-    application.WithLoggerHandlersFromConfig,
-
-    application.WithModuleFactory("http", httpserver.NewServer(
-
-      "default",
-
-      func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-
-        router.HandleWith(sqlh.WithTx(NewPostHandler(), func(router *httpserver.Router, handler *PostHandler) {
-
-          router.POST("/v1/authors/:id/posts", sqlh.BindTx(handler.HandleCreatePost))
-
-          router.GET("/v1/posts/:id", sqlh.BindTxN(handler.HandleReadPost))
-
-        }))
-
-
-
-        return nil
-
-      },
-
-    )),
-
-  ).Run()
-
-}
-```
-
-### Summary of Binding Functions[​](#summary-of-binding-functions "Direct link to Summary of Binding Functions")
-
-| Function   | Input | Raw Request | Signature                                                           |
-| ---------- | ----- | ----------- | ------------------------------------------------------------------- |
-| `BindTx`   | Yes   | No          | `func(cttx sqlc.Tx, input *I) (Response, error)`                    |
-| `BindTxR`  | Yes   | Yes         | `func(cttx sqlc.Tx, req *http.Request, input *I) (Response, error)` |
-| `BindTxN`  | No    | No          | `func(cttx sqlc.Tx) (Response, error)`                              |
-| `BindTxNR` | No    | Yes         | `func(cttx sqlc.Tx, req *http.Request) (Response, error)`           |
+* [sqlc - SQL Client](/docs/how-to/databases-sql/sqlc/.md)
+* [sqlr - SQL Repository](/docs/how-to/databases-sql/sqlr/.md)
+* [Migrate an existing service to SQLH](/docs/migrations/sqlh-crud/.md)
 
 
 ---
@@ -4665,7 +5245,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```
-go get github.com/gosoline-project/sqlr@v0.8.0
+go get github.com/gosoline-project/sqlr@v0.9.1
 ```
 
 Then import the package in your Go code:
@@ -4917,6 +5497,7 @@ The `Repository` interface provides:
 | `Create(ctx, entity, opts...)` | Inserts the entity and any eligible populated association fields; optional create builder methods can limit, omit, or disable association persistence for a call, and can request a post-create reload with preloads                                                              |
 | `Read(ctx, id, opts...)`       | Loads one entity by primary key, with optional `QueryBuilderRead` relation loading                                                                                                                                                                                                |
 | `Query(ctx, opts...)`          | Loads entities matching query conditions                                                                                                                                                                                                                                          |
+| `Count(ctx, qb)`               | Counts the rows selected by a query builder. It preserves joins, filters, grouping, and `HAVING`, but ignores ordering, pagination, and row locking. Pass `nil` to count all rows.                                                                                                |
 | `Update(ctx, entity, opts...)` | Updates only the base entity row by default; associations remain untouched unless explicitly synchronized per call or via `sync:update` tags, many-to-many updates stay link-only unless `SyncMany2many()` is used, and `Preload()` can request a post-update reload of relations |
 | `Delete(ctx, id, opts...)`     | Deletes the entity by primary key; by default also cleans up owned associations, and delete builder methods can narrow or disable that cleanup                                                                                                                                    |
 | `Close()`                      | Releases resources (prepared statements, etc.)                                                                                                                                                                                                                                    |
@@ -5843,14 +6424,49 @@ func (s *BlogService) queryPublishedPosts(ctx context.Context) ([]Post, error) {
 
 The `QueryBuilderSelect` supports:
 
-| Method                         | Description                                       |
-| ------------------------------ | ------------------------------------------------- |
-| `Where(condition, params...)`  | Adds a WHERE condition (multiple calls are ANDed) |
-| `OrderBy(cols...)`             | Sets the ORDER BY clause                          |
-| `Limit(n)`                     | Limits the number of results                      |
-| `Offset(n)`                    | Skips the first n results                         |
-| `GroupBy(cols...)`             | Sets the GROUP BY clause                          |
-| `Having(condition, params...)` | Adds a HAVING condition                           |
+| Method                         | Description                                                                                          |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `Where(condition, params...)`  | Adds a WHERE condition (multiple calls are ANDed)                                                    |
+| `OrderBy(cols...)`             | Sets the ORDER BY clause                                                                             |
+| `Limit(n)`                     | Limits the number of results                                                                         |
+| `Offset(n)`                    | Skips the first n results                                                                            |
+| `GroupBy(cols...)`             | Sets the GROUP BY clause                                                                             |
+| `Having(condition, params...)` | Adds a HAVING condition                                                                              |
+| `ForUpdate()`                  | Adds `FOR UPDATE` as the final SQL clause and locks selected rows until the current transaction ends |
+
+`ForUpdate()` mutates `QueryBuilderSelect` and returns the same builder. Use it with `RepositoryTx.Query()` inside a transaction when a read must protect the rows before a later write:
+
+```
+err := client.WithTx(ctx, func(tx sqlc.Tx) error {
+
+    transaction := sqlr.NewTx(tx)
+
+    entities, err := repositoryTx.Query(transaction, func(qb *sqlr.QueryBuilderSelect) {
+
+        qb.Where(sqlc.Col("status").Eq("scheduled")).
+
+            Limit(10).
+
+            ForUpdate()
+
+    })
+
+    if err != nil {
+
+        return err
+
+    }
+
+
+
+    _ = entities
+
+    return nil
+
+})
+```
+
+`ForUpdate()` locks rows from the root SELECT, its joins, and separate `Preload()` SELECTs in the same transaction. This includes nested and many-to-many preloads. `Count()` removes `FOR UPDATE` because a count must not lock rows.
 
 WHERE conditions use the same `sqlc.Col()` expression API from the [`sqlc` package](/docs/how-to/databases-sql/sqlc/.md):
 
@@ -5861,6 +6477,30 @@ qb.Where(sqlc.Col("age").Gt(18))
 
 qb.Where(sqlc.And(sqlc.Col("a").Eq(1), sqlc.Col("b").Eq(2)))
 ```
+
+## Counting Query Results[​](#counting-query-results "Direct link to Counting Query Results")
+
+Use `Count()` when an endpoint needs a total beside a paginated result set:
+
+```
+qb := sqlr.NewQueryBuilderSelect().
+
+    Where(sqlc.Col("status").Eq("published")).
+
+    LeftJoin("Author").
+
+    GroupBy("status").
+
+    Having(sqlc.Col("*").Count().Gt(0))
+
+
+
+total, err := repo.Count(ctx, qb)
+```
+
+`Count()` preserves joins, `WHERE`, `GROUP BY`, and `HAVING`. It removes `ORDER BY`, `LIMIT`, `OFFSET`, and `FOR UPDATE` before it builds the count query. A grouped query counts the rows in its grouped result. Pass `nil` to count all rows.
+
+Use `RepositoryTx.Count(ttx, qb)` when the count must use an active transaction. SQLH uses the same filter and delete scope for its list query and count operation.
 
 ## Eager Loading with Preload[​](#eager-loading-with-preload "Direct link to Eager Loading with Preload")
 
@@ -6683,13 +7323,13 @@ curl -H 'X-API-KEY: secret' http://localhost:8080/api/ping
 Successful authenticators attach an `auth.Subject` to the request context. Handlers registered through `Bind`, `BindN`, `BindR`, `BindNR`, and SSE helpers receive that context.
 
 ```
-func me(ctx context.Context) (httpserver.Response, error) {
+func me(ctx context.Context) (map[string]any, error) {
 
     subject := auth.GetSubject(ctx)
 
 
 
-    return httpserver.NewJsonResponse(map[string]any{
+    return map[string]any{
 
         "name":             subject.Name,
 
@@ -6699,7 +7339,7 @@ func me(ctx context.Context) (httpserver.Response, error) {
 
         "attributes":       subject.Attributes,
 
-    }), nil
+    }, nil
 
 }
 ```
@@ -7084,13 +7724,13 @@ httpserver:
 
 # Build an HTTP service
 
-In this guide, you'll build a complete HTTP service from scratch. You'll start with the basics of defining routes, then level up to type-safe handlers with dependency injection, request binding, and structured responses.
+In this guide, you will build an HTTP service from scratch. You will add routes, typed handlers, dependency injection, request binding, and negotiated responses.
 
 ## What is httpserver?[​](#what-is-httpserver "Direct link to What is httpserver?")
 
-The httpserver package is built on top of [Gin](https://gin-gonic.com/), one of the most popular HTTP frameworks for Go. It inherits all of Gin's routing, middleware, and parameter handling — so you can always fall back to raw `*gin.Context` handlers when you need to.
+The httpserver package is built on [Gin](https://gin-gonic.com/), an HTTP framework for Go. You can use Gin routing and middleware, and you can register raw `*gin.Context` handlers when needed.
 
-On top of that foundation, httpserver adds a structured, type-safe way to build HTTP services. The **`With` pattern** gives you clean dependency injection: each handler group gets its own constructor that receives `ctx`, `config`, and `logger`, so your dependencies are initialized in one place and shared across related routes. The **`Bind` function** replaces manual request parsing with struct-tag-driven binding and validation — declare an input struct with `json`, `uri`, `form`, or `header` tags, and the request data is populated and validated before your handler even runs. Your handlers return a typed `Response` instead of writing directly to the response writer, making them easy to test and compose.
+httpserver adds a typed way to build HTTP services. The **`With` pattern** gives each handler group a constructor that receives `ctx`, `config`, and `logger`. The constructor initializes dependencies that related routes share. The **`Bind` function** uses struct tags to bind and validate request data. Typed handlers return Go values. httpserver selects a response format from the request's `Accept` header and writes the response.
 
 Together with built-in middleware for logging, metrics, compression, and graceful shutdown — all configured through YAML — httpserver lets you focus on your application logic rather than HTTP plumbing.
 
@@ -7099,7 +7739,7 @@ Together with built-in middleware for logging, metrics, compression, and gracefu
 Install the package:
 
 ```
-go get github.com/gosoline-project/httpserver@v0.5.6
+go get github.com/gosoline-project/httpserver@v0.6.4
 ```
 
 The entry point for any HTTP server is a `RouterFactory` — a function that receives a `*Router` and registers routes on it:
@@ -7107,11 +7747,11 @@ The entry point for any HTTP server is a `RouterFactory` — a function that rec
 ```
 httpserver.RunDefaultServer(func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
 
-    router.GET("/hello", func(ginCtx *gin.Context) {
+    router.GET("/hello", httpserver.BindN(func(ctx context.Context) (map[string]string, error) {
 
-        ginCtx.String(200, "Hello, World!")
+        return map[string]string{"message": "Hello, World!"}, nil
 
-    })
+    }))
 
     return nil
 
@@ -7145,14 +7785,14 @@ Group related routes with `router.Group()`:
 ```
 api := router.Group("/api")
 
-api.GET("/ping", func(ginCtx *gin.Context) {
+api.GET("/ping", httpserver.BindN(func(ctx context.Context) (map[string]string, error) {
 
-    ginCtx.JSON(200, gin.H{"message": "pong"})
+    return map[string]string{"message": "pong"}, nil
 
-})
+}))
 ```
 
-Raw Gin handlers work fine for simple cases. For type safety and cleaner code, read on.
+Raw Gin handlers remain useful when you need direct access to Gin APIs. Use typed handlers when you want request binding and negotiated output.
 
 ## The With pattern[​](#the-with-pattern "Direct link to The With pattern")
 
@@ -7218,21 +7858,29 @@ The suffixes follow a simple pattern:
 * **`R`** means the raw `*http.Request` is passed to the handler.
 * **`N`** means there is no input struct to bind.
 
-| Helper     | Handler shape                                    | Use when                                                                                                                         |
-| ---------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `Bind[I]`  | `(ctx, *Input) (Response, error)`                | The endpoint needs request data bound into an input struct. This is the default choice for most endpoints.                       |
-| `BindR[I]` | `(ctx, *http.Request, *Input) (Response, error)` | The endpoint needs both bound input and raw request access, for example headers, method, body metadata, or client IP resolution. |
-| `BindN`    | `(ctx) (Response, error)`                        | The endpoint does not need request input, for example health checks or static status endpoints.                                  |
-| `BindNR`   | `(ctx, *http.Request) (Response, error)`         | The endpoint does not need a bound input struct, but still needs raw request access.                                             |
+| Helper            | Handler shape                                                       | Use when                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `Bind[I, O any]`  | `func(ctx context.Context, input *I) (O, error)`                    | The endpoint needs request data bound into an input struct. This is the default choice for most endpoints.                       |
+| `BindR[I, O any]` | `func(ctx context.Context, req *http.Request, input *I) (O, error)` | The endpoint needs both bound input and raw request access, for example headers, method, body metadata, or client IP resolution. |
+| `BindN[O any]`    | `func(ctx context.Context) (O, error)`                              | The endpoint does not need request input, for example health checks or static status endpoints.                                  |
+| `BindNR[O any]`   | `func(ctx context.Context, req *http.Request) (O, error)`           | The endpoint does not need a bound input struct, but still needs raw request access.                                             |
 
 `Bind` and `BindR` can bind request data from JSON bodies, query parameters, form data, URI parameters, headers, and other supported sources. `BindN` and `BindNR` skip request binding entirely because there is no input struct.
 
 ```
 // With input
 
-func (h *Handler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 
-    // input is populated from the request
+    user, ok := h.users[input.Id]
+
+    if !ok {
+
+        return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
+
+    }
+
+    return user, nil
 
 }
 
@@ -7240,11 +7888,13 @@ func (h *Handler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.
 
 // With input and raw request access
 
-func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (httpserver.Response, error) {
+func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (map[string]string, error) {
 
     contentType := req.Header.Get("Content-Type")
 
     // input is populated from the request
+
+    return map[string]string{"contentType": contentType}, nil
 
 }
 
@@ -7252,9 +7902,11 @@ func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadIn
 
 // Without input
 
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
 
     // no request data needed
+
+    return map[string]string{"status": "ok"}, nil
 
 }
 
@@ -7262,11 +7914,13 @@ func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
 
 // Without input, but with raw request access
 
-func (h *Handler) Ping(ctx context.Context, req *http.Request) (httpserver.Response, error) {
+func (h *Handler) Ping(ctx context.Context, req *http.Request) (map[string]string, error) {
 
     userAgent := req.Header.Get("User-Agent")
 
     // no input struct is bound
+
+    return map[string]string{"userAgent": userAgent}, nil
 
 }
 ```
@@ -7411,11 +8065,11 @@ The `binding` tag uses [go-playground/validator](https://pkg.go.dev/github.com/g
 If you need the raw `*http.Request` alongside your input struct:
 
 ```
-func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (httpserver.Response, error) {
+func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadInput) (map[string]string, error) {
 
     contentType := req.Header.Get("Content-Type")
 
-    // ...
+    return map[string]string{"contentType": contentType}, nil
 
 }
 ```
@@ -7425,7 +8079,7 @@ func (h *Handler) Upload(ctx context.Context, req *http.Request, input *UploadIn
 When your handler needs the caller IP address, use `ResolveClientIP` with the raw request from `BindR` or `BindNR`:
 
 ```
-func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetProfileInput) (httpserver.Response, error) {
+func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetProfileInput) (map[string]string, error) {
 
     clientIP, err := httpserver.ResolveClientIP(req)
 
@@ -7437,11 +8091,7 @@ func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetP
 
 
 
-    logger.Info(ctx, "profile requested from %s", clientIP)
-
-
-
-    // ...
+    return map[string]string{"clientIP": clientIP}, nil
 
 }
 ```
@@ -7450,59 +8100,197 @@ func (h *Handler) GetProfile(ctx context.Context, req *http.Request, input *GetP
 
 ## Sending responses[​](#sending-responses "Direct link to Sending responses")
 
-All handler methods return an `httpserver.Response` interface.
+Typed handlers return Go values. The default response negotiator encodes these values as JSON. If the request has no `Accept` header, httpserver selects JSON. The default negotiator supports only JSON. If `Accept` does not allow JSON, httpserver returns `406 Not Acceptable`.
 
-### JSON responses[​](#json-responses "Direct link to JSON responses")
+### JSON by default[​](#json-by-default "Direct link to JSON by default")
 
-`NewJsonResponse` serializes any value as JSON:
-
-```
-return httpserver.NewJsonResponse(user), nil
-```
-
-### Text responses[​](#text-responses "Direct link to Text responses")
+Return a Go value from a handler. httpserver encodes it as JSON:
 
 ```
-return httpserver.NewTextResponse("Hello, plain text!"), nil
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
+
+    return map[string]string{"status": "ok"}, nil
+
+}
 ```
 
-### Status-only responses[​](#status-only-responses "Direct link to Status-only responses")
-
-`NewStatusResponse` returns a response with only a status code — useful for `DELETE`, `PUT`, `PATCH`:
+Send a compatible `Accept` header to get JSON:
 
 ```
-return httpserver.NewStatusResponse(204), nil
+curl -i -H "Accept: application/json" http://localhost:8088/api/users/health
+
+# HTTP/1.1 200 OK
+
+# {"status":"ok"}
 ```
 
-### Custom status codes and headers[​](#custom-status-codes-and-headers "Direct link to Custom status codes and headers")
-
-Use functional options to customize any response:
+The default negotiator does not support plain text. This request returns `406 Not Acceptable`:
 
 ```
-return httpserver.NewJsonResponse(
+curl -i -H "Accept: text/plain" http://localhost:8088/api/users/health
 
-    user,
-
-    httpserver.WithStatusCode(http.StatusCreated),
-
-    httpserver.WithHeader("X-Custom-Header", "my-value"),
-
-), nil
+# HTTP/1.1 406 Not Acceptable
 ```
 
-| Option                             | Description                             |
-| ---------------------------------- | --------------------------------------- |
-| `WithStatusCode(code int)`         | Set the HTTP status code (default: 200) |
-| `WithHeader(key, value string)`    | Add a single header                     |
-| `WithHeaders(headers http.Header)` | Merge multiple headers                  |
-| `WithBody(body []byte)`            | Set the raw response body               |
+To support XML or another format, create a negotiator with the representations that the server can produce:
+
+```
+negotiator, err := httpserver.NewContentNegotiator(
+
+    httpserver.ContentTypeApplicationJson,
+
+    httpserver.JSONRepresentation(),
+
+    httpserver.XMLRepresentation(),
+
+)
+
+if err != nil {
+
+    return err
+
+}
+```
+
+Configure the negotiator for the whole server with `WithResponseNegotiator`. Pass this server option to `NewServer` or `NewServerWithSettings`. When using the application helper, put it in `ServerDefinition.Options` passed to `RunServers`:
+
+```
+httpserver.RunServers(map[string]httpserver.ServerDefinition{
+
+    "default": {
+
+        RouterFactory: func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+
+            type HelloResponse struct {
+
+                Message string `json:"message" xml:"message"`
+
+            }
+
+            router.GET("/hello", httpserver.BindN(func(ctx context.Context) (HelloResponse, error) {
+
+                return HelloResponse{Message: "Hello, World!"}, nil
+
+            }))
+
+            return nil
+
+        },
+
+        Options: []httpserver.ServerOption{
+
+            httpserver.WithResponseNegotiator(negotiator),
+
+        },
+
+    },
+
+})
+```
+
+In this example, JSON is the default and XML is available. XML encoding requires output types that Go's `encoding/xml` package supports.
+
+Use `ResponseNegotiationMiddleware` only when a router or group needs to override the server negotiator. For example, this group uses JSON only, while other routes retain the server's JSON and XML representations:
+
+```
+group := router.Group("/json-only")
+
+group.Use(httpserver.ResponseNegotiationMiddleware(
+
+    httpserver.NewDefaultResponseNegotiator(),
+
+))
+```
+
+Register the group's routes after installing the middleware. You do not need this middleware to configure the server-wide negotiator.
+
+### Customizing responses[​](#customizing-responses "Direct link to Customizing responses")
+
+A typed output can implement `StatusCode() int` to set its HTTP status. The default status is `200 OK`. The complete example uses this for `201 Created` from `CreateUser`; `DeleteUser` uses an explicit bodyless response, described below.
+
+```
+type CreatedUserOutput struct {
+
+    *User
+
+}
+
+
+
+func (CreatedUserOutput) StatusCode() int {
+
+    return http.StatusCreated
+
+}
+```
+
+To add a header to `CreatedUserOutput`, implement `Header() http.Header`:
+
+```
+func (CreatedUserOutput) Header() http.Header {
+
+    header := make(http.Header)
+
+    header.Set("X-User-Created", "true")
+
+    return header
+
+}
+```
+
+httpserver negotiates the typed output before it applies these methods. The selected representation controls `Content-Type`. A `Header` method cannot override `Content-Type`. A `ContentType() string` method by itself does not change the selected representation.
+
+A full `httpserver.Response` bypasses negotiation. An explicit `Response` implements `ContentType() string`, `Body() ([]byte, error)`, `Header() http.Header`, and `StatusCode() int`. The server does not compare its content type with the request's `Accept` header.
+
+For a bodyless response such as `204 No Content`, use `NewStatusResponse(http.StatusNoContent)`. A typed output with that status is negotiated first and can return `406 Not Acceptable` if `Accept` excludes supported representations; the explicit response preserves `204` regardless of `Accept`.
+
+```
+return httpserver.NewStatusResponse(http.StatusNoContent), nil
+```
+
+This is specific to explicit responses; ordinary typed outputs, including those with custom status codes, remain subject to negotiation.
+
+```
+func (h *Handler) PlainText(ctx context.Context) (httpserver.Response, error) {
+
+    return httpserver.NewTextResponse("plain text"), nil
+
+}
+```
+
+Use `NewJsonResponse`, `NewTextResponse`, or `NewStatusResponse` to create a full response. Each constructor bypasses negotiation. `NewTextResponse` creates a text response. `NewStatusResponse(http.StatusNoContent)` creates a no-content response.
+
+Use response options to set a status, headers, or body:
+
+```
+func explicitUserResponse(user *User) httpserver.Response {
+
+    return httpserver.NewJsonResponse(
+
+        user,
+
+        httpserver.WithStatusCode(http.StatusCreated),
+
+        httpserver.WithHeader("X-Custom-Header", "my-value"),
+
+    )
+
+}
+```
+
+| Option                             | Description               |
+| ---------------------------------- | ------------------------- |
+| `WithStatusCode(code int)`         | Set the HTTP status code. |
+| `WithHeader(key, value string)`    | Add one header.           |
+| `WithHeaders(headers http.Header)` | Merge multiple headers.   |
+| `WithBody(body []byte)`            | Set the response body.    |
 
 ### Error handling[​](#error-handling "Direct link to Error handling")
 
-Return `nil, error` for unexpected errors. The error middleware returns `500 Internal Server Error` with a sanitized `{"err":"internal server error"}` response, so internal details do not leak to clients:
+Return a zero output and an error for unexpected failures. The error middleware returns `500 Internal Server Error` with `{"err":"internal server error"}`. This prevents internal details from reaching clients.
 
 ```
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
 
     if len(h.users) > 10000 {
 
@@ -7510,30 +8298,30 @@ func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
 
     }
 
-    return httpserver.NewJsonResponse(map[string]string{"status": "ok"}), nil
+    return map[string]string{"status": "ok"}, nil
 
 }
 ```
 
-For client errors with a specific status code, use `GetErrorHandler()` — this returns a `Response` with `nil` error (a handled error):
+For a client error with a specific status code, return a zero output and an error wrapped with `NewErrorWithStatus`:
 
 ```
-func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 
     user, ok := h.users[input.Id]
 
     if !ok {
 
-        return httpserver.GetErrorHandler()(http.StatusNotFound, errors.New("user not found")), nil
+        return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
 
     }
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 
 }
 ```
 
-The key pattern: return a `Response` with `nil` error for **handled** errors, and `nil, error` for **unexpected** errors.
+The error middleware maps both types of errors to HTTP responses. Use `NewErrorWithStatus` for expected client errors and return unwrapped errors for unexpected failures.
 
 If middleware or lower-level code attaches an error to the Gin context and needs a specific status code, wrap it with `NewErrorWithStatus`:
 
@@ -7650,6 +8438,22 @@ type User struct {
 
 
 
+type CreatedUserOutput struct {
+
+	*User
+
+}
+
+
+
+func (CreatedUserOutput) StatusCode() int {
+
+	return http.StatusCreated
+
+}
+
+
+
 type Handler struct {
 
 	users map[int]*User
@@ -7674,7 +8478,7 @@ func NewHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*Han
 
 
 
-func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) (httpserver.Response, error) {
+func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) ([]*User, error) {
 
 	var result []*User
 
@@ -7696,13 +8500,13 @@ func (h *Handler) ListUsers(ctx context.Context, input *ListUsersInput) (httpser
 
 	}
 
-	return httpserver.NewJsonResponse(result), nil
+	return result, nil
 
 }
 
 
 
-func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (CreatedUserOutput, error) {
 
 	user := &User{
 
@@ -7722,23 +8526,23 @@ func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (https
 
 
 
-	return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+	return CreatedUserOutput{User: user}, nil
 
 }
 
 
 
-func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (httpserver.Response, error) {
+func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 
 	user, ok := h.users[input.Id]
 
 	if !ok {
 
-		return httpserver.GetErrorHandler()(http.StatusNotFound, errors.New("user not found")), nil
+		return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
 
 	}
 
-	return httpserver.NewJsonResponse(user), nil
+	return user, nil
 
 }
 
@@ -7754,7 +8558,7 @@ func (h *Handler) DeleteUser(ctx context.Context, input *UserIdInput) (httpserve
 
 
 
-func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
+func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
 
 	if len(h.users) > 10000 {
 
@@ -7762,7 +8566,7 @@ func (h *Handler) Health(ctx context.Context) (httpserver.Response, error) {
 
 	}
 
-	return httpserver.NewJsonResponse(map[string]string{"status": "ok"}), nil
+	return map[string]string{"status": "ok"}, nil
 
 }
 ```
@@ -7792,7 +8596,7 @@ Test it:
 ```
 # Create a user
 
-curl -X POST http://localhost:8088/api/users \
+curl -X POST http://localhost:8088/api/users/ \
 
   -H "Content-Type: application/json" \
 
@@ -7804,7 +8608,7 @@ curl -X POST http://localhost:8088/api/users \
 
 # List users
 
-curl http://localhost:8088/api/users
+curl http://localhost:8088/api/users/
 
 # [{"id":1,"name":"Alice","email":"alice@example.com","role":"admin"}]
 
@@ -7826,11 +8630,21 @@ curl http://localhost:8088/api/users/99
 
 
 
-# Delete a user
+# Delete a user; the explicit bodyless response preserves 204 for this unsupported representation
 
-curl -X DELETE http://localhost:8088/api/users/1 -v
+curl -X DELETE http://localhost:8088/api/users/1 -H "Accept: text/plain" -v
 
 # HTTP/1.1 204 No Content
+
+
+
+# The user was deleted
+
+curl -i http://localhost:8088/api/users/1
+
+# HTTP/1.1 404 Not Found
+
+# {"err":"user not found"}
 
 
 
@@ -8451,7 +9265,7 @@ httpserver:
 | --------- | ------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `privacy` | string | `"private"` | Error detail policy for 5xx responses. Use `"private"` to hide internal details, or `"public"` to return the original error message. |
 
-With the default `private` setting, internal 5xx errors return `{"err":"internal server error"}`. Status errors below 500 still expose their message, so client errors returned through `NewErrorWithStatus` or `GetErrorHandler()(status, err)` remain useful to API clients.
+With the default `private` setting, internal 5xx errors return `{"err":"internal server error"}`. Errors below 500 wrapped with `NewErrorWithStatus` still expose their message to API clients.
 
 Set `privacy` to `public` only when exposing internal 5xx error messages is intentional:
 
@@ -8754,7 +9568,7 @@ type DeploymentSelectorInput struct {
 Multiple handlers reference this same type:
 
 ```
-func (h *HandlerCheckpoints) GetCheckpoints(ctx context.Context, request *DeploymentSelectorInput) (httpserver.Response, error) {
+func (h *HandlerCheckpoints) GetCheckpoints(ctx context.Context, request *DeploymentSelectorInput) ([]Checkpoint, error) {
 
     // request.Namespace and request.Name are populated from the URI
 
@@ -8867,10 +9681,10 @@ httpserver:
 
 ## Error handling patterns[​](#error-handling-patterns "Direct link to Error handling patterns")
 
-Handlers distinguish between client errors (returned as structured responses) and internal errors (returned as Go errors). By default, internal errors return a sanitized `{"err":"internal server error"}` response while the server logs the actual error:
+Handlers attach an HTTP status to expected client errors and add context to other errors. The default error middleware hides internal error details from clients.
 
 ```
-func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (httpserver.Response, error) {
+func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (ListFilesResponse, error) {
 
     items, err := h.files.ListFiles(ctx, input.Database, input.Table, input.Partitions)
 
@@ -8878,15 +9692,15 @@ func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (h
 
         if isBadRequest(err) {
 
-            return httpserver.GetErrorHandler()(http.StatusBadRequest, err), nil
+            return ListFilesResponse{}, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
 
         }
 
-        return nil, fmt.Errorf("could not list files: %w", err)
+        return ListFilesResponse{}, fmt.Errorf("could not list files: %w", err)
 
     }
 
-    return httpserver.NewJsonResponse(ListFilesResponse{Files: items}), nil
+    return ListFilesResponse{Files: items}, nil
 
 }
 ```
@@ -8944,7 +9758,7 @@ Raise `max_body_bytes` for APIs that intentionally accept larger uploads, or set
 | Shared input types                                 | Multiple handlers accept the same URI params                 |
 | Mixed binding (`uri` + `json` + `form` + `header`) | Endpoints that accept path params + query/body/header values |
 | `BindSseN` for SSE                                 | Real-time streaming endpoints                                |
-| `GetErrorHandler()(status, err)`                   | Client errors with specific status codes                     |
+| `nil, NewErrorWithStatus(status, err)`             | Client errors with specific status codes                     |
 | `nil, error`                                       | Unexpected/internal errors (500)                             |
 | Compression exclusion for SSE                      | Always exclude SSE paths from gzip                           |
 
@@ -10737,8 +11551,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -10857,7 +11669,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -10891,13 +11703,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -10909,7 +11721,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -10921,7 +11733,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -10997,8 +11809,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -11117,7 +11927,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11151,13 +11961,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11169,7 +11979,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -11181,7 +11991,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -11231,8 +12041,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -11351,7 +12159,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11385,13 +12193,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11403,7 +12211,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -11415,7 +12223,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -11484,8 +12292,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -11604,7 +12410,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11638,13 +12444,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11656,7 +12462,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -11668,7 +12474,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -11720,8 +12526,6 @@ import (
 
 
 
-	"github.com/gosoline-project/httpserver"
-
 	"github.com/justtrackio/gosoline/pkg/cfg"
 
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -11840,7 +12644,7 @@ func truncate(ctx context.Context, text string) string {
 
 
 
-func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11874,13 +12678,13 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
 
 
-func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (httpserver.Response, error) {
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 
 	h.mu.Lock()
 
@@ -11892,7 +12696,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 	if !ok {
 
-		return httpserver.NewStatusResponse(404), fmt.Errorf("todo %d not found", input.Id)
+		return nil, fmt.Errorf("todo %d not found", input.Id)
 
 	}
 
@@ -11904,7 +12708,7 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (h
 
 
 
-	return httpserver.NewJsonResponse(todo), nil
+	return todo, nil
 
 }
 
@@ -15715,7 +16519,7 @@ This configuration ensures all resource names resolve identically to the old def
 
 # Migrating to the Standalone HTTP Server Package
 
-This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.5.6`.
+This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.6.4`.
 
 The new package keeps the Gin-based server lifecycle and middleware model, but it changes the application-facing API. Instead of building and returning a `*httpserver.Definitions` tree, you receive a `*httpserver.Router` and register routes on it directly. Instead of implementing handler interfaces and manually unpacking an `httpserver.Request`, handlers are plain functions or methods registered through `Bind`, `BindN`, `BindR`, or SSE binding helpers.
 
@@ -15724,7 +16528,7 @@ The new package keeps the Gin-based server lifecycle and middleware model, but i
 Add the standalone module:
 
 ```
-go get github.com/gosoline-project/httpserver@v0.5.6
+go get github.com/gosoline-project/httpserver@v0.6.4
 ```
 
 Update imports:
@@ -16029,10 +16833,10 @@ func (h *listUsersHandler) Handle(ctx context.Context, request *httpserver.Reque
 }
 ```
 
-New handlers without request input use `BindN` and return `httpserver.Response`:
+New handlers without request input use `BindN` and return a typed result:
 
 ```
-func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
 
     users, err := h.store.List(ctx)
 
@@ -16044,7 +16848,7 @@ func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error
 
 
 
-    return httpserver.NewJsonResponse(users), nil
+    return users, nil
 
 }
 ```
@@ -16116,19 +16920,19 @@ type GetUserInput struct {
 
 
 
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
 
     user, err := h.store.Get(ctx, input.Id)
 
     if err != nil {
 
-        return nil, err
+        return User{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 
 }
 ```
@@ -16142,6 +16946,8 @@ r.GET("/:id", httpserver.Bind(h.GetUser))
 ## 6. Migrate Request Binding[​](#6-migrate-request-binding "Direct link to 6. Migrate Request Binding")
 
 The old package selected a binding helper explicitly:
+
+Bound handlers registered with `Bind`, `BindR`, `BindN`, or `BindNR` accept a typed result `O`. Return ordinary results directly. See the response migration section for explicit response cases.
 
 | Old helper                      | Typical new migration                                               |
 | ------------------------------- | ------------------------------------------------------------------- |
@@ -16167,22 +16973,40 @@ type CreateUserInput struct {
 
 
 
-func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+type CreatedUser struct {
+
+    User
+
+}
+
+
+
+func (CreatedUser) StatusCode() int {
+
+    return http.StatusCreated
+
+}
+
+
+
+func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (CreatedUser, error) {
 
     user, err := h.store.Create(ctx, input.Name, input.Email)
 
     if err != nil {
 
-        return nil, err
+        return CreatedUser{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+    return CreatedUser{User: user}, nil
 
 }
 ```
+
+The typed output preserves the old `201 Created` status without forcing a JSON response.
 
 You can combine URI, query, and body fields in one input struct:
 
@@ -16249,19 +17073,19 @@ type GetUserInput struct {
 
 
 
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
 
     user, err := h.store.Get(ctx, input.Id)
 
     if err != nil {
 
-        return nil, err
+        return User{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 
 }
 ```
@@ -16335,13 +17159,13 @@ func (h *UserHandler) UploadAvatar(ctx context.Context, req *http.Request, input
 The old `httpserver.Request` exposed `request.ClientIp`. In the standalone package, use raw request access and resolve the client IP explicitly:
 
 ```
-func (h *UserHandler) GetUser(ctx context.Context, req *http.Request, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, req *http.Request, input *GetUserInput) (User, error) {
 
     clientIP, err := httpserver.ResolveClientIP(req)
 
     if err != nil {
 
-        return nil, err
+        return User{}, err
 
     }
 
@@ -16351,7 +17175,17 @@ func (h *UserHandler) GetUser(ctx context.Context, req *http.Request, input *Get
 
 
 
-    // ...
+    user, err := h.store.Get(ctx, input.Id)
+
+    if err != nil {
+
+        return User{}, err
+
+    }
+
+
+
+    return user, nil
 
 }
 ```
@@ -16360,51 +17194,39 @@ Register handlers that need both typed input and the raw request with `BindR`. U
 
 ## 9. Migrate Responses[​](#9-migrate-responses "Direct link to 9. Migrate Responses")
 
-The new package returns a `Response` interface instead of the old concrete `*Response` struct.
+Bound handlers in `v0.6.4` accept typed result values. Return ordinary results directly, and the server negotiates their response format. The default negotiator supports JSON only. Register other representations explicitly. A missing `Accept` header selects JSON, while an unsupported `Accept` value returns `406 Not Acceptable`.
 
-### JSON Responses[​](#json-responses "Direct link to JSON Responses")
+For example, a JSON handler returns the domain value:
 
 ```
-return httpserver.NewJsonResponse(user), nil
+return user, nil
 ```
 
-### Text Responses[​](#text-responses "Direct link to Text Responses")
+See [Customizing responses](/docs/how-to/http-server/build-an-http-service/.md#customizing-responses) for typed status or header methods and explicit `Response` overrides.
 
-Old low-level response:
+### Fixed response formats and bodyless responses[​](#fixed-response-formats-and-bodyless-responses "Direct link to Fixed response formats and bodyless responses")
+
+Keep an explicit response when the route must return a fixed media type or no body. Typed outputs are negotiated before their `StatusCode()` method is applied, so even a typed output with `204 No Content` can return `406 Not Acceptable` for an unsupported `Accept` value. An explicit `httpserver.Response` bypasses negotiation; use `NewStatusResponse(http.StatusNoContent)` to preserve `204` regardless of `Accept`. Ordinary typed outputs, including outputs with custom statuses, remain subject to negotiation.
+
+Old low-level text response:
 
 ```
 return httpserver.NewResponse("ok", httpserver.ContentTypeText, http.StatusOK, make(http.Header)), nil
 ```
 
-New response:
+New fixed text response:
 
 ```
 return httpserver.NewTextResponse("ok"), nil
 ```
 
-### Status Responses[​](#status-responses "Direct link to Status Responses")
+For a bodyless status such as `204 No Content`, use:
 
 ```
 return httpserver.NewStatusResponse(http.StatusNoContent), nil
 ```
 
-### Custom Status Codes and Headers[​](#custom-status-codes-and-headers "Direct link to Custom Status Codes and Headers")
-
-Old response options were limited and the constructor accepted status and headers directly. New responses use options consistently:
-
-```
-return httpserver.NewJsonResponse(
-
-    user,
-
-    httpserver.WithStatusCode(http.StatusCreated),
-
-    httpserver.WithHeader("X-User-Id", strconv.FormatUint(uint64(user.Id), 10)),
-
-), nil
-```
-
-For raw bodies, use `NewResponse` with options:
+For raw bytes with a required media type, keep `NewResponse` with options:
 
 ```
 return httpserver.NewResponse(
@@ -16420,10 +17242,10 @@ return httpserver.NewResponse(
 
 ## 10. Migrate Error Handling[​](#10-migrate-error-handling "Direct link to 10. Migrate Error Handling")
 
-For unexpected errors, keep returning `nil, err`:
+For unexpected errors, return the zero value for the typed result and the error:
 
 ```
-func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
 
     users, err := h.store.List(ctx)
 
@@ -16435,38 +17257,85 @@ func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error
 
 
 
-    return httpserver.NewJsonResponse(users), nil
+    return users, nil
 
 }
 ```
 
-For handled client errors, return an error response and a nil Go error:
+For an expected client error with a specific status, return the zero result and `NewErrorWithStatus`:
 
 ```
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
 
     user, err := h.store.Get(ctx, input.Id)
 
     if errors.Is(err, ErrUserNotFound) {
 
-        return httpserver.GetErrorHandler()(http.StatusNotFound, err), nil
+        return User{}, httpserver.NewErrorWithStatus(http.StatusNotFound, err)
 
     }
 
     if err != nil {
 
-        return nil, fmt.Errorf("could not get user: %w", err)
+        return User{}, fmt.Errorf("could not get user: %w", err)
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 
 }
 ```
 
-In `v0.5.6`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
+Configure `WithErrorHandler` as a server option. Pass it to `NewServer` or `NewServerWithSettings`, or put it in `ServerDefinition.Options` for `RunServers`.
+
+The callback type is `func(statusCode int, err error) any`. Error middleware calls it after it selects the HTTP status from the last recorded error.
+
+Status selection follows this order:
+
+1. An `ErrorWithStatus`, such as `NewErrorWithStatus`, sets the status.
+2. Otherwise, the first matching `WithErrorMapper` sets the status.
+3. Otherwise, validation errors use `400 Bad Request`.
+4. All other errors use `500 Internal Server Error`.
+
+The endpoint still returns its error through the normal `(output, error)` result. This callback returns the body to send to the client, not another Go error. If it returns a body value such as the `ErrorBody` struct below, the framework keeps the selected HTTP status. With private 5xx privacy, middleware passes `internal server error` to the callback.
+
+Return a struct, map, or other serializable Go value that does not implement `httpserver.Response` to let the server choose the response format from the request's `Accept` header. The configured negotiator serializes that value and sets `Content-Type`. JSON is the default. XML requires a negotiator that includes `XMLRepresentation()` and a value that `encoding/xml` can encode, such as this struct:
+
+```
+type ErrorBody struct {
+
+    Message string `json:"message" xml:"message"`
+
+}
+
+
+
+httpserver.WithErrorHandler(func(statusCode int, err error) any {
+
+    return ErrorBody{Message: err.Error()}
+
+})
+```
+
+In `v0.6.4`, error middleware falls back to JSON with the selected error status if it cannot negotiate or encode that body value. To always send a fixed format instead, return a `httpserver.Response`. It bypasses `Accept` negotiation and controls its own status and `Content-Type`. This example always sends JSON; `WithStatusCode(statusCode)` preserves the selected error status:
+
+```
+httpserver.WithErrorHandler(func(statusCode int, err error) any {
+
+    return httpserver.NewJsonResponse(
+
+        ErrorBody{Message: err.Error()},
+
+        httpserver.WithStatusCode(statusCode),
+
+    )
+
+})
+```
+
+In `v0.6.4`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
 
 The 5xx behavior is controlled by `httpserver.<name>.errors.privacy`. The default is `private`, which hides internal error details. Set it to `public` only when clients should receive the original internal error message:
 
@@ -16821,13 +17690,13 @@ The standalone JWT helper validates `Authorization: Bearer <token>` headers usin
 Successful authenticators attach an `auth.Subject` to the request context. In bound handlers, retrieve it with `auth.GetSubject(ctx)`:
 
 ```
-func (h *UserHandler) Me(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) Me(ctx context.Context) (*auth.Subject, error) {
 
     subject := auth.GetSubject(ctx)
 
 
 
-    return httpserver.NewJsonResponse(subject), nil
+    return subject, nil
 
 }
 ```
@@ -16970,25 +17839,7 @@ func (s *UserApiSuite) SetupHttpServerRouter() httpserver.RouterFactory {
 }
 ```
 
-For handler-level tests, prefer testing handler methods directly where possible:
-
-```
-func TestGetUser(t *testing.T) {
-
-    handler := &UserHandler{store: fakeStore}
-
-
-
-    response, err := handler.GetUser(context.Background(), &GetUserInput{Id: 1})
-
-
-
-    require.NoError(t, err)
-
-    assert.Equal(t, http.StatusOK, response.StatusCode())
-
-}
-```
+Assert typed output values and domain behavior through handler methods. Test negotiation, headers, and status codes through HTTP requests.
 
 For binding and routing tests, use the package test helpers or an application test case with `SetupHttpServerRouter`.
 
@@ -17105,7 +17956,7 @@ type CreateUserInput struct {
 
 
 
-func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error) {
+func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
 
     users, err := h.store.List(ctx)
 
@@ -17117,49 +17968,65 @@ func (h *UserHandler) ListUsers(ctx context.Context) (httpserver.Response, error
 
 
 
-    return httpserver.NewJsonResponse(users), nil
+    return users, nil
 
 }
 
 
 
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (httpserver.Response, error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
 
     user, err := h.store.Get(ctx, input.Id)
 
     if errors.Is(err, ErrUserNotFound) {
 
-        return httpserver.GetErrorHandler()(http.StatusNotFound, err), nil
+        return User{}, httpserver.NewErrorWithStatus(http.StatusNotFound, err)
 
     }
 
     if err != nil {
 
-        return nil, err
+        return User{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user), nil
+    return user, nil
 
 }
 
 
 
-func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (httpserver.Response, error) {
+type CreatedUser struct {
+
+    User
+
+}
+
+
+
+func (CreatedUser) StatusCode() int {
+
+    return http.StatusCreated
+
+}
+
+
+
+func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (CreatedUser, error) {
 
     user, err := h.store.Create(ctx, input.Name, input.Email)
 
     if err != nil {
 
-        return nil, err
+        return CreatedUser{}, err
 
     }
 
 
 
-    return httpserver.NewJsonResponse(user, httpserver.WithStatusCode(http.StatusCreated)), nil
+    return CreatedUser{User: user}, nil
 
 }
 
@@ -17192,11 +18059,9 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 * Replace path parameter helpers with `uri` tags on input structs.
 * Replace `CreateRawHandler` and `CreateReaderHandler` with `BindR` or `BindNR` and explicit `req.Body` handling.
 * Replace `request.ClientIp` with `ResolveClientIP(req)` in `BindR` or `BindNR` handlers.
-* Replace low-level `NewResponse(body, contentType, statusCode, header)` calls with `NewTextResponse`, `NewJsonResponse`, `NewStatusResponse`, or `NewResponse` options.
-* Replace old `pkg/httpserver/auth` imports with `github.com/gosoline-project/httpserver/auth`, move auth config below `httpserver.<name>.auth`, and pass the server name to auth constructors.
-* Move old global CORS config from `api_cors_*` keys to `httpserver.<name>.cors.*`, and register package CORS with `router.UseFactory(httpserver.CorsFactory)` or `httpserver.Cors(config, name)`.
-* Review `max_body_bytes`; keep the v0.5.6 default 10 MiB limit, raise it, or set it to `0` intentionally.
-* Update tests for v0.5.6 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
+* Return typed values directly from ordinary bound handlers. Keep explicit responses for fixed media types, raw bodies, and bodyless status responses. See [Customizing responses](/docs/how-to/http-server/build-an-http-service/.md#customizing-responses).
+* Review `max_body_bytes`; keep the v0.6.4 default 10 MiB limit, raise it, or set it to `0` intentionally.
+* Update tests for v0.6.4 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
 * Update test suites from definition setup to router factory setup.
 * Run your HTTP tests and exercise validation errors, client errors, and middleware behavior after migration.
 
@@ -17205,6 +18070,316 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 If you want an AI agent to perform this migration, copy the prepared migration instructions and provide them as the task prompt. The instructions are intentionally operational and include discovery steps, migration order, API mappings, validation checks, and stop conditions.
 
 Copy AI migration instructions
+
+
+---
+
+# Migrating an Existing Service to SQLH CRUD
+
+This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers. Use it to preserve the service's public API and domain behavior.
+
+SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations. Do not replace domain rules with generic CRUD behavior.
+
+This guide targets SQLH v0.8.0, SQLR v0.9.1, SQLC v0.4.0, and httpserver v0.6.4. SQLH v0.8.0 declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
+
+## 1. Review the Current API[​](#1-review-the-current-api "Direct link to 1. Review the Current API")
+
+Before changing code, record the current behavior:
+
+* HTTP paths, methods, middleware, and authorization
+* Request and response schemas, envelopes, and status codes
+* `Content-Type`, `Accept`, and response negotiation behavior
+* Validation errors, not-found behavior, and soft-delete rules
+* Association create, update, patch, and delete behavior
+* List filters, joins, ordering, grouping, pagination, and counts
+* Event publication, transaction boundaries, and rollback behavior
+
+Create a parity matrix for every CRUD endpoint. Add parity checks before removing old handlers. Search for old SQLH symbols, custom handlers, repository factories, relation mappers, soft-delete scopes, generated artifacts, and event or outbox paths. For v0.7.1, inspect `Transformer`, `JsonResultsTransformer`, every `Builder*Aware` hook, `WithTx`/`BindTx*`, and each `WithRepositoryFactory` or returned wrapper. Record its side effects, including database provisioning, data copies, and storage cleanup.
+
+## 2. Replace the Persistence Model[​](#2-replace-the-persistence-model "Direct link to 2. Replace the Persistence Model")
+
+Embed `sqlr.Entity[K]` when SQLR should manage IDs and timestamps. Otherwise implement `sqlr.Entitier[K]` and preserve the service's ID and timestamp behavior. Keep table names, column names, primary keys, and nullable fields, and implement `TableName()` when SQLR's inferred name differs.
+
+Use `db` for columns and `db:"-"` for non-column relation fields:
+
+```
+type Project struct {
+
+    sqlr.Entity[uint]
+
+
+
+    OwnerID *uint  `db:"owner_id"`
+
+    Owner   *Owner `db:"-" sqlr:"belongsTo:owner_id;preload" sqlh:"preload:read,update"`
+
+    Rules   []*Rule `db:"-" sqlr:"foreignKey:project_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
+
+    Labels  []*Label `db:"-" sqlr:"foreignKey:project_id;preload;sync:create,update" sqlh:"preload:create,read,query,update;sync:create,update"`
+
+    Tags    []*Tag  `db:"-" sqlr:"many2many:project_tags;sync:update" sqlh:"preload:read,update;sync:update"`
+
+}
+```
+
+Use SQLR tags for relationship shape and schema defaults. `foreignKey:<column>` names the foreign-key column on a HasOne or HasMany child table. `belongsTo:<column>` names the foreign-key column on the current entity and requires a matching `db` field. `many2many:<table>` names the join table.
+
+Use `parentKey:<column>` and `relatedKey:<column>` for nonstandard many-to-many join-column names. Other relevant options are `primaryKey`, `autoCreateTime`, `autoUpdateTime`, `preload`, `sync:create,update,delete`, and `syncMode:many2many`. Separate SQLR options with semicolons. `syncMode:many2many` requires `sync:update` and a many-to-many relation.
+
+Use SQLH tags for CRUD-phase builders. Valid directives are `preload:create,read,query,update` and `sync:create,update,delete`; separate directives with semicolons and phases with commas. Relation paths use Go field names such as `Rules` or `Rules.Owner`, not database columns or JSON names. Unknown directives, phases, and scalar-field tags fail during handler setup.
+
+`sqlr:"...;preload"` is a schema-level auto-preload. `sqlh:"preload:<phases>"` adds phase-specific builders, and `preload:update` affects the update lookup and update write, not only post-write loading. SQLH parses nested relation tags recursively.
+
+Treat sync tags as policy. SQLR Create and Delete default to all association paths, but the first create or delete sync path changes that operation to selected-path mode. SQLR Update defaults to no association sync, then merges schema defaults and per-operation paths. Omit options take precedence. SQLR `sync:update` can synchronize PUT relations without an SQLH tag, while default PATCH association selection still needs matching SQLH `sync:update` policy.
+
+## 3. Build the SQLR Repository[​](#3-build-the-sqlr-repository "Direct link to 3. Build the SQLR Repository")
+
+Construct the transaction-aware repository from the same SQLC client that SQLH uses:
+
+```
+client, err := sqlc.ProvideClient(ctx, config, logger, "default")
+
+if err != nil {
+
+    return nil, err
+
+}
+
+
+
+repository, err := sqlr.NewRepositoryTxWithSettings[uint, model.Project](client, sqlr.DefaultSettings())
+```
+
+Keep domain queries and background transitions in an application repository. Apply an active-row scope to normal reads when the service uses soft deletion, and provide a separate method for consumers that must read deleted rows. Use explicit transactions for background transitions and `ForUpdate()` when a transition must lock the root row. Before replacing a v0.7.x `WithRepositoryFactory`, inspect its repository wrapper and method side effects. The v0.8 `WithRepositoryTxFactory` supplies a transaction-aware SQLR repository, but it does not migrate those effects. Preserve database provisioning, data copies, and storage cleanup at the service or route boundary when their order or failure behavior matters. SQLH transactions cannot roll back blob-store or other external effects, and MySQL DDL may commit implicitly. Keep legacy Create/Delete handlers outside the SQLH CRUD handler when that order matters. Use `NewCrudHandler` to manually register only the other SQLH routes.
+
+## 4. Define Typed SQLH Callbacks[​](#4-define-typed-sqlh-callbacks "Direct link to 4. Define Typed SQLH Callbacks")
+
+Create an update input that embeds `sqlh.InputById[Id]`. It supplies `GetId`, force-filter storage, and the `uri:"id" json:"-"` route identity. Keep request fields tagged for JSON and Gin validation.
+
+After authorization, use `AddForceFilter` to attach tenant or account restrictions. Each force filter must add a restrictive `WHERE` clause only.
+
+```
+type ProjectUpdateInput struct {
+
+    sqlh.InputById[string]
+
+    Name      string       `json:"name" binding:"required"`
+
+    RuleItems []*RuleInput `json:"ruleItems"`
+
+}
+```
+
+### Choose the definition constructor[​](#choose-the-definition-constructor "Direct link to Choose the definition constructor")
+
+For the standard `sqlh.ListInput`, call `NewCrudDefinition` and wrap the result:
+
+```
+definition := sqlh.NewCrudDefinition(
+
+    operations.createInput,
+
+    operations.updateInput,
+
+    operations.patchInputFromEntity,
+
+    operations.output,
+
+)
+
+definition.Identity = identityByPublicID
+
+definition.DeleteScope = activeScope
+
+definition.Delete = operations.delete
+
+definition.DeleteOutput = definition.Output
+
+definition.PatchAssociationTriggers = map[string]string{"state": "Labels"}
+
+
+
+factory := sqlh.SimpleCrudDefinition(definition)
+```
+
+`NewCrudDefinition` fixes the list input type to `sqlh.ListInput`. For a custom list input, instantiate `CrudDefinition` with every type parameter; do not assign `NewCrudDefinition` to a custom-LI definition.
+
+```
+type ProjectListInput struct {
+
+    sqlh.ListInput
+
+    LegacyFilter string `json:"legacyFilter,omitempty"`
+
+}
+
+
+
+definition := sqlh.CrudDefinition[
+
+    uint, Project, string, ProjectCreateInput, ProjectUpdateInput, ProjectListInput, ProjectOutput,
+
+]{
+
+    CreateInput:          operations.createInput,
+
+    UpdateInput:          operations.updateInput,
+
+    PatchInputFromEntity: operations.patchInputFromEntity,
+
+    Output:               operations.output,
+
+}
+
+factory := sqlh.SimpleCrudDefinition(definition)
+```
+
+Use a `CrudDefinitionFactory` instead of `SimpleCrudDefinition` when construction needs context, configuration, a logger, or another startup dependency. Keep domain behavior in callbacks: `CreateInput` authorizes and validates the request, maps root and child values, and preserves ID and state rules.
+
+`UpdateInput` authorizes the loaded entity, validates before mutation, maps complete values, resolves child IDs, creates ID-less children, applies state transitions, and preserves timestamp ownership. `PatchInputFromEntity` copies every writable value that an omitted patch field must retain, including child public IDs. `Output` checks read authorization and maps the existing typed response. Map v0.7.x `TransformCreateInput` to `CreateInput`, `TransformUpdateInput` to `UpdateInput`, and `TransformOutput` or `RenderEntityResponse` to `Output`. Map each old `RenderQueryResponse` result with `Output`. Keep a route wrapper when the old list envelope differs from `ListOutput[O]`. SQLH v0.7.1 had no built-in PATCH route or patch mapper. If the old API has PATCH, preserve it with a custom operation or a complete-input mapper. Move each old `Builder*Aware` hook to relation tags, list or identity callbacks, or a full operation. Preserve its query, preload, and synchronization behavior. The mapper callbacks do not receive a transaction or repository. Use a `*Operation` callback for database reads or writes that need SQLH's active transaction. When an old transformer returned an explicit `httpserver.Response`, record its status, headers, and content type. Typed outputs use httpserver negotiation and can return 406 for an unsupported `Accept`. When JSON is the only registered representation and negotiated responses are acceptable, bind typed output directly. Do not add a JSON-only wrapper. Use an explicit `httpserver.Response` or route wrapper when the old response must bypass negotiation.
+
+Default HTTP binding validates the bound type. PUT validates the update input, but PATCH validates `sqlh.PatchInput`, not the merged update input. Validate the complete input at the start of `UpdateInput`, before changing the entity:
+
+```
+import (
+
+    "github.com/gin-gonic/gin/binding"
+
+    "github.com/justtrackio/gosoline/pkg/validation"
+
+)
+
+
+
+if err := binding.Validator.ValidateStruct(input); err != nil {
+
+    return nil, validation.NewError(err)
+
+}
+```
+
+This reuses `binding` tags and registered Gin field or struct validators. `validation.NewError` maps the failure to HTTP 400. A custom `UpdateOperation` must perform this validation itself.
+
+## 5. Preserve JSON Merge Patch Behavior[​](#5-preserve-json-merge-patch-behavior "Direct link to 5. Preserve JSON Merge Patch Behavior")
+
+The default PATCH operation runs in one transaction:
+
+1. Load the scoped entity with update preloads and a root-row lock.
+2. Build the complete update input.
+3. Merge the original RFC 7396 document into that input.
+4. Call `UpdateInput`.
+5. Select associations present in the original document.
+6. Persist the root and selected associations.
+7. Map output and commit.
+
+Do not treat `UpdateInput` as partial. The complete input must contain every value that an omitted field keeps, and arrays replace the complete array.
+
+An explicit null clears a pointer or nullable value. Use a pointer or nullable wrapper for fields that accept null. For a non-nullable scalar, JSON null becomes the field's zero value during merge. Required or domain validation must reject it when the old contract forbids null.
+
+An explicit null or empty selected collection clears that collection. A selected HasOne null clears its owned child. For a selected, directly mapped BelongsTo path, SQLH also clears its nullable foreign key when PATCH sets it to null. For PUT or trigger-driven changes, the mapper must clear the foreign key because SQLR skips a nil target. An omitted relation is not synchronized merely because the complete input contains its current value.
+
+For direct child relations, an existing child ID updates that child and an ID-less child creates one. A missing HasMany child can be deleted when the selected sync path requires it. For many-to-many relations, an existing ID is link-only by default; SQLR verifies the target and reconciles join-table membership without updating that target row.
+
+An ID-less many-to-many target is created. A missing target removes its link without deleting the target row. Use full target-row sync only when the old contract permits mutation of shared targets. Configure it with SQLR `sync:update;syncMode:many2many` and matching SQLH `sync:update`.
+
+SQLH derives a direct association path from update-input `json` tags and entity relation names. Use overrides when the paths differ:
+
+```
+definition.PatchAssociations = map[string]string{
+
+    "ruleItems": "Rules",
+
+}
+
+definition.PatchAssociationTriggers = map[string]string{
+
+    "state": "Labels",
+
+}
+```
+
+A direct path or trigger must name a relation with SQLH `sync:update`. A trigger only selects the relation when the scalar JSON path is present; it does not compute the relation or change merge and null semantics. Keep selection based on the original patch document.
+
+A custom operation that bypasses the default builder must request the same association path. Use `SyncMany2many` for an operation-level full-sync choice.
+
+Use a custom `PatchOperation` only when the complete-input pipeline cannot represent the old API. It replaces this pipeline inside SQLH's transaction, and `TxRunner` still wraps the operation. Use the supplied transaction and repository, and implement validation, association selection, persistence, and output mapping.
+
+In SQLH v0.8.0, custom PATCH operations read the parsed document from `input.Document`. Do not call `input.Document()`.
+
+## 6. Preserve List Compatibility[​](#6-preserve-list-compatibility "Direct link to 6. Preserve List Compatibility")
+
+Use the `ProjectListInput` type above for native SQLC JSON filters, pagination, and force filters. Embedding `sqlh.ListInput` supplies standard implementations only. If `LegacyFilter` changes filter behavior, override `ApplyFilters` and any other needed phase. SQLH v0.7.1 `InputQuery` contained only `filter`; v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`. Do not add pagination if the old API did not expose it. Use a custom `ListInputSource` with the old fields, no-op modifier and pagination phases, and no-op pagination validation when those phases did not exist. Implement all required list-input methods and instantiate `CrudDefinition` with every type parameter; `NewCrudDefinition` fixes the input type to `sqlh.ListInput`. Preserve the old binder's behavior for unknown fields.
+
+Custom `Query` and `Count` callbacks must call `QueryPlan.ApplyBuilder` and then `QueryPlan.ApplyScope`. Return a scope error before repository work. A custom `Query` then applies modifiers and pagination, in that order. A custom `Count` must not apply query modifiers or pagination. The default count applies query modifiers but not pagination. SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING. Implement a custom count when joins or grouping change the old total. Use the same filter, force-filter, and delete scope for rows and counts.
+
+`CrudHandler.List` and `CrudDefinition.ListOperation` always return `ListOutput[O]` with `Results` and `Total`. If the old API uses another outer envelope, call `handler.List` from a typed wrapper and map those fields, then register the wrapper manually:
+
+```
+func listLegacy(ctx context.Context, input *ProjectListInput) (LegacyListOutput, error) {
+
+    result, err := handler.List(ctx, input)
+
+    if err != nil {
+
+        return LegacyListOutput{}, err
+
+    }
+
+
+
+    return LegacyListOutput{Items: result.Results, Count: result.Total}, nil
+
+}
+
+
+
+router.POST("/v1/projects", httpserver.Bind(listLegacy))
+```
+
+Do not make `ListOperation` return another envelope. For a legacy filter dialect, detect it before decoding and reject unsafe mixed native and legacy forms. Translate known fields and operators to SQLC expressions.
+
+Preserve required joins, grouping, ordering, pagination, and client-dependent `LIMIT 0` behavior. Reject unknown fields, operators, directions, and boolean values. Apply the same scope to row and count queries.
+
+## 7. Keep Existing Routes and Delete Responses[​](#7-keep-existing-routes-and-delete-responses "Direct link to 7. Keep Existing Routes and Delete Responses")
+
+`WithCrudHandlers` registers:
+
+* `POST /v{version}/{entity}`
+* `GET /v{version}/{entity}/:id`
+* `PUT /v{version}/{entity}/:id`
+* `PATCH /v{version}/{entity}/:id`
+* `DELETE /v{version}/{entity}/:id`
+* `POST /v{version}/{plural-entity}`
+
+`WithCrudHandlers` in SQLH v0.7.1 did not register a PATCH route. SQLH v0.8.0 adds that route. Both versions return 204 for the standard DELETE route. Use `NewCrudHandler` and manual registration when a path, method, middleware, binder, response envelope, or status differs. Do not register PATCH unless it is part of the public API.
+
+Use `DeleteScope` to hide inactive rows and a custom `Delete` callback for soft deletion or other domain rules. The scope applies to default read, list, count, update, PATCH, and delete lookups. When DELETE returns a body, set `definition.DeleteOutput = definition.Output` and manually bind `handler.Delete`. `DeleteNoContent` never calls `DeleteOutput`.
+
+Set `Identity` when a public ID uses a non-primary-key column or when public `Id` and stored key `K` have different Go types. SQLH rejects differing `Id` and `K` types when `Identity` is nil. Use the default lookup only when the types and key semantics match. In a custom lookup, use the supplied repository and transaction. Add the public-ID predicate. For every lookup, apply the supplied scope, return its error before repository work, and apply the supplied builder. Return `sqlr.ErrNotFound` when no row matches. Ordinary GET lookups use the builder for relation preloads, but not for row locking. Default Update, PATCH, and Delete lookups also use it for `FOR UPDATE`. SQLR locks the root and preloaded rows in the same transaction, including nested and many-to-many preloads.
+
+## 8. Preserve Transactions, Background Work, and Events[​](#8-preserve-transactions-background-work-and-events "Direct link to 8. Preserve Transactions, Background Work, and Events")
+
+Build `RepositoryTx` from the same `sqlc.Client` that SQLH uses to begin transactions. Use `WithRepositoryTxFactory` and `sqlr.NewRepositoryTxWithSettings` for custom repository construction. The default SQLH operation maps output before commit. It rolls back its SQL transaction on operation, association, output, and panic errors. Each custom `*Operation` runs inside SQLH's `TxRunner` and receives its active `sqlr.TTx` and configured repository. Use them for transaction-bound database work; the transaction cannot roll back blob-store or other external effects, and MySQL DDL may commit implicitly. An override owns authorization, scope, root locking, association selection, and persistence for its operation. Remove old `WithTx`/`BindTx*` middleware from migrated CRUD routes. SQLH v0.8.0 starts a transaction for each CRUD operation. Do not wrap it in another transaction or put a transaction in Gin context. `UpdateOperation` does not replace the mapper used by default PATCH. `PatchOperation` replaces the default PATCH pipeline inside the existing transaction. `ListOperation` still returns `ListOutput[O]`. Use `TxRunner.InTransaction` for custom typed handlers outside a CRUD definition. Keep background transitions in the application repository with explicit transactions. Use `ForUpdate()` when a transition must serialize with another writer. Preserve existing retry, idempotency, and reader visibility behavior.
+
+Publish events only after the database transaction commits. For CDC, publish from the committed change event and reload the aggregate with the required active or deleted-row visibility. Preserve soft-delete events, hard-delete tombstones, outbox boundaries, and retry behavior.
+
+Preserve the existing SQLC configuration, migration path, and reset behavior. Set MySQL `clientFoundRows=true` under SQLC `parameters` when a valid unchanged update must count as matched. Without it, SQLR can report `ErrNotFound` for an update that matched a row.
+
+## 9. Validate and Regenerate[​](#9-validate-and-regenerate "Direct link to 9. Validate and Regenerate")
+
+Before removing old handlers, verify route and response parity, authorization, validation and 400 errors, JSON Merge Patch omission and null behavior, association preloads and synchronization, native and legacy filters, row/count scope parity, soft-delete visibility, delete responses, not-found behavior, rollback after root or child failures, background locks, and post-commit events.
+
+Regenerate Go types, mocks, OpenAPI files, and other derived artifacts from the preserved source definitions. Do not edit generated files as the primary fix. Remove old handlers and removed SQLH APIs only after parity checks pass.
+
+For the full operational procedure, copy the instructions below. The prompt is self-contained and includes pinned API semantics, tag rules, constructors, operation choices, acceptance checks, and stop conditions.
+
+Copy AI migration instructions
+
+## See Also[​](#see-also "Direct link to See Also")
+
+* [sqlh - SQL HTTP Handlers](/docs/how-to/databases-sql/sqlh/.md)
+* [sqlr - SQL Repository](/docs/how-to/databases-sql/sqlr/.md)
+* [sqlc - SQL Client](/docs/how-to/databases-sql/sqlc/.md)
 
 
 ---
@@ -19645,16 +20820,20 @@ func NewMyHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*M
 
 ### Bind functions[​](#bind-functions "Direct link to Bind functions")
 
-| Function      | Handler signature                            | Use case                       |
-| ------------- | -------------------------------------------- | ------------------------------ |
-| `Bind[I]`     | `(ctx, *I) (Response, error)`                | Bind request to input struct   |
-| `BindR[I]`    | `(ctx, *http.Request, *I) (Response, error)` | Bind with raw request access   |
-| `BindN`       | `(ctx) (Response, error)`                    | No input binding               |
-| `BindNR`      | `(ctx, *http.Request) (Response, error)`     | No input, with raw request     |
-| `BindSse[I]`  | `(ctx, *I, *SseWriter) error`                | SSE with input binding         |
-| `BindSseR[I]` | `(ctx, *http.Request, *I, *SseWriter) error` | SSE with input + raw request   |
-| `BindSseN`    | `(ctx, *SseWriter) error`                    | SSE with no input              |
-| `BindSseNR`   | `(ctx, *http.Request, *SseWriter) error`     | SSE with raw request, no input |
+| Function          | Handler signature                                                       | Use case                                      |
+| ----------------- | ----------------------------------------------------------------------- | --------------------------------------------- |
+| `Bind[I, O any]`  | `func(ctx context.Context, input *I) (O, error)`                        | Bind request to input and render typed output |
+| `BindR[I, O any]` | `func(ctx context.Context, request *http.Request, input *I) (O, error)` | Bind with raw request access                  |
+| `BindN[O any]`    | `func(ctx context.Context) (O, error)`                                  | No input binding                              |
+| `BindNR[O any]`   | `func(ctx context.Context, request *http.Request) (O, error)`           | No input, with raw request                    |
+| `BindSse[I]`      | `(ctx, *I, *SseWriter) error`                                           | SSE with input binding                        |
+| `BindSseR[I]`     | `(ctx, *http.Request, *I, *SseWriter) error`                            | SSE with input + raw request                  |
+| `BindSseN`        | `(ctx, *SseWriter) error`                                               | SSE with no input                             |
+| `BindSseNR`       | `(ctx, *http.Request, *SseWriter) error`                                | SSE with raw request, no input                |
+
+The four response binding helpers accept a typed result `O` and negotiate its representation from the request's `Accept` header. The default renderer supports JSON only, uses JSON when `Accept` is missing, and returns `406 Not Acceptable` when no accepted media type is supported. See [Customizing responses in Build an HTTP service](/docs/how-to/http-server/build-an-http-service/.md#customizing-responses) for response metadata and explicit `Response` overrides.
+
+Typed outputs are negotiated before their `StatusCode()` metadata is applied. For a bodyless `204 No Content` response that must be preserved when `Accept` is unsupported, return `NewStatusResponse(http.StatusNoContent)`; explicit responses bypass negotiation. Other typed outputs, including those with custom status codes, remain negotiated.
 
 ### Binding tags[​](#binding-tags "Direct link to Binding tags")
 
@@ -19715,33 +20894,41 @@ Binding and validation failures return `400 Bad Request`. Validation bind failur
 
 ## Error handling[​](#error-handling "Direct link to Error handling")
 
-### [WithErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#witherrorhandler "Direct link to witherrorhandler")
+### [WithErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/server_options.go)[​](#witherrorhandler "Direct link to witherrorhandler")
 
 ```
-httpserver.WithErrorHandler(func(statusCode int, err error) httpserver.Response {
+httpserver.WithErrorHandler(func(statusCode int, err error) any {
 
-    return httpserver.NewJsonResponse(
-
-        map[string]any{"error": err.Error()},
-
-        httpserver.WithStatusCode(statusCode),
-
-    )
+    return map[string]any{"error": err.Error()}
 
 })
 ```
 
-Sets a custom global error handler. By default, 4xx responses return `{"err":"<message>"}` and 5xx responses return `{"err":"internal server error"}`. Set `httpserver.<name>.errors.privacy` to `public` to expose 5xx error messages.
+Pass this option to `NewServer` or `NewServerWithSettings`, or add it to `ServerDefinition.Options` for `RunServers`. The callback runs after middleware selects a status from the last recorded error.
 
-### [GetErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#geterrorhandler "Direct link to geterrorhandler")
+Status selection checks `ErrorWithStatus` first, then the first matching `WithErrorMapper`. Validation errors use `400 Bad Request`. All other errors use `500 Internal Server Error`.
+
+The callback returns the body to send to the client, not another Go error. The endpoint still returns its error through its normal `(output, error)` result. A returned struct or map keeps the selected HTTP status. Private 5xx privacy passes `internal server error` to the callback.
+
+A struct, map, or other serializable value that does not implement `httpserver.Response` uses the server's response negotiator. It selects a format from `Accept`, serializes the value, and sets `Content-Type`. JSON is the default. XML needs a negotiator that includes `XMLRepresentation()` and a value that `encoding/xml` can encode. In `v0.6.4`, error middleware falls back to JSON with the selected status if negotiation or encoding fails.
+
+An explicit `httpserver.Response` bypasses negotiation and sends its format regardless of `Accept`. It owns the status and headers, including `Content-Type`. It does not inherit the selected error status. For fixed JSON with that status, return `httpserver.NewJsonResponse(body, httpserver.WithStatusCode(statusCode))`.
+
+### [NewErrorWithStatus()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#newerrorwithstatus "Direct link to newerrorwithstatus")
+
+Return a zero output and a wrapped error to set an expected client-error status:
 
 ```
-return httpserver.GetErrorHandler()(http.StatusBadRequest, err), nil
+return nil, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
 ```
 
-Returns the current error handler, useful for returning client errors with specific status codes.
+For a struct output, replace `nil` with that struct's zero value.
 
-Use `NewErrorWithStatus(statusCode, err)` when middleware attaches an error to the Gin context and the response should use a status other than 500.
+Middleware can attach the same wrapped error to the Gin context:
+
+```
+ginCtx.Error(httpserver.NewErrorWithStatus(http.StatusBadRequest, err))
+```
 
 ## Middleware[​](#middleware "Direct link to Middleware")
 

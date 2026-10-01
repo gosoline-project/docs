@@ -1,24 +1,24 @@
 # sqlh - SQL HTTP Handlers
 
-The `sqlh` package exposes database entities as REST API endpoints. Built on top of [`sqlr`](/docs/how-to/databases-sql/sqlr/.md) and [`sqlc`](/docs/how-to/databases-sql/sqlc/.md), it provides automatic CRUD handler generation, a transformer pattern for input/output mapping, repository customization hooks, and transaction middleware for wrapping HTTP requests in database transactions.
+The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the current `httpserver`, `sqlc`, and `sqlr` APIs. SQLH runs each default CRUD operation in a database transaction and returns a typed value. That transaction does not make external effects or non-transactional DDL atomic.
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
-Add the dependency to your Go module:
+Install SQLH v0.8.0:
 
 ```
-go get github.com/gosoline-project/sqlh@v0.7.0
+go get github.com/gosoline-project/sqlh@v0.8.0
 ```
 
-Then import the package in your Go code:
+SQLH v0.8.0 uses `httpserver` v0.6.4, `sqlc` v0.4.0, and `sqlr` v0.9.1. Use these versions for the examples. SQLH v0.8.0 requires Go 1.27.0 or newer.
+
+Then import the package:
 
 ```
 import "github.com/gosoline-project/sqlh"
 ```
 
-## Configuration[​](#configuration "Direct link to Configuration")
-
-The `sqlh` package requires both an HTTP server and a database client. Configure them under the `httpserver` and `sqlc` keys respectively:
+Configure the HTTP server and the SQL client before the handler starts:
 
 config.dist.yml
 
@@ -60,15 +60,36 @@ sqlc:
       path: migrations
 ```
 
-The HTTP server configuration is described in the httpserver documentation. The database configuration follows the same format described in the [sqlc documentation](/docs/how-to/databases-sql/sqlc/.md#configuration).
+Each runnable example loads `config.dist.yml` from disk in the current working directory. Run each example from its own directory. The migration path in its config is relative to that directory.
 
-## CRUD Handlers[​](#crud-handlers "Direct link to CRUD Handlers")
+## CRUD Model[​](#crud-model "Direct link to CRUD Model")
 
-The `WithCrudHandlers` function generates a complete set of REST endpoints for an entity. It connects an `sqlr` repository with a transformer to handle input/output mapping, and accepts optional configuration for custom repository setup.
+SQLH separates four concerns:
 
-### Defining Entities[​](#defining-entities "Direct link to Defining Entities")
+| Concern        | Callback                                                                    |
+| -------------- | --------------------------------------------------------------------------- |
+| Create mapping | `CreateInput` maps an HTTP input to a new entity.                           |
+| Update mapping | `UpdateInput` applies a complete input to a loaded entity.                  |
+| Patch mapping  | `PatchInputFromEntity` creates the complete input used by JSON Merge Patch. |
+| Output mapping | `Output` maps an entity to a typed response value.                          |
 
-Entities use the same `sqlr.Entity` base struct described in the [sqlr documentation](/docs/how-to/databases-sql/sqlr/.md#defining-entities):
+The update input must expose the route identity. Embed `sqlh.InputById[Id]`, where `Id` is the public route key type. Its `Id` field binds from the `id` URI parameter, not JSON. The stored SQL key type `K` can differ only when the definition supplies a custom `Identity`. SQLH rejects different Go types for `Id` and `K` without it.
+
+```
+type AuthorUpdateInput struct {
+
+    sqlh.InputById[int64]
+
+    Name string `json:"name" binding:"required"`
+
+}
+```
+
+`InputById` also carries server-owned force filters. Use it when the read, update, patch, or delete lookup must respect request-specific authorization restrictions.
+
+### Define an Entity and Callbacks[​](#define-an-entity-and-callbacks "Direct link to Define an Entity and Callbacks")
+
+The following example uses one definition for create, update, patch, and output mapping:
 
 main.go
 
@@ -84,10 +105,6 @@ type Author struct {
 }
 ```
 
-### Input Types[​](#input-types "Direct link to Input Types")
-
-Define separate types for create and update input. These decouple the HTTP API from the database entity:
-
 main.go
 
 ```
@@ -95,7 +112,7 @@ type AuthorCreateInput struct {
 
   Name  string `json:"name" binding:"required"`
 
-  Email string `json:"email" binding:"required"`
+  Email string `json:"email" binding:"required,email"`
 
 }
 
@@ -103,28 +120,39 @@ type AuthorCreateInput struct {
 
 type AuthorUpdateInput struct {
 
+  sqlh.InputById[int64]
+
   Name string `json:"name" binding:"required"`
+
+}
+
+
+
+type AuthorOutput struct {
+
+  Id        int64     `json:"id"`
+
+  Name      string    `json:"name"`
+
+  Email     string    `json:"email"`
+
+  CreatedAt time.Time `json:"created_at"`
+
+  UpdatedAt time.Time `json:"updated_at"`
 
 }
 ```
 
-Using separate input types lets you:
-
-* Validate input with `binding` tags (e.g., `binding:"required"`)
-* Exclude internal fields (like `Id` or `CreatedAt`) from create/update payloads
-
-### Implementing the Transformer[​](#implementing-the-transformer "Direct link to Implementing the Transformer")
-
-The `Transformer[K, E, IC, IU]` interface converts between input types and entity types, and controls how responses are rendered. Implement `TransformCreateInput`, `TransformUpdateInput`, `RenderEntityResponse`, and `RenderQueryResponse`:
+`NewCrudDefinition` accepts the four required callbacks. `SimpleCrudDefinition` wraps the definition in the application factory shape:
 
 main.go
 
 ```
-type AuthorTransformer struct{}
+type AuthorMapper struct{}
 
 
 
-func (t *AuthorTransformer) TransformCreateInput(_ context.Context, input *AuthorCreateInput) (*Author, error) {
+func (t *AuthorMapper) TransformCreateInput(_ context.Context, input *AuthorCreateInput) (*Author, error) {
 
   return &Author{
 
@@ -138,7 +166,15 @@ func (t *AuthorTransformer) TransformCreateInput(_ context.Context, input *Autho
 
 
 
-func (t *AuthorTransformer) TransformUpdateInput(_ context.Context, entity *Author, input *AuthorUpdateInput) (*Author, error) {
+func (t *AuthorMapper) TransformUpdateInput(_ context.Context, entity *Author, input *AuthorUpdateInput) (*Author, error) {
+
+  if err := binding.Validator.ValidateStruct(input); err != nil {
+
+    return nil, validation.NewError(err)
+
+  }
+
+
 
   entity.Name = input.Name
 
@@ -150,203 +186,42 @@ func (t *AuthorTransformer) TransformUpdateInput(_ context.Context, entity *Auth
 
 
 
-func (t *AuthorTransformer) RenderEntityResponse(_ context.Context, entity *Author) (httpserver.Response, error) {
+func (t *AuthorMapper) TransformPatchInputFromEntity(_ context.Context, entity *Author) (*AuthorUpdateInput, error) {
 
-  return httpserver.NewJsonResponse(entity), nil
+  return &AuthorUpdateInput{
 
-}
+    InputById: sqlh.InputById[int64]{Id: entity.Id},
 
+    Name:      entity.Name,
 
-
-func (t *AuthorTransformer) RenderQueryResponse(_ context.Context, entities []Author) (httpserver.Response, error) {
-
-  return httpserver.NewJsonResponse(entities), nil
+  }, nil
 
 }
-```
-
-The type parameters are:
-
-| Parameter | Description                                   |
-| --------- | --------------------------------------------- |
-| `K`       | Primary key type (e.g., `int64`)              |
-| `E`       | Entity type (e.g., `Author`)                  |
-| `IC`      | Create input type (e.g., `AuthorCreateInput`) |
-| `IU`      | Update input type (e.g., `AuthorUpdateInput`) |
-
-The interface requires four methods:
-
-| Method                 | Description                                                  |
-| ---------------------- | ------------------------------------------------------------ |
-| `TransformCreateInput` | Converts a create input DTO into a new entity                |
-| `TransformUpdateInput` | Merges an update input DTO into an existing entity           |
-| `RenderEntityResponse` | Serialises a single entity into an `httpserver.Response`     |
-| `RenderQueryResponse`  | Serialises a slice of entities into an `httpserver.Response` |
-
-In the simple case above, `RenderEntityResponse` and `RenderQueryResponse` return the entity directly as JSON. See [Customizing Output Transformers](#customizing-output-transformers) for approaches when you need a separate output shape.
-
-### Registering CRUD Handlers[​](#registering-crud-handlers "Direct link to Registering CRUD Handlers")
-
-Use `WithCrudHandlers` to generate all endpoints and register them with the HTTP server:
-
-main.go
-
-```
-func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-
-  router.HandleWith(sqlh.WithCrudHandlers(1, "author", sqlh.SimpleTransformer(&AuthorTransformer{})))
 
 
 
-  return nil
+func (t *AuthorMapper) TransformOutput(_ context.Context, entity *Author) (AuthorOutput, error) {
 
-},
-```
+  return AuthorOutput{
 
-The arguments are:
+    Id:        entity.Id,
 
-| Argument             | Description                                                             |
-| -------------------- | ----------------------------------------------------------------------- |
-| `version`            | API version number, used in the URL path (e.g., `1` produces `/v1/...`) |
-| `entityName`         | Singular entity name for the URL path (e.g., `"author"`)                |
-| `transformerFactory` | Factory that creates the transformer instance                           |
-| `options`            | Optional `sqlh.Option` values that customize repository creation        |
+    Name:      entity.Name,
 
-By default, CRUD handlers create an `sqlr.Repository` against the `default` SQL client. Pass additional options to change that behavior:
+    Email:     entity.Email,
 
-* `sqlh.WithClientName[K, E](name)` selects a different configured SQL client for the default repository factory.
-* `sqlh.WithRepositoryFactory[K, E](factory)` replaces repository construction entirely.
+    CreatedAt: entity.CreatedAt,
 
-### Generated Endpoints[​](#generated-endpoints "Direct link to Generated Endpoints")
+    UpdatedAt: entity.UpdatedAt,
 
-`WithCrudHandlers` registers five endpoints:
-
-| Method   | Path                 | Handler        | Description                                       |
-| -------- | -------------------- | -------------- | ------------------------------------------------- |
-| `POST`   | `/v{n}/{entity}`     | `HandleCreate` | Creates an entity from `IC` input                 |
-| `GET`    | `/v{n}/{entity}/:id` | `HandleRead`   | Reads a single entity by ID                       |
-| `PUT`    | `/v{n}/{entity}/:id` | `HandleUpdate` | Updates an entity from `IU` input                 |
-| `DELETE` | `/v{n}/{entity}/:id` | `HandleDelete` | Deletes an entity by ID; returns `204 No Content` |
-| `POST`   | `/v{n}/{entities}`   | `HandleQuery`  | Queries entities with a JSON filter               |
-
-The query endpoint uses the **plural** form of the entity name (e.g., `"author"` becomes `"/v1/authors"`). Pluralization is handled automatically.
-
-### Handler Behavior[​](#handler-behavior "Direct link to Handler Behavior")
-
-All generated CRUD handlers follow the same high-level pattern: bind input, delegate persistence to `sqlr.Repository`, and render the result through the configured transformer.
-
-| Handler        | Flow                                                                                                                                                                          |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HandleCreate` | Binds `IC`, calls `TransformCreateInput`, persists via `repo.Create()`, then renders the created entity (including any post-create preloads configured on the create builder) |
-| `HandleRead`   | Loads a single entity via `repo.Read()` and renders it                                                                                                                        |
-| `HandleQuery`  | Converts the JSON filter into an `sqlc.Expression`, calls `repo.Query()`, then renders the result list                                                                        |
-| `HandleUpdate` | Loads the existing entity via `repo.Read()`, applies `TransformUpdateInput`, persists via `repo.Update()`, then renders the entity returned by `Update()`                     |
-| `HandleDelete` | Deletes the entity via `repo.Delete()` and returns `204 No Content`                                                                                                           |
-
-The update flow is slightly different from the others: `HandleUpdate` renders the rehydrated entity returned by `sqlr.Update()` rather than issuing a separate follow-up `Read()` call. That means post-update preloads configured on the update builder are reflected directly in the HTTP response. See [`sqlr` Update with Post-Update Preloading](/docs/how-to/databases-sql/sqlr/.md#update-with-post-update-preloading) for the underlying repository behavior.
-
-### Query with JSON Filter[​](#query-with-json-filter "Direct link to Query with JSON Filter")
-
-The query endpoint accepts a JSON body with a `filter` field that maps to `sqlc.JsonFilter`:
-
-```
-{
-
-  "filter": {
-
-    "column": "name",
-
-    "operator": "=",
-
-    "value": "Alice"
-
-  }
+  }, nil
 
 }
 ```
 
-The filter is converted to an `sqlc.Expression` and applied as a WHERE condition on the query. See the [sqlc JSON filter documentation](/docs/how-to/databases-sql/sqlc/.md) for the full filter syntax.
+The `Output` callback returns a Go value. `httpserver.Bind` negotiates its representation from the request's `Accept` header. A typed output can implement `StatusCode() int` and `Header() http.Header` to set its status and headers. An explicit `httpserver.Response` bypasses negotiation. See [Customizing responses](/docs/how-to/http-server/build-an-http-service/.md#customizing-responses) for response overrides and content types.
 
-### Association Tags[​](#association-tags "Direct link to Association Tags")
-
-CRUD handlers can also configure association loading and syncing directly from entity relationship fields with the `sqlh` struct tag:
-
-```
-type Author struct {
-
-    sqlr.Entity[int64]
-
-    ProfileID int64         `db:"profile_id"`
-
-    Profile   Profile       `db:"-" sqlr:"belongsTo:profile_id" sqlh:"preload:create,read,query,update"`
-
-    Tags      []Tag         `db:"-" sqlr:"many2many:author_tags" sqlh:"preload:create,read;sync:create,update,delete"`
-
-}
-```
-
-Supported directives are:
-
-| Directive | Phases                              | Effect                                                                                                                                    |
-| --------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `preload` | `create`, `read`, `query`, `update` | Adds `Preload()` to the matching CRUD builder; on `create` and `update`, it configures the post-write reload used for the returned entity |
-| `sync`    | `create`, `update`, `delete`        | Calls `SyncAssociation()` for the association while persisting or cleaning up the entity                                                  |
-
-`sqlh` tags are additive to the association behavior already defined by `sqlr`. The relationship itself must still be declared via an explicit `sqlr` relationship tag or discovered through [`sqlr` auto-detected relationships](/docs/how-to/databases-sql/sqlr/.md#auto-detected-relationships); the `sqlh` tag only adds CRUD-specific preload and sync behavior on top. `db:"-"` remains optional for relationship fields. In particular, `sqlh` preload phases are merged with any preload behavior already configured in `sqlr`, rather than replacing it.
-
-For creates, `sqlh:"preload:create"` is applied to the underlying `sqlr.Create()` builder, so the entity returned by the create handler is reloaded with those relations already hydrated. This follows the same post-create preload behavior described in [`sqlr` Create with Post-Create Preloading](/docs/how-to/databases-sql/sqlr/.md#create-with-post-create-preloading).
-
-For updates, `sqlh:"preload:update"` is applied to the underlying `sqlr.Update()` builder, so the entity returned by the update handler is reloaded with those relations already hydrated. This follows the same post-update preload behavior described in [`sqlr` Update with Post-Update Preloading](/docs/how-to/databases-sql/sqlr/.md#update-with-post-update-preloading).
-
-For delete operations, `sync:delete` configures the association cleanup passed to the underlying `sqlr.Delete()` call, following the same cleanup semantics described in [`sqlr` Delete with Association Cleanup](/docs/how-to/databases-sql/sqlr/.md#delete-with-association-cleanup).
-
-Tags are only valid on association fields recognised by [`sqlr` relationships](/docs/how-to/databases-sql/sqlr/.md#relationships); using them on scalar fields causes startup to fail with an error. Tagged associations are traversed recursively, so nested paths such as `Child.Nested` are picked up automatically when the related entity also declares `sqlh` tags.
-
-For the underlying `sqlr` behavior behind these options, see [Read with Association Loading](/docs/how-to/databases-sql/sqlr/.md#read-with-association-loading), [Eager Loading with Preload](/docs/how-to/databases-sql/sqlr/.md#eager-loading-with-preload), [Create with Selective Association Persistence](/docs/how-to/databases-sql/sqlr/.md#create-with-selective-association-persistence), [Create with Post-Create Preloading](/docs/how-to/databases-sql/sqlr/.md#create-with-post-create-preloading), [Update with Association Sync](/docs/how-to/databases-sql/sqlr/.md#update-with-association-sync), and [Delete with Association Cleanup](/docs/how-to/databases-sql/sqlr/.md#delete-with-association-cleanup).
-
-### Wiring into the Application[​](#wiring-into-the-application "Direct link to Wiring into the Application")
-
-Register handlers with the gosoline HTTP server using `router.HandleWith()`:
-
-main.go
-
-```
-func main() {
-
-  application.New(
-
-    application.WithConfigBytes(config, "yml"),
-
-    application.WithLoggerHandlersFromConfig,
-
-    application.WithModuleFactory("http", httpserver.NewServer(
-
-      "default",
-
-      func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-
-        router.HandleWith(sqlh.WithCrudHandlers(1, "author", sqlh.SimpleTransformer(&AuthorTransformer{})))
-
-
-
-        return nil
-
-      },
-
-    )),
-
-  ).Run()
-
-}
-```
-
-## Customizing Output Transformers[​](#customizing-output-transformers "Direct link to Customizing Output Transformers")
-
-The `Transformer` interface is the primary extension point for controlling how entities are serialised in API responses. Because it is a plain Go interface, a single implementation can be written once and reused across multiple entities — or shared as an internal library across services. This makes it straightforward to enforce consistent response shapes, pagination envelopes, or field-level access control in one place.
-
-### JsonResultsTransformer[​](#jsonresultstransformer "Direct link to JsonResultsTransformer")
-
-`JsonResultsTransformer[K, E, IC, IU]` is a simplified variant of `Transformer` for the common case where you want to map entities to a dedicated output type and return them as JSON, without needing to construct `httpserver.Response` values manually. Implement three methods — `TransformCreateInput`, `TransformUpdateInput`, and a single `TransformOutput` that converts one entity to any JSON-serialisable value — and pass the implementation to `NewJsonResultsTransformer`. The wrapping of single and multi-entity responses into JSON is handled automatically, and optional CRUD builder hooks implemented by the transformer — including create hooks, delete hooks, and the split update read/write hooks — are forwarded too:
+For a dedicated response DTO, map the entity in the output callback:
 
 user\_crud.go
 
@@ -360,6 +235,8 @@ type (
   }
 
   UserUpdateInput struct {
+
+    sqlh.InputById[int]
 
     Name string `json:"name"`
 
@@ -391,11 +268,11 @@ type (
 user\_crud.go
 
 ```
-type UserTransformer struct{}
+type UserMapper struct{}
 
 
 
-func (t *UserTransformer) TransformCreateInput(ctx context.Context, input *UserCreateInput) (*User, error) {
+func (t *UserMapper) TransformCreateInput(_ context.Context, input *UserCreateInput) (*User, error) {
 
   return &User{
 
@@ -407,7 +284,15 @@ func (t *UserTransformer) TransformCreateInput(ctx context.Context, input *UserC
 
 
 
-func (t *UserTransformer) TransformUpdateInput(ctx context.Context, user *User, input *UserUpdateInput) (*User, error) {
+func (t *UserMapper) TransformUpdateInput(_ context.Context, user *User, input *UserUpdateInput) (*User, error) {
+
+  if err := binding.Validator.ValidateStruct(input); err != nil {
+
+    return nil, validation.NewError(err)
+
+  }
+
+
 
   user.Name = input.Name
 
@@ -419,7 +304,21 @@ func (t *UserTransformer) TransformUpdateInput(ctx context.Context, user *User, 
 
 
 
-func (t *UserTransformer) TransformOutput(ctx context.Context, user *User) (any, error) {
+func (t *UserMapper) TransformPatchInputFromEntity(_ context.Context, user *User) (*UserUpdateInput, error) {
+
+  return &UserUpdateInput{
+
+    InputById: sqlh.InputById[int]{Id: user.Id},
+
+    Name:      user.Name,
+
+  }, nil
+
+}
+
+
+
+func (t *UserMapper) TransformOutput(_ context.Context, user *User) (UserOutput, error) {
 
   return UserOutput{
 
@@ -436,63 +335,224 @@ func (t *UserTransformer) TransformOutput(ctx context.Context, user *User) (any,
 }
 ```
 
-user\_crud.go
+### Register Standard Routes[​](#register-standard-routes "Direct link to Register Standard Routes")
+
+Use `WithCrudHandlers` when the standard route paths and delete response meet your API contract:
+
+main.go
 
 ```
-func NewUserCrud() httpserver.RegisterFactoryFunc {
+func NewAuthorCrud() httpserver.RegisterFactoryFunc {
 
-  return sqlh.WithCrudHandlers(0, "user", sqlh.NewJsonResultsTransformer(&UserTransformer{}))
+  transformer := &AuthorMapper{}
+
+  definition := sqlh.NewCrudDefinition(
+
+    transformer.TransformCreateInput,
+
+    transformer.TransformUpdateInput,
+
+    transformer.TransformPatchInputFromEntity,
+
+    transformer.TransformOutput,
+
+  )
+
+
+
+  return sqlh.WithCrudHandlers(1, "author", sqlh.SimpleCrudDefinition(definition))
 
 }
 ```
 
-Because `TransformOutput` receives a single entity, the same function is used for both single-entity and list responses — there is no duplication. Use the full `Transformer` interface directly when you need control over HTTP status codes, headers, or non-JSON response bodies.
+The generated routes are:
 
-### Wiring Transformers[​](#wiring-transformers "Direct link to Wiring Transformers")
+| Method   | Path                          | Operation                    |
+| -------- | ----------------------------- | ---------------------------- |
+| `POST`   | `/v{version}/{entity}`        | Create                       |
+| `GET`    | `/v{version}/{entity}/:id`    | Read                         |
+| `PUT`    | `/v{version}/{entity}/:id`    | Complete update              |
+| `PATCH`  | `/v{version}/{entity}/:id`    | JSON Merge Patch             |
+| `DELETE` | `/v{version}/{entity}/:id`    | Delete with `204 No Content` |
+| `POST`   | `/v{version}/{plural-entity}` | List and count               |
 
-Use `sqlh.SimpleTransformer()` to wrap an already-constructed transformer into a factory when it has no startup dependencies:
+For example, version `1` and entity name `author` produce `/v1/author` and `/v1/authors`.
+
+The default delete route uses `DeleteNoContent`. Use `NewCrudHandler` for a delete route that returns the entity:
+
+main.go
 
 ```
-sqlh.SimpleTransformer[K, E, IC, IU](&MyTransformer{})
+type AuthorCrudHandler = sqlh.CrudHandler[int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, sqlh.ListInput, AuthorOutput]
+
+
+
+func NewAuthorHandler() httpserver.HandlerFactory[AuthorCrudHandler] {
+
+  transformer := &AuthorMapper{}
+
+  definition := sqlh.NewCrudDefinition(
+
+    transformer.TransformCreateInput,
+
+    transformer.TransformUpdateInput,
+
+    transformer.TransformPatchInputFromEntity,
+
+    transformer.TransformOutput,
+
+  )
+
+  definition.DeleteOutput = definition.Output
+
+
+
+  return sqlh.NewCrudHandler(sqlh.SimpleCrudDefinition(definition))
+
+}
 ```
 
-For transformers that require configuration or other dependencies at startup, implement `TransformerFactory` directly:
+```
+router.HandleWith(httpserver.With(NewAuthorHandler(), func(router *httpserver.Router, handler *AuthorCrudHandler) {
+
+    router.DELETE("/v1/resources/:id", httpserver.Bind(handler.Delete, httpserver.NoBodyBinding{}))
+
+}))
+```
+
+`NewAuthorHandler` sets `DeleteOutput` to the normal output mapper. Without `DeleteOutput`, `handler.Delete` cannot return a body.
+
+### Register Custom Paths[​](#register-custom-paths "Direct link to Register Custom Paths")
+
+Use `NewCrudHandler` when an existing API has different paths, singular and plural names, or response behavior:
 
 ```
-type TransformerFactory[K, E, IC, IU] func(ctx context.Context, config cfg.Config, logger log.Logger) (Transformer[K, E, IC, IU], error)
+func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+
+    router.HandleWith(httpserver.With(NewAuthorHandler(), func(router *httpserver.Router, handler *AuthorCrudHandler) {
+
+        router.POST("/v1/resource", httpserver.Bind(handler.Create))
+
+        router.POST("/v1/resources", httpserver.Bind(handler.List))
+
+        router.GET("/v1/resources/:id", httpserver.Bind(handler.Read, httpserver.NoBodyBinding{}))
+
+        router.PUT("/v1/resources/:id", httpserver.Bind(handler.Update))
+
+        router.PATCH("/v1/resources/:id", httpserver.Bind(handler.Patch))
+
+        router.DELETE("/v1/resources/:id", httpserver.Bind(handler.Delete, httpserver.NoBodyBinding{}))
+
+    }))
+
+
+
+    return nil
+
+}
 ```
 
-This follows the standard gosoline factory pattern and gives the transformer access to the application config and logger during initialisation.
+This pattern preserves existing public routes while SQLH owns the transaction and CRUD flow for each registered SQLH route.
 
-## CRUD Builder Hooks[​](#crud-builder-hooks "Direct link to CRUD Builder Hooks")
+## Transactions[​](#transactions "Direct link to Transactions")
 
-Both `Transformer` and `JsonResultsTransformer` implementations can optionally customize generated CRUD queries by implementing one or more builder-aware interfaces:
+SQLH creates one transaction for every default CRUD operation. It loads the entity, applies the mapper, synchronizes selected associations, maps the output, and commits only after the operation succeeds. An operation, mapper, validation, repository, or output error rolls back SQL changes on that transaction. That rollback cannot undo blob-store or other external effects, and MySQL DDL may commit implicitly. Keep lifecycle effects outside SQLH CRUD when the old order or failure behavior requires it. The HTTP server renders the result after the commit.
 
-| Interface                 | Builder                   | Used for                                                                                                               |
-| ------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `BuilderCreateAware`      | `sqlr.QueryBuilderCreate` | Customize create persistence                                                                                           |
-| `BuilderReadAware`        | `sqlr.QueryBuilderRead`   | Customize single-entity reads                                                                                          |
-| `BuilderQueryAware`       | `sqlr.QueryBuilderSelect` | Customize list/query requests                                                                                          |
-| `BuilderDeleteAware`      | `sqlr.QueryBuilderDelete` | Customize delete cleanup                                                                                               |
-| `BuilderUpdateReadAware`  | `sqlr.QueryBuilderRead`   | Customize the read of the existing entity before `TransformUpdateInput` runs                                           |
-| `BuilderUpdateWriteAware` | `sqlr.QueryBuilderUpdate` | Customize the `Update()` call itself, including association sync and post-update preloads used for the returned entity |
+The SQLH repository must use the same SQL client that starts the transaction. This requirement is important when SQLR uses prepared statements. The default handler factory creates both objects from the configured client.
 
-The update flow is intentionally split across two hooks. Use `BuilderUpdateReadAware` when the transformer needs additional relations loaded before it merges the incoming update DTO into the existing entity. Use `BuilderUpdateWriteAware` when you need to change how `sqlr.Update()` executes, including which relations are synchronized and which associations are preloaded onto the rehydrated entity returned in the HTTP response.
+The old `sqlh.WithTx`, `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR` APIs are removed. SQLH `*Operation` callbacks already receive the active `sqlr.TTx`. Use it directly for SQL work. Do not start another transaction inside a callback. For another typed operation outside a CRUD definition, use `TxRunner` and adapt it to the handler signature:
 
-## Custom Repository Implementations[​](#custom-repository-implementations "Direct link to Custom Repository Implementations")
+main.go
 
-By default, `WithCrudHandlers` creates a regular `sqlr.Repository` using the `default` SQL client. When you need different startup behavior, you can customize repository creation with dedicated options instead of changing your handler logic.
+```
+type PostHandler struct {
 
-### Choosing an Option[​](#choosing-an-option "Direct link to Choosing an Option")
+  runner   *sqlh.TxRunner
 
-* Use `sqlh.WithClientName[K, E](name)` when the standard `sqlr.NewRepository()` behavior is correct and you only want to point it at a different configured SQL client.
-* Use `sqlh.WithRepositoryFactory[K, E](factory)` when you want full control over repository construction, such as wrapping the default repository, adding opinionated query defaults, or returning a completely custom implementation.
+  postRepo sqlr.RepositoryTx[int64, Post]
 
-The factory is called once during application startup and receives the application `context`, `config`, `logger`, and the selected client name.
+}
 
-### Example Configuration[​](#example-configuration "Direct link to Example Configuration")
 
-This example configures both a `default` and a `reporting` SQL client. The custom repository factory honors the configured client name, so the same wrapper can be reused with either connection:
+
+func NewPostHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*PostHandler, error) {
+
+  client, err := sqlc.ProvideClient(ctx, config, logger, "default")
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  postRepo, err := sqlr.NewRepositoryTxWithSettings[int64, Post](client, sqlr.DefaultSettings())
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  runner, err := sqlh.NewTxRunnerWithClient(client)
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  return &PostHandler{runner: runner, postRepo: postRepo}, nil
+
+}
+
+
+
+func (h *PostHandler) CreatePost(ctx context.Context, input *PostCreateInput) (PostOutput, error) {
+
+  return h.runner.RunValue(ctx, input, func(ctx context.Context, tx sqlr.TTx, input *PostCreateInput) (PostOutput, error) {
+
+    post := &Post{
+
+      Title:  input.Title,
+
+      Body:   input.Body,
+
+      Status: "draft",
+
+    }
+
+
+
+    if err := h.postRepo.Create(tx, post); err != nil {
+
+      return PostOutput{}, fmt.Errorf("failed to create post: %w", err)
+
+    }
+
+
+
+    return PostOutput{
+
+      Id:     post.Id,
+
+      Title:  post.Title,
+
+      Body:   post.Body,
+
+      Status: post.Status,
+
+    }, nil
+
+  })
+
+}
+```
 
 config.dist.yml
 
@@ -532,6 +592,780 @@ sqlc:
       reset: true
 
       path: migrations
+```
+
+`TxRunner.Run` rolls back transaction-bound SQL changes when the operation returns an error or panics. It cannot undo blob-store or other external effects. `RunValue` returns the value only after commit. `InTransaction` converts a transaction-aware operation to the function shape accepted by `httpserver.Bind`.
+
+## Input and Output Types[​](#input-and-output-types "Direct link to Input and Output Types")
+
+Use separate input types for create and update requests. This keeps database fields and server-owned values out of the HTTP request:
+
+```
+type AuthorCreateInput struct {
+
+    Name  string `json:"name" binding:"required"`
+
+    Email string `json:"email" binding:"required,email"`
+
+}
+
+
+
+type AuthorUpdateInput struct {
+
+    sqlh.InputById[int64]
+
+    Name string `json:"name" binding:"required"`
+
+}
+
+
+
+type AuthorOutput struct {
+
+    Id        int64     `json:"id"`
+
+    Name      string    `json:"name"`
+
+    Email     string    `json:"email"`
+
+    CreatedAt time.Time `json:"created_at"`
+
+    UpdatedAt time.Time `json:"updated_at"`
+
+}
+```
+
+HTTP binding validates `binding` tags on the bound request type. For PATCH, that type is `sqlh.PatchInput`, not the complete update input. Validate the merged input inside `UpdateInput` before changing the entity:
+
+```
+import (
+
+    "github.com/gin-gonic/gin/binding"
+
+    "github.com/justtrackio/gosoline/pkg/validation"
+
+)
+
+
+
+// Inside UpdateInput, before assigning entity fields:
+
+if err := binding.Validator.ValidateStruct(input); err != nil {
+
+    return nil, validation.NewError(err)
+
+}
+```
+
+This uses the same field and struct validators as Gin binding. `validation.NewError` makes the HTTP error mapper return 400. The examples use this check for both PUT and PATCH.
+
+The `Output` callback can return an entity, a response DTO, or another value that the HTTP server can render.
+
+The old `Transformer` and `JsonResultsTransformer` interfaces are removed. Replace their methods as follows:
+
+| Old method                                  | New callback                                                                      |
+| ------------------------------------------- | --------------------------------------------------------------------------------- |
+| `TransformCreateInput`                      | `CrudDefinition.CreateInput`                                                      |
+| `TransformUpdateInput`                      | `CrudDefinition.UpdateInput`                                                      |
+| `TransformOutput` or `RenderEntityResponse` | `CrudDefinition.Output`                                                           |
+| `RenderQueryResponse`                       | Per-entity `Output` plus `ListOutput[O]` or a route wrapper for the old envelope. |
+| No old equivalent                           | `CrudDefinition.PatchInputFromEntity`                                             |
+
+Use `NewCrudDefinition` for the standard `sqlh.ListInput`. Set optional identity, delete, or operation callbacks on the returned definition. A custom list input needs an explicitly parameterized `CrudDefinition`, as shown below.
+
+## JSON Merge Patch[​](#json-merge-patch "Direct link to JSON Merge Patch")
+
+The default `PATCH` operation follows RFC 7396 JSON Merge Patch. It uses the same update mapper as `PUT`:
+
+1. SQLH loads the entity with the update scope and update preloads.
+2. `PatchInputFromEntity` maps the entity to a complete update input.
+3. SQLH merges the request document into that input.
+4. `UpdateInput` validates and applies the merged input.
+5. SQLH synchronizes only associations selected by the original patch document.
+6. SQLH maps the result and commits the transaction.
+
+`PatchInputFromEntity` must populate every writable field that an omitted request field must preserve. An omitted scalar remains unchanged. Arrays replace the complete array.
+
+Explicit JSON `null` clears a pointer or nullable value. For non-nullable scalars, the merge produces the zero value. Reject forbidden values through request and domain validation.
+
+SQLH converts selected HasMany and many-to-many null or empty arrays to empty collections. SQLR deletes omitted owned HasMany children or removes many-to-many links. A selected HasOne `null` clears its owned child. For a selected, directly mapped BelongsTo path, SQLH also clears its nullable foreign key when PATCH sets it to `null`. For PUT or trigger-driven changes, the mapper must clear the foreign key because SQLR skips a nil target. An empty array is not valid for a pointer-shaped input.
+
+```
+func (t *AuthorMapper) PatchInputFromEntity(_ context.Context, author *Author) (*AuthorUpdateInput, error) {
+
+    return &AuthorUpdateInput{
+
+        InputById: sqlh.InputById[int64]{Id: author.Id},
+
+        Name:      author.Name,
+
+    }, nil
+
+}
+```
+
+SQLH derives direct association paths from update-input JSON tags and SQLR relation names. A relation must have `sqlh:"sync:update"` before SQLH can synchronize it during a patch. Use `PatchAssociations` when a JSON path does not match the relation name.
+
+Use `PatchAssociationTriggers` when a scalar request field changes an association indirectly:
+
+```
+definition.PatchAssociationTriggers = map[string]string{
+
+    "state": "Labels",
+
+}
+```
+
+The key is a path in the original patch document. The value is an SQLR relation path. A trigger selects the relation for persistence. It does not change merge-patch null behavior or mutate the relation.
+
+A custom `PatchOperation` replaces the complete default patch pipeline. Use it only when the default complete-input mapping and association selection cannot represent the API contract.
+
+A custom `PatchOperation` receives `*sqlh.PatchInput[Id]`. Read the parsed `sqlh.PatchDocument` from `input.Document`. Use `input.Document.MergeInto(completeInput)` to apply the patch. Use `input.Document.Has("status")` to check whether the request supplied a field. The old `input.Document()` method is not available in v0.8.0.
+
+## List Inputs, Filters, and Counts[​](#list-inputs-filters-and-counts "Direct link to List Inputs, Filters, and Counts")
+
+The standard list input contains a JSON SQLC filter, page limit, page offset, and server-owned force filters:
+
+```
+input := sqlh.ListInput{
+
+    Filter: sqlc.JsonFilter{
+
+        Type:   "eq",
+
+        Column: "status",
+
+        Value:  "active",
+
+    },
+
+    Page: sqlh.ListPage{
+
+        Limit:  50,
+
+        Offset: 100,
+
+    },
+
+}
+```
+
+The generated list endpoint accepts a body such as:
+
+```
+{
+
+  "filter": {
+
+    "type": "eq",
+
+    "column": "status",
+
+    "value": "active"
+
+  },
+
+  "page": {
+
+    "limit": 50,
+
+    "offset": 100
+
+  }
+
+}
+```
+
+SQLH returns a `ListOutput` value:
+
+```
+{
+
+  "results": [],
+
+  "total": 0
+
+}
+```
+
+The default list applies user filters, force filters, delete scope, and query modifiers to both the row and count builders. Only the row builder receives pagination. SQLR `Count` removes ordering, limit, offset, and locking, but preserves grouping and HAVING.
+
+### Force Filters[​](#force-filters "Direct link to Force Filters")
+
+Force filters are server-owned restrictions. They are not bound from HTTP input and the caller cannot remove them. Embed `sqlh.ForceFilters` through `sqlh.ListInput` or `sqlh.InputById`, then add filters after authentication:
+
+```
+input.AddForceFilter(func(qb *sqlr.QueryBuilderSelect) {
+
+    qb.Where(sqlc.Col("account_id").Eq(accountID))
+
+})
+```
+
+SQLH applies force filters to list, count, identity, update, PATCH, and delete lookups. A force filter must only add restrictive `WHERE` conditions.
+
+### Custom List Inputs[​](#custom-list-inputs "Direct link to Custom List Inputs")
+
+SQLH v0.7.1 `InputQuery` contained only `filter`. SQLH v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`. If the old endpoint had no pagination, use a custom `ListInputSource` with only the old fields. Preserve the old unknown-field behavior and implement every required phase. Use no-op query-modifier, pagination, and pagination-validation methods when the old API had none. Construct `CrudDefinition` with all type parameters because `NewCrudDefinition` fixes the input type to `sqlh.ListInput`.
+
+Embed `sqlh.ListInput` to retain native filters, pagination, and force filters. Override `ApplyFilters` to interpret additional request fields:
+
+```
+type AuthorListInput struct {
+
+    sqlh.ListInput
+
+    Name string `json:"name,omitempty"`
+
+}
+
+
+
+func (i AuthorListInput) ApplyFilters(qb *sqlr.QueryBuilderSelect) error {
+
+    if err := i.ListInput.ApplyFilters(qb); err != nil {
+
+        return err
+
+    }
+
+    if i.Name != "" {
+
+        qb.Where(sqlc.Col("name").Eq(i.Name))
+
+    }
+
+    return nil
+
+}
+```
+
+A custom list input must implement `ListInputSource`:
+
+* `ApplyFilters` adds user filters and joins.
+* `ApplyQueryModifiers` adds grouping and ordering.
+* `ApplyPagination` adds the page limit and offset.
+* `ValidatePagination` validates the input.
+* `GetForceFilters` exposes the embedded, server-owned filters.
+
+Custom `Query` callbacks must apply `QueryPlan.ApplyBuilder`, check `ApplyScope`, then apply query modifiers and pagination. Custom `Count` callbacks must apply the builder and scope, return scope errors, and not apply query modifiers or pagination. The default count applies query modifiers but not pagination. SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING. Write a custom count when joins or grouping change the old total.
+
+`NewCrudDefinition` fixes its list input to `sqlh.ListInput`. Construct the definition explicitly for `AuthorListInput`. Use the entity value type `Author` for `E`: callback signatures already use `*E`.
+
+```
+type AuthorListHandler = sqlh.CrudHandler[
+
+    int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, AuthorListInput, AuthorOutput,
+
+]
+
+
+
+func NewAuthorListHandler() httpserver.HandlerFactory[AuthorListHandler] {
+
+    mapper := &AuthorMapper{}
+
+    definition := sqlh.CrudDefinition[
+
+        int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, AuthorListInput, AuthorOutput,
+
+    ]{
+
+        CreateInput:          mapper.TransformCreateInput,
+
+        UpdateInput:          mapper.TransformUpdateInput,
+
+        PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
+
+        Output:               mapper.TransformOutput,
+
+    }
+
+    return sqlh.NewCrudHandler(sqlh.SimpleCrudDefinition(definition))
+
+}
+```
+
+### Preserve a Legacy List Envelope[​](#preserve-a-legacy-list-envelope "Direct link to Preserve a Legacy List Envelope")
+
+`ListOperation` and `handler.List` always return `ListOutput[O]` with outer JSON fields `results` and `total`. An entity output mapper cannot change that envelope. Use a typed wrapper and manual registration for another response shape:
+
+```
+type LegacyAuthorListOutput struct {
+
+    Items []AuthorOutput `json:"items"`
+
+    Count int            `json:"count"`
+
+}
+
+
+
+func RegisterLegacyAuthorList(router *httpserver.Router, handler *AuthorListHandler) {
+
+    router.POST("/v1/authors", httpserver.Bind(func(ctx context.Context, input *AuthorListInput) (LegacyAuthorListOutput, error) {
+
+        result, err := handler.List(ctx, input)
+
+        if err != nil {
+
+            return LegacyAuthorListOutput{}, err
+
+        }
+
+        return LegacyAuthorListOutput{Items: result.Results, Count: result.Total}, nil
+
+    }))
+
+}
+```
+
+Register it with `router.HandleWith(httpserver.With(NewAuthorListHandler(), RegisterLegacyAuthorList))`. The wrapper runs after `handler.List` commits its transaction.
+
+## SQLR and SQLH Relation Tags[​](#sqlr-and-sqlh-relation-tags "Direct link to SQLR and SQLH Relation Tags")
+
+Keep database mapping, relationship shape, HTTP input, and CRUD policy separate:
+
+| Tag                 | Purpose                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| `db:"column"`       | Maps an entity field to a database column. Use `db:"-"` on non-column relation fields.    |
+| `sqlr:"..."`        | Defines relationships and schema-wide preload or synchronization defaults.                |
+| `sqlh:"..."`        | Adds operation-specific preload and synchronization paths to SQLH's default builders.     |
+| `json:"field"`      | Defines the request field name and helps SQLH derive PATCH association paths.             |
+| `binding:"..."`     | Defines request validation. Validate the merged PATCH input explicitly.                   |
+| `uri:"id" json:"-"` | Binds the route identity without accepting it from JSON. `InputById` supplies these tags. |
+
+```
+type Project struct {
+
+    sqlr.Entity[uint]
+
+
+
+    PublicID  string     `db:"public_id"`
+
+    DeletedAt *time.Time `db:"deleted_at"`
+
+    OwnerID   *uint      `db:"owner_id"`
+
+
+
+    Owner  *Owner   `db:"-" sqlr:"belongsTo:owner_id" sqlh:"preload:read,query,update"`
+
+    Rules  []*Rule  `db:"-" sqlr:"foreignKey:project_id" sqlh:"preload:create,read,query,update;sync:create,update"`
+
+    Labels []*Label `db:"-" sqlr:"foreignKey:project_id" sqlh:"preload:create,read,query,update;sync:create,update"`
+
+    Tags   []*Tag   `db:"-" sqlr:"many2many:project_tags" sqlh:"preload:read,query,update;sync:update"`
+
+}
+```
+
+### SQLR Relationship Options[​](#sqlr-relationship-options "Direct link to SQLR Relationship Options")
+
+Separate SQLR options with semicolons. Choose only the options that match the existing persistence contract.
+
+| Option                                   | Meaning                                                                                                        |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `belongsTo:owner_id`                     | The foreign key is on the current entity. Declare its matching `db` field, such as `OwnerID`.                  |
+| `foreignKey:project_id`                  | The foreign key is on the related HasOne or HasMany entity. Declare that column on the child.                  |
+| `many2many:project_tags`                 | Names the join table for a slice relation.                                                                     |
+| `parentKey:project_id;relatedKey:tag_id` | Overrides the parent and related join-column names for a many-to-many relation.                                |
+| `preload`                                | Enables schema-wide automatic relation loading, including repository calls outside SQLH.                       |
+| `sync:create,update,delete`              | Adds default association paths for the selected repository operations.                                         |
+| `syncMode:many2many`                     | Enables updates to existing many-to-many target rows. Requires a many-to-many relation and SQLR `sync:update`. |
+
+### SQLH Phases[​](#sqlh-phases "Direct link to SQLH Phases")
+
+Separate directives with semicolons and phases with commas. There is no `patch` phase: PATCH uses the update policy.
+
+| Directive | Phase                        | Effect                                                                      |
+| --------- | ---------------------------- | --------------------------------------------------------------------------- |
+| `preload` | `create`                     | Reloads the relation after insertion.                                       |
+| `preload` | `read`                       | Loads the relation for read and delete identity lookups.                    |
+| `preload` | `query`                      | Loads the relation for list results.                                        |
+| `preload` | `update`                     | Loads the relation before PUT/PATCH mapping and reloads it after the write. |
+| `sync`    | `create`, `update`, `delete` | Adds association paths for persistence or owned-association cleanup.        |
+
+SQLH traverses nested relation tags. Paths use Go field names, such as `Labels` or `Rules.Owner`, not column names or JSON names. Unknown directives, unsupported phases, and `sqlh` tags on scalar or embedded fields fail during handler construction.
+
+### Defaults and PATCH Selection[​](#defaults-and-patch-selection "Direct link to Defaults and PATCH Selection")
+
+SQLR Create persists populated associations by default. Delete cleans up owned HasOne and HasMany rows and many-to-many links, not shared target rows.
+
+Adding the first create or delete sync path changes that operation to selected-path mode. SQLR schema paths and SQLH builder paths combine. `OmitAssociation` excludes a path even when a tag selects it.
+
+Update defaults to the root row only. SQLR `sync:update` defaults or per-call paths can also enable relation updates. Therefore PUT can persist relations without an SQLH tag.
+
+Default PATCH requires `sqlh:"sync:update"` for eligible association paths. It selects paths from the original document or configured triggers, then omits unselected SQLR auto-sync paths. Do not infer PATCH selection from the complete merged input.
+
+### Many-to-Many Target Updates[​](#many-to-many-target-updates "Direct link to Many-to-Many Target Updates")
+
+Existing many-to-many IDs are link-only by default. SQLR verifies target existence and reconciles join-table membership without updating those target rows. An ID-less target is inserted. Removing a target from the collection removes its link, not the shared row.
+
+Enable full target-row updates only when the API permits changes to shared targets:
+
+```
+Tags []*Tag `db:"-" sqlr:"many2many:project_tags;sync:update;syncMode:many2many" sqlh:"preload:read,query,update;sync:update"`
+```
+
+For custom repository operations, `SyncMany2many("Tags")` enables full synchronization for that call. Keep the same ownership and authorization rules as the existing API.
+
+## Custom Identity and Delete Behavior[​](#custom-identity-and-delete-behavior "Direct link to Custom Identity and Delete Behavior")
+
+The default identity lookup uses the SQL primary key. Set `CrudDefinition.Identity` when the public API uses another key, such as a public UUID:
+
+```
+definition.Identity = func(
+
+    ctx context.Context,
+
+    tx sqlr.TTx,
+
+    repository sqlr.RepositoryTx[uint, Project],
+
+    publicID string,
+
+    scope sqlh.QueryScope,
+
+    builder func(*sqlr.QueryBuilderSelect),
+
+) (*Project, error) {
+
+    var scopeErr error
+
+    entities, err := repository.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
+
+        qb.Where(sqlc.Col("projects", "public_id").Eq(publicID))
+
+        if scope != nil {
+
+            scopeErr = scope(qb)
+
+        }
+
+        if scopeErr == nil && builder != nil {
+
+            builder(qb)
+
+        }
+
+    })
+
+    if scopeErr != nil {
+
+        return nil, scopeErr
+
+    }
+
+    if err != nil {
+
+        return nil, err
+
+    }
+
+    if len(entities) == 0 {
+
+        return nil, fmt.Errorf("project %s: %w", publicID, sqlr.ErrNotFound)
+
+    }
+
+
+
+    return &entities[0], nil
+
+}
+```
+
+SQLH passes a builder to every custom identity lookup. Apply it, along with the public-ID predicate and supplied scope, before querying. Return scope errors before repository work. Ordinary GET builders can add relation preloads but do not include `FOR UPDATE`. Default Update, PATCH, and Delete builders include that lock.
+
+SQLH uses physical SQLR deletion by default. Use `DeleteScope` and `Delete` for soft deletion:
+
+```
+definition.DeleteScope = func(qb *sqlr.QueryBuilderSelect) {
+
+    qb.Where(sqlc.Col("deleted_at").IsNull())
+
+}
+
+
+
+definition.Delete = func(
+
+    ctx context.Context,
+
+    tx sqlr.TTx,
+
+    repository sqlr.RepositoryTx[uint, Project],
+
+    entity *Project,
+
+) error {
+
+    now := time.Now()
+
+    entity.DeletedAt = &now
+
+    entity.UpdatedAt = now
+
+
+
+    updated, err := repository.Update(tx, entity, func(qb *sqlr.QueryBuilderUpdate) {
+
+        qb.OmitAssociation("Rules", "Labels", "Tags")
+
+    })
+
+    if err != nil {
+
+        return err
+
+    }
+
+    *entity = *updated
+
+
+
+    return nil
+
+}
+
+
+
+definition.DeleteOutput = definition.Output
+```
+
+`DeleteScope` restricts default read, list, count, update, PATCH, and delete operations. `Delete` receives the entity after the scoped identity lookup. SQLH does not infer soft deletion from a field name.
+
+## Custom Repository Settings[​](#custom-repository-settings "Direct link to Custom Repository Settings")
+
+SQLH uses a transaction-aware `sqlr.RepositoryTx` by default. Use options when the handler needs another SQL client, repository settings, or a wrapper:
+
+* `sqlh.WithClientName[K, E](name)` selects a configured SQL client.
+* `sqlh.WithRepositorySettings[K, E](settings)` sets SQLR settings.
+* `sqlh.WithRepositoryTxFactory[K, E](factory)` replaces repository construction.
+
+The custom factory receives the same `sqlc.Client` that SQLH uses to start transactions:
+
+main.go
+
+```
+type ReportingAuthorRepository struct {
+
+  delegate sqlr.RepositoryTx[int64, Author]
+
+}
+
+
+
+func NewReportingAuthorRepository(client sqlc.Client, settings sqlr.Settings) (sqlr.RepositoryTx[int64, Author], error) {
+
+  repo, err := sqlr.NewRepositoryTxWithSettings[int64, Author](client, settings)
+
+  if err != nil {
+
+    return nil, err
+
+  }
+
+
+
+  return &ReportingAuthorRepository{delegate: repo}, nil
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Create(tx sqlr.TTx, entity *Author, opts ...func(qb *sqlr.QueryBuilderCreate)) error {
+
+  return r.delegate.Create(tx, entity, opts...)
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Read(tx sqlr.TTx, id int64, opts ...func(qb *sqlr.QueryBuilderRead)) (*Author, error) {
+
+  return r.delegate.Read(tx, id, opts...)
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Query(tx sqlr.TTx, opts ...func(qb *sqlr.QueryBuilderSelect)) ([]Author, error) {
+
+  return r.delegate.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
+
+    qb.OrderBy(reportingAuthorOrderBy)
+
+    qb.Limit(reportingAuthorDefaultLimit)
+
+    for _, opt := range opts {
+
+      opt(qb)
+
+    }
+
+  })
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Count(tx sqlr.TTx, qb *sqlr.QueryBuilderSelect) (int, error) {
+
+  return r.delegate.Count(tx, qb)
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Update(tx sqlr.TTx, entity *Author, opts ...func(qb *sqlr.QueryBuilderUpdate)) (*Author, error) {
+
+  return r.delegate.Update(tx, entity, opts...)
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Delete(tx sqlr.TTx, id int64, opts ...func(qb *sqlr.QueryBuilderDelete)) error {
+
+  return r.delegate.Delete(tx, id, opts...)
+
+}
+
+
+
+func (r *ReportingAuthorRepository) Close() error {
+
+  return r.delegate.Close()
+
+}
+```
+
+The repository wrapper retains its defaults for direct queries, but SQLH v0.8.0 prepares the list builder and copies it into the repository query, so those defaults alone do not affect the list route. The example also applies them through a custom `ListInputSource`: it adds the newest-first order as a query modifier and applies the 100-row fallback only when no page limit was requested. It embeds `sqlh.ListInput` to preserve native filters, force filters, and offsets. The default count does not apply pagination, so its total remains uncapped.
+
+main.go
+
+```
+const (
+
+  reportingAuthorOrderBy      = "created_at DESC"
+
+  reportingAuthorDefaultLimit = 100
+
+)
+
+
+
+type reportingAuthorListInput struct {
+
+  sqlh.ListInput
+
+}
+
+
+
+func (i reportingAuthorListInput) ApplyQueryModifiers(qb *sqlr.QueryBuilderSelect) {
+
+  qb.OrderBy(reportingAuthorOrderBy)
+
+}
+
+
+
+func (i reportingAuthorListInput) ApplyPagination(qb *sqlr.QueryBuilderSelect) {
+
+  i.ListInput.ApplyPagination(qb)
+
+  if i.Page.Limit == 0 {
+
+    qb.Limit(reportingAuthorDefaultLimit)
+
+  }
+
+}
+```
+
+The custom list input is selected by the CRUD definition:
+
+main.go
+
+```
+func main() {
+
+  application.New(
+
+    application.WithConfigFile("config.dist.yml", "yml"),
+
+    application.WithLoggerHandlersFromConfig,
+
+    application.WithModuleFactory("http", httpserver.NewServer(
+
+      "default",
+
+      func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+
+        mapper := &AuthorMapper{}
+
+        definition := sqlh.CrudDefinition[
+
+          int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, reportingAuthorListInput, *Author,
+
+        ]{
+
+          CreateInput:          mapper.TransformCreateInput,
+
+          UpdateInput:          mapper.TransformUpdateInput,
+
+          PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
+
+          Output:               mapper.TransformOutput,
+
+        }
+
+        router.HandleWith(sqlh.WithCrudHandlers(
+
+          1,
+
+          "author",
+
+          sqlh.SimpleCrudDefinition(definition),
+
+          sqlh.WithClientName[int64, Author]("reporting"),
+
+          sqlh.WithRepositoryTxFactory[int64, Author](NewReportingAuthorRepository),
+
+        ))
+
+        return nil
+
+      },
+
+    )),
+
+  ).Run()
+
+}
+```
+
+This configuration enables migrations for the selected `reporting` client.
+
+config.dist.yml
+
+```
+httpserver:
+
+  default:
+
+    port: 8080
+
+    mode: release
+
+
+
+sqlc:
 
   reporting:
 
@@ -548,369 +1382,65 @@ sqlc:
       password: gosoline
 
       database: blog
+
+    migrations:
+
+      enabled: true
+
+      reset: true
+
+      path: migrations
 ```
 
-### Wrapping the Default Repository[​](#wrapping-the-default-repository "Direct link to Wrapping the Default Repository")
+A custom repository must implement the transaction-aware `sqlr.RepositoryTx` interface. The interface includes `Count` in addition to `Create`, `Read`, `Query`, `Update`, `Delete`, and `Close`.
 
-In most cases, the simplest custom implementation is a small wrapper around `sqlr.NewRepository()`. That lets you preserve the standard CRUD behavior while adding defaults in selected methods:
+## Custom Operations[​](#custom-operations "Direct link to Custom Operations")
 
-main.go
-
-```
-type ReportingAuthorRepository struct {
-
-  delegate sqlr.Repository[int64, Author]
-
-}
-
-
-
-func NewReportingAuthorRepository(ctx context.Context, config cfg.Config, logger log.Logger, name string) (sqlr.Repository[int64, Author], error) {
-
-  repo, err := sqlr.NewRepository[int64, Author](ctx, config, logger, name)
-
-  if err != nil {
-
-    return nil, err
-
-  }
-
-
-
-  return &ReportingAuthorRepository{delegate: repo}, nil
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Create(ctx context.Context, entity *Author, opts ...func(qb *sqlr.QueryBuilderCreate)) error {
-
-  return r.delegate.Create(ctx, entity, opts...)
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Read(ctx context.Context, id int64, opts ...func(qb *sqlr.QueryBuilderRead)) (*Author, error) {
-
-  return r.delegate.Read(ctx, id, opts...)
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Query(ctx context.Context, opts ...func(qb *sqlr.QueryBuilderSelect)) ([]Author, error) {
-
-  return r.delegate.Query(ctx, append(opts, func(qb *sqlr.QueryBuilderSelect) {
-
-    qb.OrderBy("created_at DESC")
-
-    qb.Limit(100)
-
-  })...)
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Update(ctx context.Context, entity *Author, opts ...func(qb *sqlr.QueryBuilderUpdate)) (*Author, error) {
-
-  return r.delegate.Update(ctx, entity, opts...)
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Delete(ctx context.Context, id int64, opts ...func(qb *sqlr.QueryBuilderDelete)) error {
-
-  return r.delegate.Delete(ctx, id, opts...)
-
-}
-
-
-
-func (r *ReportingAuthorRepository) Close() error {
-
-  return r.delegate.Close()
-
-}
-```
-
-This pattern is useful when you want to add metrics, logging, tenant-aware setup, or query defaults without reimplementing the full `sqlr.Repository` interface.
-
-### Registering CRUD Handlers with a Custom Repository[​](#registering-crud-handlers-with-a-custom-repository "Direct link to Registering CRUD Handlers with a Custom Repository")
-
-Pass both options to `WithCrudHandlers` when you want to select a non-default SQL client and override how the repository is created:
-
-main.go
+A `CrudDefinition` can replace a complete operation when the default flow does not match the domain. Operation callbacks receive the active `sqlr.TTx`, the configured `sqlr.RepositoryTx`, and the typed input:
 
 ```
-func main() {
+type CrudOperation[K sqlr.KeyTypes, E sqlr.Entitier[K], I, O any] func(
 
-  application.New(
+    context.Context,
 
-    application.WithConfigBytes(config, "yml"),
+    sqlr.TTx,
 
-    application.WithLoggerHandlersFromConfig,
+    sqlr.RepositoryTx[K, E],
 
-    application.WithModuleFactory("http", httpserver.NewServer(
+    *I,
 
-      "default",
-
-      func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-
-        router.HandleWith(sqlh.WithCrudHandlers(
-
-          1,
-
-          "author",
-
-          sqlh.SimpleTransformer(&AuthorTransformer{}),
-
-          sqlh.WithClientName[int64, Author]("reporting"),
-
-          sqlh.WithRepositoryFactory[int64, Author](NewReportingAuthorRepository),
-
-        ))
-
-
-
-        return nil
-
-      },
-
-    )),
-
-  ).Run()
-
-}
+) (O, error)
 ```
 
-The custom repository must still satisfy `sqlr.Repository[K, E]`, so `sqlh` can continue to call `Create`, `Read`, `Query`, `Update`, and `Delete` normally.
+The definition supports `CreateOperation`, `ReadOperation`, `UpdateOperation`, `PatchOperation`, `ListOperation`, and `DeleteOperation`. An operation field replaces the complete default operation. `UpdateOperation` does not change the default PATCH pipeline. `PatchOperation` replaces the complete patch pipeline.
 
-## Transaction Middleware[​](#transaction-middleware "Direct link to Transaction Middleware")
+Use custom operations for domain rules that need direct control over persistence. An override owns authorization, validation, scope, locking, association policy, and persistence for its operation. Create, read, update, patch, and list overrides return their typed operation results. `DeleteOperation` instead returns the deleted `*E`. `handler.Delete` applies `DeleteOutput` to that entity. `handler.DeleteNoContent` skips the mapper and returns 204. SQLH wraps it in `TxRunner`; its transaction covers SQL work that uses the supplied transaction and repository. It cannot roll back blob-store or other external effects, and MySQL DDL may commit implicitly. Keep legacy lifecycle handlers outside SQLH CRUD when the old order or failure behavior requires it. Publish success events after commit, not from a pre-commit mapper.
 
-The `WithTx` function wraps a group of HTTP routes in a database transaction. Each request automatically begins a transaction before the handler runs, commits on success, and rolls back if any error occurs.
+## Migration Notes[​](#migration-notes "Direct link to Migration Notes")
 
-### Setting Up WithTx[​](#setting-up-withtx "Direct link to Setting Up WithTx")
+The SQLH CRUD redesign removes these APIs:
 
-Create a handler struct with a factory function, then use `WithTx` to register routes:
+* `Transformer` and `JsonResultsTransformer`
+* `WithTx`
+* `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR`
+* legacy Gin transaction binding files and builder-aware transformer interfaces
 
-main.go
+Use these replacements:
 
-```
-type PostHandler struct {
+| Old pattern                            | New pattern                                                                   |
+| -------------------------------------- | ----------------------------------------------------------------------------- |
+| Transformer factory                    | `CrudDefinitionFactory` with `NewCrudDefinition` or a custom `CrudDefinition` |
+| `RenderEntityResponse`                 | Typed `CrudDefinition.Output`                                                 |
+| `GetInput` and request body assertions | Typed callback input values                                                   |
+| Request-scoped `WithTx` middleware     | Default SQLH operation transactions or `TxRunner`                             |
+| Repository factory                     | `WithRepositoryTxFactory` returning `sqlr.RepositoryTx`                       |
+| Generic query list handler             | `ListInput`, `ListOutput`, `Query`, and `Count`                               |
+| Implicit patch association behavior    | `sqlh` relation tags and `PatchAssociationTriggers`                           |
 
-}
+Add parity tests before changing the implementation. Check routes, response bodies, status codes, authorization, association behavior, filters, pagination, and transaction rollback behavior.
 
+## See Also[​](#see-also "Direct link to See Also")
 
-
-func NewPostHandler() httpserver.HandlerFactory[PostHandler] {
-
-  return func(ctx context.Context, config cfg.Config, logger log.Logger) (*PostHandler, error) {
-
-    return &PostHandler{}, nil
-
-  }
-
-}
-```
-
-main.go
-
-```
-func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-
-  router.HandleWith(sqlh.WithTx(NewPostHandler(), func(router *httpserver.Router, handler *PostHandler) {
-
-    router.POST("/v1/authors/:id/posts", sqlh.BindTx(handler.HandleCreatePost))
-
-    router.GET("/v1/posts/:id", sqlh.BindTxN(handler.HandleReadPost))
-
-  }))
-
-
-
-  return nil
-
-},
-```
-
-Notice that the handler struct does not create or hold a repository. Instead of manually setting up database access, each handler receives an active `sqlc.Tx` directly through the `Bind*` helpers — the transaction is started automatically before the handler runs and committed or rolled back afterward.
-
-`WithTx` takes two arguments:
-
-| Argument         | Description                                                                    |
-| ---------------- | ------------------------------------------------------------------------------ |
-| `handlerFactory` | Factory that creates the handler struct (with access to `config` and `logger`) |
-| `register`       | Function that registers routes on the router, receiving the handler instance   |
-
-The middleware:
-
-1. Begins a transaction via `sqlClient.BeginTx()` before each request
-2. Stores the transaction in the gin context
-3. Calls the next handler
-4. **Commits** if no errors occurred
-5. **Rolls back** if any handler in the chain added an error to the gin context
-
-### Transaction Binding Helpers[​](#transaction-binding-helpers "Direct link to Transaction Binding Helpers")
-
-Inside a `WithTx`-wrapped route group, use the `BindTx` family of functions to extract the transaction and bind request input:
-
-#### BindTx — With Input[​](#bindtx--with-input "Direct link to BindTx — With Input")
-
-Use `BindTx` when the handler needs both the transaction and a parsed request body:
-
-main.go
-
-```
-func (h *PostHandler) HandleCreatePost(cttx sqlc.Tx, input *PostCreateInput) (httpserver.Response, error) {
-
-  // The transaction is automatically managed — commit on success, rollback on error.
-
-  // Use cttx.Q() to execute queries within the transaction scope.
-
-
-
-  post := &Post{
-
-    Title:  input.Title,
-
-    Body:   input.Body,
-
-    Status: "draft",
-
-  }
-
-
-
-  _, err := cttx.Q().Into("posts").Records(post).Exec(cttx)
-
-  if err != nil {
-
-    return nil, fmt.Errorf("failed to create post: %w", err)
-
-  }
-
-
-
-  return httpserver.NewJsonResponse(post), nil
-
-}
-```
-
-`BindTx` automatically:
-
-* Binds the request body to the input type `I`
-* Extracts the `sqlc.Tx` from the gin context
-* Calls the handler with both
-* Writes the response
-
-#### BindTxN — No Input[​](#bindtxn--no-input "Direct link to BindTxN — No Input")
-
-Use `BindTxN` when the handler only needs the transaction (no request body):
-
-main.go
-
-```
-func (h *PostHandler) HandleReadPost(cttx sqlc.Tx) (httpserver.Response, error) {
-
-  // BindTxN is used when no request body input is needed.
-
-  // The transaction is still available for database operations.
-
-
-
-  var posts []Post
-
-  err := cttx.Q().From("posts").Where(sqlc.Col("status").Eq("draft")).Select(cttx, &posts)
-
-  if err != nil {
-
-    return nil, fmt.Errorf("failed to query posts: %w", err)
-
-  }
-
-
-
-  return httpserver.NewJsonResponse(posts), nil
-
-}
-```
-
-Since `sqlc.Tx` implements `Querier`, you can pass it to `WithClient()` on query builders to execute queries within the transaction.
-
-#### BindTxR / BindTxNR — With Raw Request[​](#bindtxr--bindtxnr--with-raw-request "Direct link to BindTxR / BindTxNR — With Raw Request")
-
-For handlers that need access to the raw `*http.Request` (e.g., to read headers or query parameters), use the `R` variants:
-
-```
-// With input + raw request
-
-sqlh.BindTxR(func(cttx sqlc.Tx, req *http.Request, input *MyInput) (httpserver.Response, error) {
-
-    userAgent := req.Header.Get("User-Agent")
-
-    // ...
-
-})
-
-
-
-// No input + raw request
-
-sqlh.BindTxNR(func(cttx sqlc.Tx, req *http.Request) (httpserver.Response, error) {
-
-    // ...
-
-})
-```
-
-### Wiring into the Application[​](#wiring-into-the-application-1 "Direct link to Wiring into the Application")
-
-main.go
-
-```
-func main() {
-
-  application.New(
-
-    application.WithConfigBytes(config, "yml"),
-
-    application.WithLoggerHandlersFromConfig,
-
-    application.WithModuleFactory("http", httpserver.NewServer(
-
-      "default",
-
-      func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
-
-        router.HandleWith(sqlh.WithTx(NewPostHandler(), func(router *httpserver.Router, handler *PostHandler) {
-
-          router.POST("/v1/authors/:id/posts", sqlh.BindTx(handler.HandleCreatePost))
-
-          router.GET("/v1/posts/:id", sqlh.BindTxN(handler.HandleReadPost))
-
-        }))
-
-
-
-        return nil
-
-      },
-
-    )),
-
-  ).Run()
-
-}
-```
-
-### Summary of Binding Functions[​](#summary-of-binding-functions "Direct link to Summary of Binding Functions")
-
-| Function   | Input | Raw Request | Signature                                                           |
-| ---------- | ----- | ----------- | ------------------------------------------------------------------- |
-| `BindTx`   | Yes   | No          | `func(cttx sqlc.Tx, input *I) (Response, error)`                    |
-| `BindTxR`  | Yes   | Yes         | `func(cttx sqlc.Tx, req *http.Request, input *I) (Response, error)` |
-| `BindTxN`  | No    | No          | `func(cttx sqlc.Tx) (Response, error)`                              |
-| `BindTxNR` | No    | Yes         | `func(cttx sqlc.Tx, req *http.Request) (Response, error)`           |
+* [sqlc - SQL Client](/docs/how-to/databases-sql/sqlc/.md)
+* [sqlr - SQL Repository](/docs/how-to/databases-sql/sqlr/.md)
+* [Migrate an existing service to SQLH](/docs/migrations/sqlh-crud/.md)

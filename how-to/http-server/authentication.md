@@ -99,13 +99,13 @@ curl -H 'X-API-KEY: secret' http://localhost:8080/api/ping
 Successful authenticators attach an `auth.Subject` to the request context. Handlers registered through `Bind`, `BindN`, `BindR`, `BindNR`, and SSE helpers receive that context.
 
 ```
-func me(ctx context.Context) (httpserver.Response, error) {
+func me(ctx context.Context) (map[string]any, error) {
 
     subject := auth.GetSubject(ctx)
 
 
 
-    return httpserver.NewJsonResponse(map[string]any{
+    return map[string]any{
 
         "name":             subject.Name,
 
@@ -115,7 +115,7 @@ func me(ctx context.Context) (httpserver.Response, error) {
 
         "attributes":       subject.Attributes,
 
-    }), nil
+    }, nil
 
 }
 ```

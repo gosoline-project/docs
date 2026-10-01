@@ -160,16 +160,20 @@ func NewMyHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*M
 
 ### Bind functions[​](#bind-functions "Direct link to Bind functions")
 
-| Function      | Handler signature                            | Use case                       |
-| ------------- | -------------------------------------------- | ------------------------------ |
-| `Bind[I]`     | `(ctx, *I) (Response, error)`                | Bind request to input struct   |
-| `BindR[I]`    | `(ctx, *http.Request, *I) (Response, error)` | Bind with raw request access   |
-| `BindN`       | `(ctx) (Response, error)`                    | No input binding               |
-| `BindNR`      | `(ctx, *http.Request) (Response, error)`     | No input, with raw request     |
-| `BindSse[I]`  | `(ctx, *I, *SseWriter) error`                | SSE with input binding         |
-| `BindSseR[I]` | `(ctx, *http.Request, *I, *SseWriter) error` | SSE with input + raw request   |
-| `BindSseN`    | `(ctx, *SseWriter) error`                    | SSE with no input              |
-| `BindSseNR`   | `(ctx, *http.Request, *SseWriter) error`     | SSE with raw request, no input |
+| Function          | Handler signature                                                       | Use case                                      |
+| ----------------- | ----------------------------------------------------------------------- | --------------------------------------------- |
+| `Bind[I, O any]`  | `func(ctx context.Context, input *I) (O, error)`                        | Bind request to input and render typed output |
+| `BindR[I, O any]` | `func(ctx context.Context, request *http.Request, input *I) (O, error)` | Bind with raw request access                  |
+| `BindN[O any]`    | `func(ctx context.Context) (O, error)`                                  | No input binding                              |
+| `BindNR[O any]`   | `func(ctx context.Context, request *http.Request) (O, error)`           | No input, with raw request                    |
+| `BindSse[I]`      | `(ctx, *I, *SseWriter) error`                                           | SSE with input binding                        |
+| `BindSseR[I]`     | `(ctx, *http.Request, *I, *SseWriter) error`                            | SSE with input + raw request                  |
+| `BindSseN`        | `(ctx, *SseWriter) error`                                               | SSE with no input                             |
+| `BindSseNR`       | `(ctx, *http.Request, *SseWriter) error`                                | SSE with raw request, no input                |
+
+The four response binding helpers accept a typed result `O` and negotiate its representation from the request's `Accept` header. The default renderer supports JSON only, uses JSON when `Accept` is missing, and returns `406 Not Acceptable` when no accepted media type is supported. See [Customizing responses in Build an HTTP service](/docs/how-to/http-server/build-an-http-service/.md#customizing-responses) for response metadata and explicit `Response` overrides.
+
+Typed outputs are negotiated before their `StatusCode()` metadata is applied. For a bodyless `204 No Content` response that must be preserved when `Accept` is unsupported, return `NewStatusResponse(http.StatusNoContent)`; explicit responses bypass negotiation. Other typed outputs, including those with custom status codes, remain negotiated.
 
 ### Binding tags[​](#binding-tags "Direct link to Binding tags")
 
@@ -230,33 +234,41 @@ Binding and validation failures return `400 Bad Request`. Validation bind failur
 
 ## Error handling[​](#error-handling "Direct link to Error handling")
 
-### [WithErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#witherrorhandler "Direct link to witherrorhandler")
+### [WithErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/server_options.go)[​](#witherrorhandler "Direct link to witherrorhandler")
 
 ```
-httpserver.WithErrorHandler(func(statusCode int, err error) httpserver.Response {
+httpserver.WithErrorHandler(func(statusCode int, err error) any {
 
-    return httpserver.NewJsonResponse(
-
-        map[string]any{"error": err.Error()},
-
-        httpserver.WithStatusCode(statusCode),
-
-    )
+    return map[string]any{"error": err.Error()}
 
 })
 ```
 
-Sets a custom global error handler. By default, 4xx responses return `{"err":"<message>"}` and 5xx responses return `{"err":"internal server error"}`. Set `httpserver.<name>.errors.privacy` to `public` to expose 5xx error messages.
+Pass this option to `NewServer` or `NewServerWithSettings`, or add it to `ServerDefinition.Options` for `RunServers`. The callback runs after middleware selects a status from the last recorded error.
 
-### [GetErrorHandler()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#geterrorhandler "Direct link to geterrorhandler")
+Status selection checks `ErrorWithStatus` first, then the first matching `WithErrorMapper`. Validation errors use `400 Bad Request`. All other errors use `500 Internal Server Error`.
+
+The callback returns the body to send to the client, not another Go error. The endpoint still returns its error through its normal `(output, error)` result. A returned struct or map keeps the selected HTTP status. Private 5xx privacy passes `internal server error` to the callback.
+
+A struct, map, or other serializable value that does not implement `httpserver.Response` uses the server's response negotiator. It selects a format from `Accept`, serializes the value, and sets `Content-Type`. JSON is the default. XML needs a negotiator that includes `XMLRepresentation()` and a value that `encoding/xml` can encode. In `v0.6.4`, error middleware falls back to JSON with the selected status if negotiation or encoding fails.
+
+An explicit `httpserver.Response` bypasses negotiation and sends its format regardless of `Accept`. It owns the status and headers, including `Content-Type`. It does not inherit the selected error status. For fixed JSON with that status, return `httpserver.NewJsonResponse(body, httpserver.WithStatusCode(statusCode))`.
+
+### [NewErrorWithStatus()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#newerrorwithstatus "Direct link to newerrorwithstatus")
+
+Return a zero output and a wrapped error to set an expected client-error status:
 
 ```
-return httpserver.GetErrorHandler()(http.StatusBadRequest, err), nil
+return nil, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
 ```
 
-Returns the current error handler, useful for returning client errors with specific status codes.
+For a struct output, replace `nil` with that struct's zero value.
 
-Use `NewErrorWithStatus(statusCode, err)` when middleware attaches an error to the Gin context and the response should use a status other than 500.
+Middleware can attach the same wrapped error to the Gin context:
+
+```
+ginCtx.Error(httpserver.NewErrorWithStatus(http.StatusBadRequest, err))
+```
 
 ## Middleware[​](#middleware "Direct link to Middleware")
 
