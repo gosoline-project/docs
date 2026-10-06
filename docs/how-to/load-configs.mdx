@@ -1,16 +1,8 @@
 ---
-sidebar_position: 1
+sidebar:
+  order: 1
 title: Load configurations
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import ConfigDist from "!!raw-loader!./src/cfg/from-file/config.dist.yml";
-import FromFile from "!!raw-loader!./src/cfg/from-file/main.go";
-import FromMap from "!!raw-loader!./src/cfg/from-map/main.go";
-import FromSetting from "!!raw-loader!./src/cfg/from-settings/main.go";
-import FromEnv from "!!raw-loader!./src/cfg/from-env/main.go";
-import Main from "!!raw-loader!./src/cfg/main.go";
-import UseConfigs from "!!raw-loader!./src/cfg/getters/main.go";
 
 There are different ways to load configurations into your application:
 
@@ -19,11 +11,11 @@ There are different ways to load configurations into your application:
 
 First, configure your project in a yaml file:
 
-<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{ConfigDist}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml" lineNumbers'>./src/cfg/from-file/config.dist.yml</include>
 
 Then, load your configurations into your application:
 
-<CodeBlock showLineNumbers language="go" title="main.go">{FromFile}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/cfg/from-file/main.go</include>
 
 Here, you:
 
@@ -37,7 +29,7 @@ Here, you:
 <details>
 <summary>From a map</summary>
 
-<CodeBlock showLineNumbers language="go" title="main.go">{FromMap}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/cfg/from-map/main.go</include>
 
 Here, you:
 
@@ -51,7 +43,7 @@ Here, you:
 <details>
 <summary>From individual settings</summary>
 
-<CodeBlock showLineNumbers language="go" title="main.go">{FromSetting}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/cfg/from-settings/main.go</include>
 
 Here, you've:
 
@@ -65,7 +57,7 @@ Here, you've:
 <details>
 <summary>From multiple sources</summary>
 
-<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/cfg/main.go</include>
 
 Here, you've:
 
@@ -78,7 +70,39 @@ Here, you've:
 
 Once you've loaded your configurations, you can access them with type-specific getters. For example:
 
-<CodeBlock showLineNumbers language="go" title="main.go" lineHighlight="22-23">{UseConfigs}</CodeBlock>
+```go title="main.go" lineNumbers {20-30}
+package main
+
+import (
+	"fmt"
+
+	"github.com/justtrackio/gosoline/pkg/cfg"
+)
+
+func main() {
+	config := cfg.New()
+
+	options := []cfg.Option{
+		cfg.WithConfigFile("config.dist.yml", "yml"),
+	}
+
+	if err := config.Option(options...); err != nil {
+		panic(err)
+	}
+
+	port, err := config.GetInt("port")
+	if err != nil {
+		panic(fmt.Errorf("failed to get port: %w", err))
+	}
+	fmt.Printf("got port: %d\n", port)
+
+	host, err := config.GetString("host")
+	if err != nil {
+		panic(fmt.Errorf("failed to get host: %w", err))
+	}
+	fmt.Printf("got host: %s\n", host)
+}
+```
 
 ## Conclusion
 

@@ -1,10 +1,8 @@
 ---
-sidebar_position: 5
+sidebar:
+  order: 5
 title: Use context with logs
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import Handler from "!!raw-loader!./src/log-context/handler.go";
 
 The [go Context](https://pkg.go.dev/context) carries data from the moment the server receives an inbound request to the moment the server makes an outbound request. This means you can use it to propagate data between services and processes. With gosoline, you can use log functions to store data from the request lifecycle in the Context and attach that data to logs to provide more details.
 
@@ -20,7 +18,22 @@ With this service, users can create and update todos. For the purposes of this t
 
 In `handler.go`, add a new function:
 
-<CodeBlock title="handler.go" language="go" snippet="truncate">{Handler}</CodeBlock>
+```go title="handler.go"
+func truncate(ctx context.Context, text string) string {
+  r := []rune(text)
+  length := len(r)
+
+  log.MutateContextFields(ctx, map[string]any{
+    "original_length": length,
+  })
+
+  if length > 50 {
+    text = string(r[:50]) + "..."
+  }
+
+  return text
+}
+```
 
 In this function, you:
 
@@ -50,11 +63,46 @@ Read more about appending and mutating context fields in our [log package refere
 
 Now that you have a function that can truncate todo text, use it when creating a todo:
 
-<CodeBlock title="handler.go" language="go" snippet="transform create">{Handler}</CodeBlock>
+```go title="handler.go" {5-6,16}
+func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
+  h.mu.Lock()
+  defer h.mu.Unlock()
+
+  localctx := log.InitContext(ctx)
+  text := truncate(localctx, input.Text)
+
+  todo := &Todo{
+    Id:      h.nextId,
+    Text:    text,
+    DueDate: input.DueDate,
+  }
+  h.todos[todo.Id] = todo
+  h.nextId++
+
+  h.logger.Info(localctx, "creating new task due at %v", todo.DueDate)
+
+  return todo, nil
+}
+```
 
 And when updating a todo:
 
-<CodeBlock title="handler.go" language="go" snippet="transform update">{Handler}</CodeBlock>
+```go title="handler.go" {10-11}
+func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
+  h.mu.Lock()
+  defer h.mu.Unlock()
+
+  todo, ok := h.todos[input.Id]
+  if !ok {
+    return nil, fmt.Errorf("todo %d not found", input.Id)
+  }
+
+  localctx := log.InitContext(ctx)
+  todo.Text = truncate(localctx, input.Text)
+
+  return todo, nil
+}
+```
 
 Here, you first call `log.InitContext()`. This function creates two sets of log-related fields in the `Context`:
 
@@ -63,7 +111,7 @@ Here, you first call `log.InitContext()`. This function creates two sets of log-
 
 Then, it returns a `Context` in which these local and global fields are mutable. You pass this `Context` as the first parameter to `truncate()`.
 
-:::info Technical Detail
+:::info[Technical Detail]
 
 Actually, this call to `log.InitContext()` is not required because gosoline will have already initialized the `Context` earlier in the request lifecycle (specifically, in the HTTP middleware). In this case, the `ctx` you pass to `log.InitContext()` is returned, unchanged. Therefore, `localctx` and `ctx` are the same, so you could have passed `ctx` to `truncate()` instead.
 
@@ -77,13 +125,28 @@ If you run your service now, you'll see the results of your work. Gosoline has s
 
 First, add a logger to your `TodoHandler`:
 
-<CodeBlock title="handler.go" language="go" snippet="crud handler v0">{Handler}</CodeBlock>
+```go title="handler.go" {2}
+type TodoHandler struct {
+  logger log.Logger
+  mu     sync.Mutex
+  nextId int
+  todos  map[int]*Todo
+}
+```
 
 Now, you can make use of this logger in any of the handler's methods.
 
 Next, when you initialize the handler, pass a logger:
 
-<CodeBlock title="handler.go" language="go" snippet="new todo crud handler">{Handler}</CodeBlock>
+```go title="handler.go" {3}
+func NewTodoHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*TodoHandler, error) {
+  return &TodoHandler{
+    logger: logger,
+    nextId: 1,
+    todos:  map[int]*Todo{},
+  }, nil
+}
+```
 
 Finally, in `CreateTodo()`, you can use the logger:
 
@@ -125,9 +188,8 @@ curl -d '{"text":"do it!!!"}' -H "Content-Type: application/json" -X PUT localho
 
 In your logs, you should see the `original_length` field you added in the first step:
 
-```js
+```js {2}
 13:32:05.145 http    info    POST /todos HTTP/1.1
-// highlight-next-line
 original_length: 115 
 ```
 

@@ -1,12 +1,8 @@
 ---
-sidebar_position: 3
+sidebar:
+  order: 3
 title: SQLH CRUD
 ---
-
-import AgentInstructions from "!!raw-loader!./src/sqlh-migration-agent-instructions.txt";
-import { CopyToClipboardButton } from '../components.jsx';
-
-# Migrating an Existing Service to SQLH CRUD
 
 This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers.
 Use it to preserve the service's public API and domain behavior.
@@ -314,7 +310,9 @@ Regenerate Go types, mocks, OpenAPI files, and other derived artifacts from the 
 
 For the full operational procedure, copy the instructions below. The prompt is self-contained and includes pinned API semantics, tag rules, constructors, operation choices, acceptance checks, and stop conditions.
 
-<CopyToClipboardButton text={AgentInstructions} label="Copy AI migration instructions" />
+[Download the migration instructions](/downloads/sqlh-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
+
+<include lang="text" meta='title="AI migration instructions"'>./src/sqlh-migration-agent-instructions.txt</include>
 
 ## See Also
 

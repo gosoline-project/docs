@@ -1,5 +1,6 @@
 ---
-sidebar_position: 4
+sidebar:
+  order: 4
 title: Configure your server
 ---
 
@@ -97,7 +98,7 @@ httpserver:
 | `path` | string array | Exact paths to exclude (e.g., `/api/events`). |
 | `pathRegex` | string array | Regex patterns to exclude (e.g., `\.json$`). |
 
-:::caution
+:::warning
 Always exclude SSE endpoints from compression. Gzip buffering will break real-time streaming. See [Stream with SSE](/how-to/http-server/stream-with-sse/) for details.
 :::
 
@@ -175,7 +176,7 @@ httpserver:
 
 Request logs already include standard metadata such as method, path, raw path, query string, status, duration, client IP, host, referer, user agent, response bytes, and compression/request-size fields when available. Incoming `X-Request-Id` and `X-Session-Id` headers are also added to the log context automatically when present.
 
-:::caution
+:::warning
 Only enable request body or sensitive header logging deliberately. Request bodies, cookies, authorization headers, API keys, tokens, and query parameters may contain secrets or personal data. Body logging also reads the full request body into memory and can significantly increase log volume. Validation bind errors are logged at warning level and may log invalid field values even when request body logging is disabled; these values are truncated before logging.
 :::
 

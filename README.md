@@ -1,116 +1,52 @@
-# Website
+# Gosoline Docs
 
-This website is built using [Docusaurus 2](https://docusaurus.io/), a modern static website generator.
+Documentation and articles for the Gosoline Go application framework, built with [Blume](https://useblume.dev/).
 
-##  Installation
+## Development
 
-```
-$ bun install
-```
+Install the project tools and dependencies:
 
-##  Local Development
-
-```
-$ bun start
+```sh
+mise install
+mise exec -- bun install --frozen-lockfile
+mise exec -- bun run dev
 ```
 
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
+Node and Bun versions are pinned in `mise.toml`. Blume serves the site under `/docs/`, matching GitHub Pages. Use `DOCS_BASE_URL=/` for a preview mounted at the root.
 
-##  Build
+## Verification
 
-```
-$ bun run build
-```
-
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
-
-##  Deployment
-
-Using SSH:
-
-```
-$ USE_SSH=true bun run deploy
+```sh
+mise exec -- bun run typecheck
+mise exec -- bun run validate
+mise exec -- bun run build
+mise exec -- bun run preview
 ```
 
-Not using SSH:
+`validate` checks links, anchors, assets, and includes in strict mode. `build` checks configuration, frontmatter, and routes, and writes the static site to `dist/`.
 
-```
-$ GIT_USER=<Your GitHub username> bun run deploy
-```
+## Content
 
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+Pages live in `docs/`; blog posts live in `docs/blog/`. Frontmatter supplies each page's title and sidebar order. Folder `meta.ts` files supply category labels and generated index cards. Navigation follows the filesystem.
 
-## Custom Components
-
-### CodeBlock
-
-To improve the reusability and maintainability of our code blocks, we've implemented a wrapper around Docusaurus's classic CodeBlock component that you can use to show snippets from a code file.
-
-To use this component, first add snippet comments to your code. For example:
-
-Yaml:
-
-```yaml
-port: 80
-host: example.com
-
-# snippet-start: example
-struct_example:
-  port: 80
-  host: example.com
-  timeout: 5s
-  threshold: 100
-# snippet-end: example
-```
-
-Go:
-
-```go
-package main
-
-import (
-	"github.com/justtrackio/gosoline/pkg/cfg"
-)
-
-// snippet-start: main
-func main() {
-	config := cfg.New()
-	
-	// snippet-start: configure options
-	options := []cfg.Option{
-		cfg.WithConfigSetting("host", "localhost"),
-		cfg.WithConfigSetting("port", "80"),
-	}
-	// snippet-end: configure options
-    
-	if err := config.Option(options...); err != nil {
-		panic(err)
-	}
-}
-// snippet-end: main
-```
-
-Note that:
-
-1. Every snippet must have a `snippet-start` and `snippet-end` comment.
-2. The name of the snippet must be the same.
-3. Snippets can be nested.
-4. Two types of comments are currently supported (`#` and `//`)
-5. The snippet comment belongs on its own line.
-
-To use these snippets in your mdx file, you first need to import the custom `CodeBlock` component:
+Reuse whole code files with Blume includes:
 
 ```mdx
-import { CodeBlock } from '../components.jsx';
+<include lang="go" meta='title="main.go" lineNumbers'>./src/example/main.go</include>
 ```
 
-Then, you'll use it the same way you'd use the Docusaurus `CodeBlock` component, but you'll include the snippet name:
+Blume does not select named snippet regions. Those examples are inlined as fenced code; when changing a source example, update its corresponding named snippets in the documentation too. Migration instruction files remain in `docs/migrations/src/`, with downloadable copies in `public/downloads/`; keep those copies in sync.
 
-```mdx
-import Main from "!!raw-loader!./src/test/test.go";
+## Deployment
 
-<CodeBlock showLineNumbers language="go" snippet="main">{Main}</CodeBlock>
-<CodeBlock showLineNumbers language="go" snippet="configure options">{Main}</CodeBlock>
-```
+GitHub Actions validates and builds pushes to `main`, then replaces the published site on `gh-pages` while preserving existing PR preview directories. This removes obsolete Docusaurus output on deployment. Pull requests from this repository build previews under `/docs/pr-<number>/`; closing a PR removes its preview. The workflows use the pinned tools from `mise.toml` and the frozen Bun lockfile.
 
-In the output, you'll get just the snippet from the code file. If you have highlight comments, those will still work in the snippets. If you have nested snippet comments, they won't appear in the output.
+Search uses Blume's built-in local index in production and previews. Markdown page mirrors, `llms.txt`, and `llms-full.txt` are generated with the site. The static GitHub Pages deployment supports these files; request-time services require a server host.
+
+## Migration from Docusaurus
+
+The migration preserves the 45 documentation pages, five blog articles, standalone Markdown sample page, blog slugs, assets, repository links, code themes, and light/dark accent colors. Eight former `/category/…` URLs redirect to folder indexes. Blog posts retain their dates, authors, and tags as search metadata, with a new card index.
+
+Docusaurus, React/MUI wrappers, raw-loader, Algolia configuration, and the separate llms plugin were replaced by Blume. Overview cards use native components; migration instructions use code-block copy controls. Named snippets and examples with Docusaurus highlight markers were converted to fences. Two obsolete log-context snippet names now show the corresponding `CreateTodo` and `UpdateTodo` methods. Unused starter components and illustrations were removed.
+
+Blume supplies its own layout, generated social cards, and URLs without trailing slashes in links. The old global social-card image remains available as an asset. Docusaurus blog author/tag/archive pages, automatic reading-time labels, footer column headings/copyright, and custom Infima/MUI/blog-width CSS were dropped. Article content and existing page URLs remain available, including URLs requested with trailing slashes on GitHub Pages.

@@ -1,12 +1,8 @@
 ---
-sidebar_position: 2
+sidebar:
+  order: 2
 title: sqlr - SQL Repository
 ---
-
-import { CodeBlock } from '../../components.jsx';
-import Config from "!!raw-loader!./src/sqlr/auto/config.dist.yml";
-import Auto from "!!raw-loader!./src/sqlr/auto/main.go";
-import Fixtures from "!!raw-loader!./src/sqlr/fixtures/integration_test.go";
 
 The `sqlr` package provides a generic, type-safe repository layer built on top of [`sqlc`](./sqlc.mdx). It offers CRUD operations, relationship management, eager loading via joins and preloads, and transaction support — all using Go generics for compile-time type safety.
 
@@ -28,13 +24,48 @@ import "github.com/gosoline-project/sqlr"
 
 The `sqlr` package uses `sqlc` under the hood for database connections. Configure your database using the same `sqlc` configuration key described in the [sqlc documentation](./sqlc.mdx#configuration):
 
-<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{Config}</CodeBlock>
+```yaml title="config.dist.yml"
+sqlc:
+  default:
+    driver: mysql
+    uri:
+      host: 127.0.0.1
+      port: 3306
+      user: root
+      password: gosoline
+      database: blog
+    migrations:
+      enabled: true
+      path: migrations
+```
 
 ## Defining Entities
 
 Entities are Go structs that map to database tables. Embed `sqlr.Entity[K]` to get a primary key (`Id`), and timestamp fields (`CreatedAt`, `UpdatedAt`) that `sqlr` manages automatically by default:
 
-<CodeBlock title="main.go" language="go" snippet="entities">{Auto}</CodeBlock>
+```go title="main.go"
+type Author struct {
+  sqlr.Entity[int64]
+  Name  string
+  Email string
+  Posts []Post // HasMany
+}
+
+type Post struct {
+  sqlr.Entity[int64]
+  AuthorID int64
+  Title    string
+  Body     string
+  Status   string
+  Author   Author `sqlr:"belongsTo:author_id"` // BelongsTo
+  Tags     []Tag  `sqlr:"many2many:"`          // ManyToMany
+}
+
+type Tag struct {
+  sqlr.Entity[int64]
+  Name string
+}
+```
 
 ### Entity Base Struct
 
@@ -154,7 +185,12 @@ Integer primary key types (`int`, `int64`, `uint`, `uint64`) are automatically t
 
 Create a repository using `sqlr.NewRepository[K, E]()` within a gosoline application. The type parameters specify the primary key type and the entity type:
 
-<CodeBlock title="main.go" language="go" snippet="create repository">{Auto}</CodeBlock>
+```go title="main.go"
+authorRepo, err := sqlr.NewRepository[int64, Author](ctx, config, logger, "default")
+if err != nil {
+  return nil, fmt.Errorf("failed to create author repository: %w", err)
+}
+```
 
 The last argument (`"default"` above) is the **sqlc client name**. It must match a key under the `sqlc` block in your configuration file — the repository uses that named client for all database operations. You can have multiple repositories pointing to different clients (e.g., `"default"`, `"analytics"`, `"readonly"`) by passing different names.
 
@@ -493,7 +529,23 @@ qb.OmitAssociation("Profile")
 
 Pass a pointer to an entity. By default, auto-increment IDs and timestamp fields are set automatically:
 
-<CodeBlock title="main.go" language="go" snippet="create">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) createAuthor(ctx context.Context, name, email string) (*Author, error) {
+  author := &Author{
+    Name:  name,
+    Email: email,
+  }
+
+  if err := s.authorRepo.Create(ctx, author); err != nil {
+    return nil, fmt.Errorf("failed to create author: %w", err)
+  }
+
+  // author.Id is automatically set for auto-increment primary keys
+  // author.CreatedAt and author.UpdatedAt are set via autoCreateTime/autoUpdateTime
+
+  return author, nil
+}
+```
 
 #### Preserve preset IDs and timestamps
 
@@ -513,7 +565,25 @@ err := repo.Create(ctx, &author, func(qb *sqlr.QueryBuilderCreate) {
 
 By default, populate relationship fields on the entity before calling `Create()` and `sqlr` will automatically persist them in the correct order within a single transaction:
 
-<CodeBlock title="main.go" language="go" snippet="create with associations">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) createPost(ctx context.Context, authorId int64, title, body, status string, tags ...Tag) (*Post, error) {
+  post := &Post{
+    AuthorID: authorId,
+    Title:    title,
+    Body:     body,
+    Status:   status,
+    Tags:     tags,
+  }
+
+  // When Tags is populated, sqlr automatically inserts the tag rows and
+  // the posts_tags join table entries within a single transaction.
+  if err := s.postRepo.Create(ctx, post); err != nil {
+    return nil, fmt.Errorf("failed to create post: %w", err)
+  }
+
+  return post, nil
+}
+```
 
 The association save order is:
 
@@ -569,7 +639,16 @@ err := repo.Create(ctx, &post, func(qb *sqlr.QueryBuilderCreate) {
 
 Load a single entity by its primary key:
 
-<CodeBlock title="main.go" language="go" snippet="read">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) readAuthor(ctx context.Context, id int64) (*Author, error) {
+  author, err := s.authorRepo.Read(ctx, id)
+  if err != nil {
+    return nil, fmt.Errorf("failed to read author: %w", err)
+  }
+
+  return author, nil
+}
+```
 
 ### Read with Association Loading
 
@@ -591,7 +670,20 @@ author, err := repo.Read(ctx, id, func(qb *sqlr.QueryBuilderRead) {
 
 Modify the entity and pass it to `Update()`. By default, only the base row is updated and the `UpdatedAt` timestamp is refreshed automatically. Any populated association fields on the entity are ignored unless association sync is explicitly enabled for that call or activated by `sync:update` tags on relationship fields:
 
-<CodeBlock title="main.go" language="go" snippet="update">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) updatePostStatus(ctx context.Context, post *Post, status string) (*Post, error) {
+  post.Status = status
+
+  updated, err := s.postRepo.Update(ctx, post)
+  if err != nil {
+    return nil, fmt.Errorf("failed to update post: %w", err)
+  }
+
+  // updated.UpdatedAt is automatically refreshed via autoUpdateTime
+
+  return updated, nil
+}
+```
 
 #### Preserve preset timestamps during update
 
@@ -688,7 +780,23 @@ If the parent row does not exist, `Update()` with association synchronization en
 
 Use `QueryBuilderUpdate` when you want `Update()` to reload the entity by primary key after persistence and hydrate relations before returning:
 
-<CodeBlock title="main.go" language="go" snippet="update preload">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) updatePostStatusWithRelations(ctx context.Context, post *Post, status string) (*Post, error) {
+  post.Status = status
+
+  updated, err := s.postRepo.Update(ctx, post, func(qb *sqlr.QueryBuilderUpdate) {
+    qb.Preload("Author")
+    qb.Preload("Tags", sqlr.Condition(sqlc.Col("name").NotEq("")))
+  })
+  if err != nil {
+    return nil, fmt.Errorf("failed to update post with relations: %w", err)
+  }
+
+  // updated.Author and updated.Tags are hydrated by the post-update reload.
+
+  return updated, nil
+}
+```
 
 - `Preload()` on `Update()` uses the same association-path syntax as `Read()` and `Query()`.
 - Conditions and nested paths are supported.
@@ -700,7 +808,15 @@ Use `QueryBuilderUpdate` when you want `Update()` to reload the entity by primar
 
 Remove an entity by its primary key:
 
-<CodeBlock title="main.go" language="go" snippet="delete">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) deleteTag(ctx context.Context, id int64) error {
+  if err := s.tagRepo.Delete(ctx, id); err != nil {
+    return fmt.Errorf("failed to delete tag: %w", err)
+  }
+
+  return nil
+}
+```
 
 ### Delete with Association Cleanup
 
@@ -731,7 +847,21 @@ err := repo.Delete(ctx, id, func(qb *sqlr.QueryBuilderDelete) {
 
 Use `Query()` with a `QueryBuilderSelect` to filter, sort, and paginate results:
 
-<CodeBlock title="main.go" language="go" snippet="query">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) queryPublishedPosts(ctx context.Context) ([]Post, error) {
+  posts, err := s.postRepo.Query(ctx, func(qb *sqlr.QueryBuilderSelect) {
+    qb.Where(sqlc.Col("status").Eq("published")).
+      OrderBy("created_at DESC").
+      Limit(10).
+      Offset(0)
+  })
+  if err != nil {
+    return nil, fmt.Errorf("failed to query posts: %w", err)
+  }
+
+  return posts, nil
+}
+```
 
 The `QueryBuilderSelect` supports:
 
@@ -796,7 +926,22 @@ Use `RepositoryTx.Count(ttx, qb)` when the count must use an active transaction.
 
 Use `Preload()` to load related entities in separate queries. On `Read()` and `Query()`, preloads run as part of the lookup; on `Create()` and `Update()`, preloads run in a follow-up reload after the write succeeds. Preloads support all relationship types: HasOne, HasMany, BelongsTo, and ManyToMany.
 
-<CodeBlock title="main.go" language="go" snippet="query preload">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) queryPostsWithAuthor(ctx context.Context) ([]Post, error) {
+  posts, err := s.postRepo.Query(ctx, func(qb *sqlr.QueryBuilderSelect) {
+    qb.Where(sqlc.Col("status").Eq("published")).
+      Preload("Author").
+      Preload("Tags")
+  })
+  if err != nil {
+    return nil, fmt.Errorf("failed to query posts: %w", err)
+  }
+
+  // Each post now has post.Author and post.Tags populated
+
+  return posts, nil
+}
+```
 
 ### Nested Preloads
 
@@ -829,7 +974,18 @@ During `Create()`, `sqlr` performs that post-create reload when you request `Que
 
 Pass conditions to `Preload()` to filter which related entities are loaded:
 
-<CodeBlock title="main.go" language="go" snippet="query preload condition">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) queryPostsPreloadWithCondition(ctx context.Context) ([]Post, error) {
+  posts, err := s.postRepo.Query(ctx, func(qb *sqlr.QueryBuilderSelect) {
+    qb.Preload("Author").Preload("Tags", sqlr.Condition(sqlc.Col("name").NotEq("")))
+  })
+  if err != nil {
+    return nil, fmt.Errorf("failed to query posts: %w", err)
+  }
+
+  return posts, nil
+}
+```
 
 ## Eager Loading with Joins
 
@@ -837,19 +993,55 @@ Use `LeftJoin()` or `InnerJoin()` to load related entities via SQL JOINs. Joins 
 
 ### Joins on Query
 
-<CodeBlock title="main.go" language="go" snippet="query join">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) queryPostsWithAuthorJoin(ctx context.Context) ([]Post, error) {
+  posts, err := s.postRepo.Query(ctx, func(qb *sqlr.QueryBuilderSelect) {
+    qb.Where(sqlc.Col("status").Eq("published")).
+      LeftJoin("Author")
+  })
+  if err != nil {
+    return nil, fmt.Errorf("failed to query posts: %w", err)
+  }
+
+  // Each post now has post.Author populated via a SQL JOIN
+
+  return posts, nil
+}
+```
 
 ### Joins on Read
 
 Joins can also be used with `Read()` to load relations alongside a single entity lookup:
 
-<CodeBlock title="main.go" language="go" snippet="read with join">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) readPostWithAuthor(ctx context.Context, postId int64) (*Post, error) {
+  post, err := s.postRepo.Read(ctx, postId, func(qb *sqlr.QueryBuilderRead) {
+    qb.LeftJoin("Author")
+  })
+  if err != nil {
+    return nil, fmt.Errorf("failed to read post with author: %w", err)
+  }
+
+  return post, nil
+}
+```
 
 ### Join Conditions
 
 Pass conditions to restrict the joined rows:
 
-<CodeBlock title="main.go" language="go" snippet="query join condition">{Auto}</CodeBlock>
+```go title="main.go"
+func (s *BlogService) queryPostsJoinWithCondition(ctx context.Context) ([]Post, error) {
+  posts, err := s.postRepo.Query(ctx, func(qb *sqlr.QueryBuilderSelect) {
+    qb.LeftJoin("Author", sqlr.Condition(sqlc.Col("name").Eq("Alice")))
+  })
+  if err != nil {
+    return nil, fmt.Errorf("failed to query posts: %w", err)
+  }
+
+  return posts, nil
+}
+```
 
 ## Error Handling
 
@@ -879,21 +1071,100 @@ You can also use `sqlr` to load typed database fixtures through the gosoline `fi
 
 Use `FixtureEntity()` when you want fixture values with explicit primary keys and timestamps:
 
-<CodeBlock title="integration_test.go" language="go" snippet="fixture entities">{Fixtures}</CodeBlock>
+```go title="integration_test.go"
+type Author struct {
+  sqlr.Entity[int64]
+  Name string `db:"name"`
+}
 
-<CodeBlock title="integration_test.go" language="go" snippet="named fixtures">{Fixtures}</CodeBlock>
+type Post struct {
+  sqlr.Entity[int64]
+  AuthorID int64  `db:"author_id"`
+  Title    string `db:"title"`
+  Author   Author `sqlr:"belongsTo:author_id"`
+}
+```
+
+```go title="integration_test.go"
+var authors = fixtures.NamedFixtures[Author]{
+  fixtures.NewNamedFixture("author_1", Author{
+    Entity: sqlr.FixtureEntity[int64](1, "2024-01-01T09:00:00Z", "2024-01-01T09:00:00Z"),
+    Name:   "Alice Johnson",
+  }),
+}
+
+var posts = fixtures.NamedFixtures[Post]{
+  fixtures.NewNamedFixture("post_with_author", Post{
+    Entity:   sqlr.FixtureEntity[int64](10, "2024-01-05T10:00:00Z", "2024-01-05T10:00:00Z"),
+    AuthorID: 1,
+    Title:    "Seeded with sqlr fixtures",
+  }),
+}
+```
 
 Use `FixtureSetFactory()` to turn named fixtures into a gosoline fixture set factory backed by an `sqlr` repository:
 
-<CodeBlock title="integration_test.go" language="go" snippet="fixture set factory">{Fixtures}</CodeBlock>
+```go title="integration_test.go"
+func Fixtures() fixtures.FixtureSetsFactory {
+  return fixtures.NewFixtureSetsFactory(
+    sqlr.FixtureSetFactory[int64, Author](authors),
+    sqlr.FixtureSetFactory[int64, Post](posts),
+  )
+}
+```
 
 Register that fixture set factory in your test suite or application setup:
 
-<CodeBlock title="integration_test.go" language="go" snippet="integration suite">{Fixtures}</CodeBlock>
+```go title="integration_test.go"
+func (s *FixtureIntegrationTestSuite) SetupSuite() []suite.Option {
+  return []suite.Option{
+    suite.WithConfigFile("config.dist.yml"),
+    suite.WithFixtureSetFactory(Fixtures()),
+  }
+}
+
+func (s *FixtureIntegrationTestSuite) SetupTest() error {
+  s.ctx = s.Env().Context()
+
+  repo, err := sqlr.NewRepository[int64, Post](s.ctx, s.Env().Config(), s.Env().Logger(), "default")
+  if err != nil {
+    return fmt.Errorf("failed to create post repository: %w", err)
+  }
+
+  s.repo = repo
+
+  return nil
+}
+```
 
 Then read the seeded entity in your test and assert that the preset IDs, timestamps, and associations were written as expected:
 
-<CodeBlock title="integration_test.go" language="go" snippet="fixture assertion">{Fixtures}</CodeBlock>
+```go title="integration_test.go"
+func (s *FixtureIntegrationTestSuite) TestReadSeededPost() {
+  post, err := s.repo.Read(s.ctx, 10, func(qb *sqlr.QueryBuilderRead) {
+    qb.Preload("Author")
+  })
+  s.Require().NoError(err)
+
+  s.Equal(&Post{
+    Entity: sqlr.Entity[int64]{
+      Id:        10,
+      CreatedAt: time.Date(2024, 1, 5, 10, 0, 0, 0, time.UTC),
+      UpdatedAt: time.Date(2024, 1, 5, 10, 0, 0, 0, time.UTC),
+    },
+    AuthorID: 1,
+    Title:    "Seeded with sqlr fixtures",
+    Author: Author{
+      Entity: sqlr.Entity[int64]{
+        Id:        1,
+        CreatedAt: time.Date(2024, 1, 1, 9, 0, 0, 0, time.UTC),
+        UpdatedAt: time.Date(2024, 1, 1, 9, 0, 0, 0, time.UTC),
+      },
+      Name: "Alice Johnson",
+    },
+  }, post)
+}
+```
 
 Fixture writes preserve the explicit IDs and timestamps already present on your entities. Internally, `sqlr` creates fixtures with auto updates disabled, so seeded values are inserted as-is instead of being regenerated.
 

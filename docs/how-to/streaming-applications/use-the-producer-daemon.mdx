@@ -1,11 +1,8 @@
 ---
-sidebar_position: 4
+sidebar:
+  order: 4
 title: Use the producer daemon
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import Main from "!!raw-loader!./src/producer-daemon/main.go";
-import Config from "!!raw-loader!./src/producer-daemon/config.dist.yml";
 
 The producer daemon is a background module placed between a `Producer` and its output. It can buffer writes, combine messages into transport batches, aggregate several stream messages into one message, compress aggregates, and write through several background runners.
 
@@ -36,7 +33,7 @@ application.RunModule("producer", newModule,
 
 ## Configure buffering and batching
 
-<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{Config}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml" lineNumbers'>./src/producer-daemon/config.dist.yml</include>
 
 The main settings are:
 
@@ -63,7 +60,7 @@ Leave `aggregation_size` at `1` when a non-Gosoline consumer reads the output or
 
 The example queues five orders. With `aggregation_size: 3`, the daemon emits one aggregate after the third order and flushes the remaining aggregate during shutdown:
 
-<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/producer-daemon/main.go</include>
 
 Run it from `docs/docs/how-to/streaming-applications/src/producer-daemon`:
 

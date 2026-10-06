@@ -1,5 +1,6 @@
 ---
-sidebar_position: 1
+sidebar:
+  order: 1
 title: Build an HTTP service
 ---
 
@@ -459,18 +460,15 @@ ginCtx.Error(httpserver.NewErrorWithStatus(http.StatusBadRequest, err))
 
 ## Complete example
 
-import CodeBlock from '@theme/CodeBlock';
-import Main from "!!raw-loader!./src/build-service/main.go";
-import Config from "!!raw-loader!./src/build-service/config.dist.yml";
 
 <details>
 <summary>main.go</summary>
-<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/build-service/main.go</include>
 </details>
 
 <details>
 <summary>config.dist.yml</summary>
-<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{Config}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml" lineNumbers'>./src/build-service/config.dist.yml</include>
 </details>
 
 Test it:

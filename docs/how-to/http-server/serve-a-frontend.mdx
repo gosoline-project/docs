@@ -1,5 +1,6 @@
 ---
-sidebar_position: 3
+sidebar:
+  order: 3
 title: Serve a frontend
 ---
 
@@ -78,18 +79,15 @@ The `public/` directory is populated by your frontend build (e.g., `npm run buil
 
 ## Complete example
 
-import CodeBlock from '@theme/CodeBlock';
-import Main from "!!raw-loader!./src/static-serve/main.go";
-import Config from "!!raw-loader!./src/static-serve/config.dist.yml";
 
 <details>
 <summary>main.go</summary>
-<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/static-serve/main.go</include>
 </details>
 
 <details>
 <summary>config.dist.yml</summary>
-<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{Config}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml" lineNumbers'>./src/static-serve/config.dist.yml</include>
 </details>
 
 Test:

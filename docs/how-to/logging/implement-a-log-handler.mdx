@@ -1,10 +1,8 @@
 ---
-sidebar_position: 6
+sidebar:
+  order: 6
 title: Implement a log handler
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import LogHandler from "!!raw-loader!./src/log-handler/main.go";
 
 With the `cfg` and `log` packages, you can implement a handler and make it available via config.
 
@@ -15,7 +13,7 @@ Here is a preview of all the code you'll cover in this guide:
 <details>
 <summary>main.go</summary>
 
-<CodeBlock showLineNumbers language="go">{LogHandler}</CodeBlock>
+<include lang="go" meta='lineNumbers'>./src/log-handler/main.go</include>
 
 </details>
 

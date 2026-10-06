@@ -1,10 +1,8 @@
 ---
-sidebar_position: 4
+sidebar:
+  order: 4
 title: Sampling & fingers-crossed
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import ManualExample from "!!raw-loader!./src/sampling-fingers-crossed/main.go";
 
 Gosoline supports log sampling and "fingers-crossed" logging to help you manage log volume without losing critical debug information when errors occur.
 
@@ -115,7 +113,7 @@ Because consumers do not have an HTTP response status, the "fail" signal is usua
 
 If you are writing a custom worker, CLI tool, or background process, you can use the fingers-crossed features manually.
 
-<CodeBlock showLineNumbers language="go" title="main.go">{ManualExample}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/sampling-fingers-crossed/main.go</include>
 
 ### Key API Methods
 

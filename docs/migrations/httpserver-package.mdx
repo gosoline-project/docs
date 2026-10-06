@@ -1,12 +1,8 @@
 ---
-sidebar_position: 2
+sidebar:
+  order: 2
 title: HTTP Server Package
 ---
-
-import AgentInstructions from "!!raw-loader!./src/httpserver-migration-agent-instructions.txt";
-import { CopyToClipboardButton } from '../components.jsx';
-
-# Migrating to the Standalone HTTP Server Package
 
 This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.6.4`.
 
@@ -1067,4 +1063,6 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 
 If you want an AI agent to perform this migration, copy the prepared migration instructions and provide them as the task prompt. The instructions are intentionally operational and include discovery steps, migration order, API mappings, validation checks, and stop conditions.
 
-<CopyToClipboardButton text={AgentInstructions} label="Copy AI migration instructions" />
+[Download the migration instructions](/downloads/httpserver-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
+
+<include lang="text" meta='title="AI migration instructions"'>./src/httpserver-migration-agent-instructions.txt</include>

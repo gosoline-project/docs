@@ -1,10 +1,8 @@
 ---
-sidebar_position: 1
+sidebar:
+  order: 1
 title: Use sampling
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import UseSampling from "!!raw-loader!./src/use-sampling/main.go";
 
 The `smpl` package helps you make a consistent sampling decision (sampled vs. not sampled) and store it in a `context.Context`. Other gosoline packages can then use that decision to change behavior (e.g. reduce log volume).
 
@@ -83,7 +81,7 @@ Typical flow:
 
 The returned context is important because this is where the decision is stored.
 
-<CodeBlock showLineNumbers language="go" title="main.go">{UseSampling}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/use-sampling/main.go</include>
 
 ## Override per call with additional strategies
 

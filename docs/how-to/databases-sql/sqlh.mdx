@@ -1,16 +1,8 @@
 ---
-sidebar_position: 3
+sidebar:
+  order: 3
 title: sqlh - SQL HTTP Handlers
 ---
-
-import { CodeBlock } from '../../components.jsx';
-import CrudConfig from "!!raw-loader!./src/sqlh/crud/config.dist.yml";
-import CrudMain from "!!raw-loader!./src/sqlh/crud/main.go";
-import CustomRepositoryConfig from "!!raw-loader!./src/sqlh/custom_repository/config.dist.yml";
-import CustomRepositoryMain from "!!raw-loader!./src/sqlh/custom_repository/main.go";
-import TxConfig from "!!raw-loader!./src/sqlh/tx/config.dist.yml";
-import TxMain from "!!raw-loader!./src/sqlh/tx/main.go";
-import ResultTransformerUserCrud from "!!raw-loader!./src/sqlh/result_transformer/user_crud.go";
 
 The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the current `httpserver`, `sqlc`, and `sqlr` APIs.
 SQLH runs each default CRUD operation in a database transaction and returns a typed value.
@@ -35,7 +27,26 @@ import "github.com/gosoline-project/sqlh"
 
 Configure the HTTP server and the SQL client before the handler starts:
 
-<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{CrudConfig}</CodeBlock>
+```yaml title="config.dist.yml"
+httpserver:
+  default:
+    port: 8080
+    mode: release
+
+sqlc:
+  default:
+    driver: mysql
+    uri:
+      host: 127.0.0.1
+      port: 3306
+      user: root
+      password: gosoline
+      database: blog
+    migrations:
+      enabled: true
+      reset: true
+      path: migrations
+```
 
 Each runnable example loads `config.dist.yml` from disk in the current working directory.
 Run each example from its own directory. The migration path in its config is relative to that directory.
@@ -67,13 +78,73 @@ type AuthorUpdateInput struct {
 
 The following example uses one definition for create, update, patch, and output mapping:
 
-<CodeBlock title="main.go" language="go" snippet="entities">{CrudMain}</CodeBlock>
+```go title="main.go"
+type Author struct {
+  sqlr.Entity[int64]
+  Name  string `db:"name"`
+  Email string `db:"email"`
+}
+```
 
-<CodeBlock title="main.go" language="go" snippet="input output">{CrudMain}</CodeBlock>
+```go title="main.go"
+type AuthorCreateInput struct {
+  Name  string `json:"name" binding:"required"`
+  Email string `json:"email" binding:"required,email"`
+}
+
+type AuthorUpdateInput struct {
+  sqlh.InputById[int64]
+  Name string `json:"name" binding:"required"`
+}
+
+type AuthorOutput struct {
+  Id        int64     `json:"id"`
+  Name      string    `json:"name"`
+  Email     string    `json:"email"`
+  CreatedAt time.Time `json:"created_at"`
+  UpdatedAt time.Time `json:"updated_at"`
+}
+```
 
 `NewCrudDefinition` accepts the four required callbacks. `SimpleCrudDefinition` wraps the definition in the application factory shape:
 
-<CodeBlock title="main.go" language="go" snippet="transformer">{CrudMain}</CodeBlock>
+```go title="main.go"
+type AuthorMapper struct{}
+
+func (t *AuthorMapper) TransformCreateInput(_ context.Context, input *AuthorCreateInput) (*Author, error) {
+  return &Author{
+    Name:  input.Name,
+    Email: input.Email,
+  }, nil
+}
+
+func (t *AuthorMapper) TransformUpdateInput(_ context.Context, entity *Author, input *AuthorUpdateInput) (*Author, error) {
+  if err := binding.Validator.ValidateStruct(input); err != nil {
+    return nil, validation.NewError(err)
+  }
+
+  entity.Name = input.Name
+
+  return entity, nil
+}
+
+func (t *AuthorMapper) TransformPatchInputFromEntity(_ context.Context, entity *Author) (*AuthorUpdateInput, error) {
+  return &AuthorUpdateInput{
+    InputById: sqlh.InputById[int64]{Id: entity.Id},
+    Name:      entity.Name,
+  }, nil
+}
+
+func (t *AuthorMapper) TransformOutput(_ context.Context, entity *Author) (AuthorOutput, error) {
+  return AuthorOutput{
+    Id:        entity.Id,
+    Name:      entity.Name,
+    Email:     entity.Email,
+    CreatedAt: entity.CreatedAt,
+    UpdatedAt: entity.UpdatedAt,
+  }, nil
+}
+```
 
 The `Output` callback returns a Go value. `httpserver.Bind` negotiates its representation from the request's `Accept` header.
 A typed output can implement `StatusCode() int` and `Header() http.Header` to set its status and headers.
@@ -81,15 +152,81 @@ An explicit `httpserver.Response` bypasses negotiation. See [Customizing respons
 
 For a dedicated response DTO, map the entity in the output callback:
 
-<CodeBlock title="user_crud.go" language="go" snippet="types">{ResultTransformerUserCrud}</CodeBlock>
+```go title="user_crud.go"
+type (
+  UserCreateInput struct {
+    Name string `json:"name"`
+  }
+  UserUpdateInput struct {
+    sqlh.InputById[int]
+    Name string `json:"name"`
+  }
+  User struct {
+    sqlr.Entity[int]
+    Name string
+  }
+  UserOutput struct {
+    Id        int       `json:"id"`
+    Name      string    `json:"name"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+  }
+)
+```
 
-<CodeBlock title="user_crud.go" language="go" snippet="transformer">{ResultTransformerUserCrud}</CodeBlock>
+```go title="user_crud.go"
+type UserMapper struct{}
+
+func (t *UserMapper) TransformCreateInput(_ context.Context, input *UserCreateInput) (*User, error) {
+  return &User{
+    Name: input.Name,
+  }, nil
+}
+
+func (t *UserMapper) TransformUpdateInput(_ context.Context, user *User, input *UserUpdateInput) (*User, error) {
+  if err := binding.Validator.ValidateStruct(input); err != nil {
+    return nil, validation.NewError(err)
+  }
+
+  user.Name = input.Name
+
+  return user, nil
+}
+
+func (t *UserMapper) TransformPatchInputFromEntity(_ context.Context, user *User) (*UserUpdateInput, error) {
+  return &UserUpdateInput{
+    InputById: sqlh.InputById[int]{Id: user.Id},
+    Name:      user.Name,
+  }, nil
+}
+
+func (t *UserMapper) TransformOutput(_ context.Context, user *User) (UserOutput, error) {
+  return UserOutput{
+    Id:        user.Id,
+    Name:      user.Name,
+    CreatedAt: user.CreatedAt,
+    UpdatedAt: user.UpdatedAt,
+  }, nil
+}
+```
 
 ### Register Standard Routes
 
 Use `WithCrudHandlers` when the standard route paths and delete response meet your API contract:
 
-<CodeBlock title="main.go" language="go" snippet="crud definition">{CrudMain}</CodeBlock>
+```go title="main.go"
+func NewAuthorCrud() httpserver.RegisterFactoryFunc {
+  transformer := &AuthorMapper{}
+  definition := sqlh.NewCrudDefinition(
+    transformer.TransformCreateInput,
+    transformer.TransformUpdateInput,
+    transformer.TransformPatchInputFromEntity,
+    transformer.TransformOutput,
+  )
+
+  return sqlh.WithCrudHandlers(1, "author", sqlh.SimpleCrudDefinition(definition))
+}
+```
 
 The generated routes are:
 
@@ -106,7 +243,22 @@ For example, version `1` and entity name `author` produce `/v1/author` and `/v1/
 
 The default delete route uses `DeleteNoContent`. Use `NewCrudHandler` for a delete route that returns the entity:
 
-<CodeBlock title="main.go" language="go" snippet="manual handler">{CrudMain}</CodeBlock>
+```go title="main.go"
+type AuthorCrudHandler = sqlh.CrudHandler[int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, sqlh.ListInput, AuthorOutput]
+
+func NewAuthorHandler() httpserver.HandlerFactory[AuthorCrudHandler] {
+  transformer := &AuthorMapper{}
+  definition := sqlh.NewCrudDefinition(
+    transformer.TransformCreateInput,
+    transformer.TransformUpdateInput,
+    transformer.TransformPatchInputFromEntity,
+    transformer.TransformOutput,
+  )
+  definition.DeleteOutput = definition.Output
+
+  return sqlh.NewCrudHandler(sqlh.SimpleCrudDefinition(definition))
+}
+```
 
 ```go
 router.HandleWith(httpserver.With(NewAuthorHandler(), func(router *httpserver.Router, handler *AuthorCrudHandler) {
@@ -149,9 +301,73 @@ The SQLH repository must use the same SQL client that starts the transaction. Th
 
 The old `sqlh.WithTx`, `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR` APIs are removed. SQLH `*Operation` callbacks already receive the active `sqlr.TTx`. Use it directly for SQL work. Do not start another transaction inside a callback. For another typed operation outside a CRUD definition, use `TxRunner` and adapt it to the handler signature:
 
-<CodeBlock title="main.go" language="go" snippet="transaction handler">{TxMain}</CodeBlock>
+```go title="main.go"
+type PostHandler struct {
+  runner   *sqlh.TxRunner
+  postRepo sqlr.RepositoryTx[int64, Post]
+}
 
-<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{TxConfig}</CodeBlock>
+func NewPostHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*PostHandler, error) {
+  client, err := sqlc.ProvideClient(ctx, config, logger, "default")
+  if err != nil {
+    return nil, err
+  }
+
+  postRepo, err := sqlr.NewRepositoryTxWithSettings[int64, Post](client, sqlr.DefaultSettings())
+  if err != nil {
+    return nil, err
+  }
+
+  runner, err := sqlh.NewTxRunnerWithClient(client)
+  if err != nil {
+    return nil, err
+  }
+
+  return &PostHandler{runner: runner, postRepo: postRepo}, nil
+}
+
+func (h *PostHandler) CreatePost(ctx context.Context, input *PostCreateInput) (PostOutput, error) {
+  return h.runner.RunValue(ctx, input, func(ctx context.Context, tx sqlr.TTx, input *PostCreateInput) (PostOutput, error) {
+    post := &Post{
+      Title:  input.Title,
+      Body:   input.Body,
+      Status: "draft",
+    }
+
+    if err := h.postRepo.Create(tx, post); err != nil {
+      return PostOutput{}, fmt.Errorf("failed to create post: %w", err)
+    }
+
+    return PostOutput{
+      Id:     post.Id,
+      Title:  post.Title,
+      Body:   post.Body,
+      Status: post.Status,
+    }, nil
+  })
+}
+```
+
+```yaml title="config.dist.yml"
+httpserver:
+  default:
+    port: 8080
+    mode: release
+
+sqlc:
+  default:
+    driver: mysql
+    uri:
+      host: 127.0.0.1
+      port: 3306
+      user: root
+      password: gosoline
+      database: blog
+    migrations:
+      enabled: true
+      reset: true
+      path: migrations
+```
 
 `TxRunner.Run` rolls back transaction-bound SQL changes when the operation returns an error or panics.
 It cannot undo blob-store or other external effects.
@@ -562,19 +778,134 @@ SQLH uses a transaction-aware `sqlr.RepositoryTx` by default. Use options when t
 
 The custom factory receives the same `sqlc.Client` that SQLH uses to start transactions:
 
-<CodeBlock title="main.go" language="go" snippet="repository wrapper">{CustomRepositoryMain}</CodeBlock>
+```go title="main.go"
+type ReportingAuthorRepository struct {
+  delegate sqlr.RepositoryTx[int64, Author]
+}
+
+func NewReportingAuthorRepository(client sqlc.Client, settings sqlr.Settings) (sqlr.RepositoryTx[int64, Author], error) {
+  repo, err := sqlr.NewRepositoryTxWithSettings[int64, Author](client, settings)
+  if err != nil {
+    return nil, err
+  }
+
+  return &ReportingAuthorRepository{delegate: repo}, nil
+}
+
+func (r *ReportingAuthorRepository) Create(tx sqlr.TTx, entity *Author, opts ...func(qb *sqlr.QueryBuilderCreate)) error {
+  return r.delegate.Create(tx, entity, opts...)
+}
+
+func (r *ReportingAuthorRepository) Read(tx sqlr.TTx, id int64, opts ...func(qb *sqlr.QueryBuilderRead)) (*Author, error) {
+  return r.delegate.Read(tx, id, opts...)
+}
+
+func (r *ReportingAuthorRepository) Query(tx sqlr.TTx, opts ...func(qb *sqlr.QueryBuilderSelect)) ([]Author, error) {
+  return r.delegate.Query(tx, func(qb *sqlr.QueryBuilderSelect) {
+    qb.OrderBy(reportingAuthorOrderBy)
+    qb.Limit(reportingAuthorDefaultLimit)
+    for _, opt := range opts {
+      opt(qb)
+    }
+  })
+}
+
+func (r *ReportingAuthorRepository) Count(tx sqlr.TTx, qb *sqlr.QueryBuilderSelect) (int, error) {
+  return r.delegate.Count(tx, qb)
+}
+
+func (r *ReportingAuthorRepository) Update(tx sqlr.TTx, entity *Author, opts ...func(qb *sqlr.QueryBuilderUpdate)) (*Author, error) {
+  return r.delegate.Update(tx, entity, opts...)
+}
+
+func (r *ReportingAuthorRepository) Delete(tx sqlr.TTx, id int64, opts ...func(qb *sqlr.QueryBuilderDelete)) error {
+  return r.delegate.Delete(tx, id, opts...)
+}
+
+func (r *ReportingAuthorRepository) Close() error {
+  return r.delegate.Close()
+}
+```
 
 The repository wrapper retains its defaults for direct queries, but SQLH v0.8.0 prepares the list builder and copies it into the repository query, so those defaults alone do not affect the list route. The example also applies them through a custom `ListInputSource`: it adds the newest-first order as a query modifier and applies the 100-row fallback only when no page limit was requested. It embeds `sqlh.ListInput` to preserve native filters, force filters, and offsets. The default count does not apply pagination, so its total remains uncapped.
 
-<CodeBlock title="main.go" language="go" snippet="reporting list input">{CustomRepositoryMain}</CodeBlock>
+```go title="main.go"
+const (
+  reportingAuthorOrderBy      = "created_at DESC"
+  reportingAuthorDefaultLimit = 100
+)
+
+type reportingAuthorListInput struct {
+  sqlh.ListInput
+}
+
+func (i reportingAuthorListInput) ApplyQueryModifiers(qb *sqlr.QueryBuilderSelect) {
+  qb.OrderBy(reportingAuthorOrderBy)
+}
+
+func (i reportingAuthorListInput) ApplyPagination(qb *sqlr.QueryBuilderSelect) {
+  i.ListInput.ApplyPagination(qb)
+  if i.Page.Limit == 0 {
+    qb.Limit(reportingAuthorDefaultLimit)
+  }
+}
+```
 
 The custom list input is selected by the CRUD definition:
 
-<CodeBlock title="main.go" language="go" snippet="custom repository">{CustomRepositoryMain}</CodeBlock>
+```go title="main.go"
+func main() {
+  application.New(
+    application.WithConfigFile("config.dist.yml", "yml"),
+    application.WithLoggerHandlersFromConfig,
+    application.WithModuleFactory("http", httpserver.NewServer(
+      "default",
+      func(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
+        mapper := &AuthorMapper{}
+        definition := sqlh.CrudDefinition[
+          int64, Author, int64, AuthorCreateInput, AuthorUpdateInput, reportingAuthorListInput, *Author,
+        ]{
+          CreateInput:          mapper.TransformCreateInput,
+          UpdateInput:          mapper.TransformUpdateInput,
+          PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
+          Output:               mapper.TransformOutput,
+        }
+        router.HandleWith(sqlh.WithCrudHandlers(
+          1,
+          "author",
+          sqlh.SimpleCrudDefinition(definition),
+          sqlh.WithClientName[int64, Author]("reporting"),
+          sqlh.WithRepositoryTxFactory[int64, Author](NewReportingAuthorRepository),
+        ))
+        return nil
+      },
+    )),
+  ).Run()
+}
+```
 
 This configuration enables migrations for the selected `reporting` client.
 
-<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{CustomRepositoryConfig}</CodeBlock>
+```yaml title="config.dist.yml"
+httpserver:
+  default:
+    port: 8080
+    mode: release
+
+sqlc:
+  reporting:
+    driver: mysql
+    uri:
+      host: 127.0.0.1
+      port: 3306
+      user: root
+      password: gosoline
+      database: blog
+    migrations:
+      enabled: true
+      reset: true
+      path: migrations
+```
 
 A custom repository must implement the transaction-aware `sqlr.RepositoryTx` interface. The interface includes `Count` in addition to `Create`, `Read`, `Query`, `Update`, `Delete`, and `Close`.
 

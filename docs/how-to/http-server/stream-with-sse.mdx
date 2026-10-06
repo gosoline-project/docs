@@ -1,5 +1,6 @@
 ---
-sidebar_position: 2
+sidebar:
+  order: 2
 title: Stream with Server-Sent Events
 ---
 
@@ -84,18 +85,15 @@ Without this exclusion, gzip buffering will break the real-time stream.
 
 ## Complete example
 
-import CodeBlock from '@theme/CodeBlock';
-import Main from "!!raw-loader!./src/sse/main.go";
-import Config from "!!raw-loader!./src/sse/config.dist.yml";
 
 <details>
 <summary>main.go</summary>
-<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/sse/main.go</include>
 </details>
 
 <details>
 <summary>config.dist.yml</summary>
-<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{Config}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml" lineNumbers'>./src/sse/config.dist.yml</include>
 </details>
 
 Test with `curl` or any SSE client:

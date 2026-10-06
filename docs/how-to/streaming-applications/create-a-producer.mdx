@@ -1,11 +1,8 @@
 ---
-sidebar_position: 2
+sidebar:
+  order: 2
 title: Create a producer
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import Main from "!!raw-loader!./src/producer/main.go";
-import Config from "!!raw-loader!./src/producer/config.dist.yml";
 
 A `stream.Producer` turns Go values into stream messages and writes them to a configured output. The producer owns encoding and compression, so application code works with domain models instead of serialized messages.
 
@@ -61,7 +58,7 @@ Attributes carry transport metadata and application routing information. Transpo
 
 The complete example uses a file output so it runs without external infrastructure:
 
-<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{Config}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml" lineNumbers'>./src/producer/config.dist.yml</include>
 
 The producer defaults to JSON. Set `stream.producer.<name>.encoding` when a consumer expects another supported encoding. Compression is also configured on the producer; some transports, notably Kafka, handle it natively.
 
@@ -69,7 +66,7 @@ The producer defaults to JSON. Set `stream.producer.<name>.encoding` when a cons
 
 This application publishes one order and then a batch of two orders:
 
-<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/producer/main.go</include>
 
 Run it from `docs/docs/how-to/streaming-applications/src/producer`:
 
