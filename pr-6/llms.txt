@@ -1,0 +1,115 @@
+# Gosoline Docs
+
+> Documentation and articles for the Gosoline Go application framework.
+
+## Docs
+
+- [Overview](https://gosoline-project.github.io/docs/pr-6)
+
+## Fundamentals
+
+- [The Application](https://gosoline-project.github.io/docs/pr-6/fundamentals/application)
+- [Naming Patterns](https://gosoline-project.github.io/docs/pr-6/fundamentals/naming-patterns)
+
+## Getting started
+
+- [Create a consumer](https://gosoline-project.github.io/docs/pr-6/getting-started/create-a-consumer)
+- [Create an application](https://gosoline-project.github.io/docs/pr-6/getting-started/create-an-application)
+
+### Testing
+
+- [Test your consumer](https://gosoline-project.github.io/docs/pr-6/getting-started/testing/test-your-consumer)
+
+## How-to guides
+
+- [Load configurations](https://gosoline-project.github.io/docs/pr-6/how-to/load-configs)
+- [Build a CLI tool](https://gosoline-project.github.io/docs/pr-6/how-to/use-cli)
+- [Implement health checks](https://gosoline-project.github.io/docs/pr-6/how-to/write-health-checks)
+
+### HTTP Server
+
+- [Build an HTTP service](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/build-an-http-service)
+- [Stream with Server-Sent Events](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/stream-with-sse)
+- [Serve a frontend](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/serve-a-frontend)
+- [Configure your server](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/configure-your-server)
+- [Add middleware](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/add-middleware)
+- [Authenticate requests](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/authentication)
+- [Concurrency and connection pressure](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/concurrency-and-connection-pressure)
+- [Chaos middleware](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/chaos-middleware)
+- [Real-world example](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/real-world-example)
+
+### Logging
+
+- [Use loggers](https://gosoline-project.github.io/docs/pr-6/how-to/logging/use-loggers)
+- [Sampling & fingers-crossed](https://gosoline-project.github.io/docs/pr-6/how-to/logging/sampling-and-fingers-crossed)
+- [Use context with logs](https://gosoline-project.github.io/docs/pr-6/how-to/logging/log-context)
+- [Implement a log handler](https://gosoline-project.github.io/docs/pr-6/how-to/logging/implement-a-log-handler)
+
+### Relational databases
+
+- [Working with Relational Databases](https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql)
+- [sqlc - SQL Client](https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql/sqlc)
+- [sqlr - SQL Repository](https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql/sqlr)
+- [sqlh - SQL HTTP Handlers](https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql/sqlh)
+
+### Streaming applications
+
+- [Understand inputs and outputs](https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/understand-inputs-and-outputs)
+- [Create a producer](https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/create-a-producer)
+- [Create a consumer](https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/create-a-consumer)
+- [Use the producer daemon](https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/use-the-producer-daemon)
+
+### Kafka
+
+- [Notes on general Kafka usage](https://gosoline-project.github.io/docs/pr-6/how-to/kafka/general)
+- [How to use the Kafka Schema Registry](https://gosoline-project.github.io/docs/pr-6/how-to/kafka/use-schema-registry)
+
+### Sampling
+
+- [Use sampling](https://gosoline-project.github.io/docs/pr-6/how-to/sampling/use-sampling)
+
+## Reference
+
+- [Naming patterns](https://gosoline-project.github.io/docs/pr-6/reference/naming-patterns)
+- [Package cfg](https://gosoline-project.github.io/docs/pr-6/reference/package-cfg)
+- [Package cloud/aws](https://gosoline-project.github.io/docs/pr-6/reference/package-cloud_aws)
+- [Package dbx](https://gosoline-project.github.io/docs/pr-6/reference/package-dbx)
+- [Package fixtures](https://gosoline-project.github.io/docs/pr-6/reference/package-fixtures)
+- [Package httpserver](https://gosoline-project.github.io/docs/pr-6/reference/package-httpserver)
+- [Package log](https://gosoline-project.github.io/docs/pr-6/reference/package-log)
+- [Package test](https://gosoline-project.github.io/docs/pr-6/reference/package-test)
+
+## Migrations
+
+- [App Identity and Naming Patterns](https://gosoline-project.github.io/docs/pr-6/migrations/app-identity-and-naming-patterns)
+- [HTTP Server Package](https://gosoline-project.github.io/docs/pr-6/migrations/httpserver-package)
+- [SQLH CRUD](https://gosoline-project.github.io/docs/pr-6/migrations/sqlh-crud)
+- [Stream Consumer Lifecycle](https://gosoline-project.github.io/docs/pr-6/migrations/stream-consumer-lifecycle)
+
+## Blog
+
+- [Gosoline Blog](https://gosoline-project.github.io/docs/pr-6/blog): Articles and announcements from the gosoline project.
+- [Clearer Stream Processing, Safer Shutdown](https://gosoline-project.github.io/docs/pr-6/blog/gosoline-v0-66-0-stream-processing): Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled.
+- [Introducing the Standalone HTTP Server Package](https://gosoline-project.github.io/docs/pr-6/blog/introducing-httpserver-package): The HTTP server has always been one of the most commonly used parts of gosoline.
+- [gosoline goes modular: smaller packages, better APIs](https://gosoline-project.github.io/docs/pr-6/blog/gosoline-goes-modular): gosoline has grown into a mature application framework that powers production backend systems.
+- [Identity & Naming Patterns: Flexible, Configuration-Driven Resource Naming](https://gosoline-project.github.io/docs/pr-6/blog/identity-and-naming-patterns): Managing cloud resources across multiple environments, teams, and services is hard enough without fighting your own naming conventions.
+- [Log Sampling in Go: Less Noise, More Debuggability](https://gosoline-project.github.io/docs/pr-6/blog/sampling-fingers-crossed-logging): High-traffic services have a logging problem: the more successful traffic you handle, the more you pay to store and query logs that rarely matter.
+
+## RSS Feeds
+
+- [Gosoline Docs — Blog](https://gosoline-project.github.io/docs/pr-6/blog/rss.xml)
+
+## Agent skills
+
+- [gosoline-docs](https://gosoline-project.github.io/docs/pr-6/.well-known/agent-skills/gosoline-docs/SKILL.md): Read the Gosoline Docs instead of answering from memory. Documentation and articles for the Gosoline Go application framework. Use when a task involves Gosoline Docs: how it works, how to set it up or configure it, or its API.
+
+## Agent resources
+
+- [llms-full.txt](https://gosoline-project.github.io/docs/pr-6/llms-full.txt): The full Markdown of every page in one file.
+- [Page Markdown](https://gosoline-project.github.io/docs/pr-6/index.md): Append `.md` to any page URL to fetch that page as raw Markdown.
+- [JSON API](https://gosoline-project.github.io/docs/pr-6/api/docs/pages.json): Page index of the JSON docs API; each entry links the page's JSON and Markdown forms. Described by the OpenAPI document at https://gosoline-project.github.io/docs/pr-6/openapi.json.
+- [Agent skills](https://gosoline-project.github.io/docs/pr-6/.well-known/agent-skills/index.json): Agent Skills discovery index of the skills this site publishes.
+- [API catalog](https://gosoline-project.github.io/docs/pr-6/.well-known/api-catalog): RFC 9727 linkset of the APIs documented here.
+- [AI catalog](https://gosoline-project.github.io/docs/pr-6/.well-known/ai-catalog.json): ARD manifest of the agent-facing resources on this site (MCP server, skills, APIs).
+- [agent-readability.json](https://gosoline-project.github.io/docs/pr-6/agent-readability.json): Manifest of every agent-facing artifact on this site.
+- [Sitemap](https://gosoline-project.github.io/docs/pr-6/sitemap.xml): Every indexable page URL with its last-modified date.

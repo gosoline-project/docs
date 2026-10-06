@@ -1,0 +1,11 @@
+{
+  "contentType": "doc",
+  "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/index.json",
+  "lastModified": null,
+  "locale": "",
+  "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/index.md",
+  "route": "/",
+  "title": "Overview",
+  "url": "https://gosoline-project.github.io/docs/pr-6",
+  "markdown": "---\nsidebar:\n  order: 1\nslug: /\ntitle: Overview\n---\n\nGosoline is a Golang-based application framework specialized for building microservices in the cloud. It provides tools for handling most of the common challenges like configuration, logging, structured code execution, handling http requests, asynchronous message processing, writing integration tests and much more.\n\n## Primary use cases\n\nThere are three primary uses cases for gosoline:\n\n**[HTTP Server](/docs/pr-6/how-to/http-server)**\n\nBuild REST web services with HTTP handling, caching, OAuth, and more.\n\n**[Message Queues](/docs/pr-6/getting-started/create-a-consumer)**\n\nProcess asynchronous messages from Kafka, Redis, or other streaming systems.\n\n**[Kernel Module](/docs/pr-6/getting-started/create-an-application)**\n\nBuild a module using Gosoline logging, configuration, and application lifecycle tools.\n\nWant to skip the guided walkthroughs and get straight to the information? Check out our [API reference docs](/docs/pr-6/reference).\n"
+}

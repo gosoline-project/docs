@@ -1,0 +1,243 @@
+{
+  "redirects": [
+    {
+      "destination": "/docs/pr-6/fundamentals",
+      "source": "/docs/pr-6/category/fundamentals",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/fundamentals.md",
+      "source": "/docs/pr-6/category/fundamentals.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/fundamentals.mdx",
+      "source": "/docs/pr-6/category/fundamentals.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/getting-started",
+      "source": "/docs/pr-6/category/getting-started",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/getting-started.md",
+      "source": "/docs/pr-6/category/getting-started.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/getting-started.mdx",
+      "source": "/docs/pr-6/category/getting-started.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/getting-started/testing",
+      "source": "/docs/pr-6/category/testing",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/getting-started/testing.md",
+      "source": "/docs/pr-6/category/testing.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/getting-started/testing.mdx",
+      "source": "/docs/pr-6/category/testing.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/how-to",
+      "source": "/docs/pr-6/category/how-to-guides",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/how-to.md",
+      "source": "/docs/pr-6/category/how-to-guides.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/how-to.mdx",
+      "source": "/docs/pr-6/category/how-to-guides.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/how-to/http-server",
+      "source": "/docs/pr-6/category/http-server",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/how-to/http-server.md",
+      "source": "/docs/pr-6/category/http-server.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/how-to/http-server.mdx",
+      "source": "/docs/pr-6/category/http-server.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/how-to/streaming-applications",
+      "source": "/docs/pr-6/category/streaming-applications",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/how-to/streaming-applications.md",
+      "source": "/docs/pr-6/category/streaming-applications.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/how-to/streaming-applications.mdx",
+      "source": "/docs/pr-6/category/streaming-applications.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/reference",
+      "source": "/docs/pr-6/category/reference",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/reference.md",
+      "source": "/docs/pr-6/category/reference.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/reference.mdx",
+      "source": "/docs/pr-6/category/reference.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/migrations",
+      "source": "/docs/pr-6/category/migrations",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/migrations.md",
+      "source": "/docs/pr-6/category/migrations.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/migrations.mdx",
+      "source": "/docs/pr-6/category/migrations.mdx",
+      "statusCode": 301
+    }
+  ],
+  "headers": [
+    {
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/markdown; charset=utf-8"
+        }
+      ],
+      "source": "/docs/pr-6/(.*).md"
+    },
+    {
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/markdown; charset=utf-8"
+        }
+      ],
+      "source": "/docs/pr-6/(.*).mdx"
+    },
+    {
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        }
+      ],
+      "source": "/docs/pr-6/(.*).txt"
+    },
+    {
+      "headers": [
+        {
+          "key": "X-Powered-By",
+          "value": "Blume"
+        }
+      ],
+      "source": "/docs/pr-6/:path(.*)?"
+    },
+    {
+      "headers": [
+        {
+          "key": "Link",
+          "value": "</docs/pr-6/.well-known/api-catalog>; rel=\"api-catalog\"; type=\"application/linkset+json; profile=\\\"https://www.rfc-editor.org/info/rfc9727\\\"\", </docs/pr-6/.well-known/ai-catalog.json>; rel=\"ai-catalog\"; type=\"application/ai-catalog+json\", </docs/pr-6/openapi.json>; rel=\"service-desc\"; type=\"application/json\", </docs/pr-6/agent-readability.json>; rel=\"describedby\"; type=\"application/json\", </docs/pr-6/llms.txt>; rel=\"describedby\"; type=\"text/plain\", </docs/pr-6/index.md>; rel=\"alternate\"; type=\"text/markdown\""
+        }
+      ],
+      "source": "/docs/pr-6"
+    },
+    {
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/linkset+json; profile=\"https://www.rfc-editor.org/info/rfc9727\""
+        }
+      ],
+      "source": "/docs/pr-6/.well-known/api-catalog"
+    },
+    {
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ],
+      "source": "/docs/pr-6/.well-known/ai-catalog.json"
+    },
+    {
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ],
+      "source": "/docs/pr-6/.well-known/ard.json"
+    },
+    {
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ],
+      "source": "/docs/pr-6/.well-known/api-catalog"
+    },
+    {
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/markdown; charset=utf-8"
+        }
+      ],
+      "source": "/docs/pr-6/.well-known/agent-skills/(.*).md"
+    },
+    {
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/gzip"
+        }
+      ],
+      "source": "/docs/pr-6/.well-known/agent-skills/(.*).tar.gz"
+    },
+    {
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "sandbox"
+        }
+      ],
+      "source": "/docs/pr-6/blume-assets/(.*).svg"
+    },
+    {
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ],
+      "source": "/docs/pr-6/blume-assets/(.*).svg"
+    }
+  ]
+}

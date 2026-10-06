@@ -1,0 +1,19 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://gosoline-project.github.io/docs/pr-6/api/docs",
+      "service-desc": [
+        {
+          "href": "https://gosoline-project.github.io/docs/pr-6/openapi.json",
+          "type": "application/json"
+        }
+      ],
+      "service-doc": [
+        {
+          "href": "https://gosoline-project.github.io/docs/pr-6",
+          "type": "text/html"
+        }
+      ]
+    }
+  ]
+}

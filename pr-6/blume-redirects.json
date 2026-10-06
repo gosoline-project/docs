@@ -1,0 +1,122 @@
+[
+  {
+    "from": "/docs/pr-6/category/fundamentals",
+    "status": 301,
+    "to": "/docs/pr-6/fundamentals"
+  },
+  {
+    "from": "/docs/pr-6/category/fundamentals.md",
+    "status": 301,
+    "to": "/docs/pr-6/fundamentals.md"
+  },
+  {
+    "from": "/docs/pr-6/category/fundamentals.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/fundamentals.mdx"
+  },
+  {
+    "from": "/docs/pr-6/category/getting-started",
+    "status": 301,
+    "to": "/docs/pr-6/getting-started"
+  },
+  {
+    "from": "/docs/pr-6/category/getting-started.md",
+    "status": 301,
+    "to": "/docs/pr-6/getting-started.md"
+  },
+  {
+    "from": "/docs/pr-6/category/getting-started.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/getting-started.mdx"
+  },
+  {
+    "from": "/docs/pr-6/category/testing",
+    "status": 301,
+    "to": "/docs/pr-6/getting-started/testing"
+  },
+  {
+    "from": "/docs/pr-6/category/testing.md",
+    "status": 301,
+    "to": "/docs/pr-6/getting-started/testing.md"
+  },
+  {
+    "from": "/docs/pr-6/category/testing.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/getting-started/testing.mdx"
+  },
+  {
+    "from": "/docs/pr-6/category/how-to-guides",
+    "status": 301,
+    "to": "/docs/pr-6/how-to"
+  },
+  {
+    "from": "/docs/pr-6/category/how-to-guides.md",
+    "status": 301,
+    "to": "/docs/pr-6/how-to.md"
+  },
+  {
+    "from": "/docs/pr-6/category/how-to-guides.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/how-to.mdx"
+  },
+  {
+    "from": "/docs/pr-6/category/http-server",
+    "status": 301,
+    "to": "/docs/pr-6/how-to/http-server"
+  },
+  {
+    "from": "/docs/pr-6/category/http-server.md",
+    "status": 301,
+    "to": "/docs/pr-6/how-to/http-server.md"
+  },
+  {
+    "from": "/docs/pr-6/category/http-server.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/how-to/http-server.mdx"
+  },
+  {
+    "from": "/docs/pr-6/category/streaming-applications",
+    "status": 301,
+    "to": "/docs/pr-6/how-to/streaming-applications"
+  },
+  {
+    "from": "/docs/pr-6/category/streaming-applications.md",
+    "status": 301,
+    "to": "/docs/pr-6/how-to/streaming-applications.md"
+  },
+  {
+    "from": "/docs/pr-6/category/streaming-applications.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/how-to/streaming-applications.mdx"
+  },
+  {
+    "from": "/docs/pr-6/category/reference",
+    "status": 301,
+    "to": "/docs/pr-6/reference"
+  },
+  {
+    "from": "/docs/pr-6/category/reference.md",
+    "status": 301,
+    "to": "/docs/pr-6/reference.md"
+  },
+  {
+    "from": "/docs/pr-6/category/reference.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/reference.mdx"
+  },
+  {
+    "from": "/docs/pr-6/category/migrations",
+    "status": 301,
+    "to": "/docs/pr-6/migrations"
+  },
+  {
+    "from": "/docs/pr-6/category/migrations.md",
+    "status": 301,
+    "to": "/docs/pr-6/migrations.md"
+  },
+  {
+    "from": "/docs/pr-6/category/migrations.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/migrations.mdx"
+  }
+]

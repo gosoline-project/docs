@@ -1,0 +1,30 @@
+{
+  "artifacts": {
+    "markdown": {
+      "pattern": "https://gosoline-project.github.io/docs/pr-6/{route}.md"
+    },
+    "api": {
+      "openapi": "https://gosoline-project.github.io/docs/pr-6/openapi.json",
+      "pages": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages.json"
+    },
+    "llmsFullTxt": "https://gosoline-project.github.io/docs/pr-6/llms-full.txt",
+    "llmsTxt": "https://gosoline-project.github.io/docs/pr-6/llms.txt",
+    "aiCatalog": "https://gosoline-project.github.io/docs/pr-6/.well-known/ai-catalog.json",
+    "apiCatalog": "https://gosoline-project.github.io/docs/pr-6/.well-known/api-catalog",
+    "agentSkills": "https://gosoline-project.github.io/docs/pr-6/.well-known/agent-skills/index.json",
+    "sitemap": "https://gosoline-project.github.io/docs/pr-6/sitemap.xml",
+    "feeds": [
+      "https://gosoline-project.github.io/docs/pr-6/blog/rss.xml"
+    ]
+  },
+  "description": "Documentation and articles for the Gosoline Go application framework.",
+  "generator": "blume@2.1.3",
+  "name": "Gosoline Docs",
+  "site": "https://gosoline-project.github.io",
+  "contentUsage": {
+    "search": true,
+    "ai-input": true,
+    "ai-train": true
+  },
+  "repository": "https://github.com/gosoline-project/docs"
+}

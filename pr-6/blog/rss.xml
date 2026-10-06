@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>Gosoline Docs — Blog</title>
+  <link>https://gosoline-project.github.io/docs/pr-6</link>
+  <description>Documentation and articles for the Gosoline Go application framework.</description>
+  <atom:link href="https://gosoline-project.github.io/docs/pr-6/blog/rss.xml" rel="self" type="application/rss+xml" />
+  <item>
+    <title>Clearer Stream Processing, Safer Shutdown</title>
+    <link>https://gosoline-project.github.io/docs/pr-6/blog/gosoline-v0-66-0-stream-processing</link>
+    <guid isPermaLink="true">https://gosoline-project.github.io/docs/pr-6/blog/gosoline-v0-66-0-stream-processing</guid>
+    <description>Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled.</description>
+    <pubDate>Wed, 30 Sep 2026 00:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>gosoline goes modular: smaller packages, better APIs</title>
+    <link>https://gosoline-project.github.io/docs/pr-6/blog/gosoline-goes-modular</link>
+    <guid isPermaLink="true">https://gosoline-project.github.io/docs/pr-6/blog/gosoline-goes-modular</guid>
+    <description>gosoline has grown into a mature application framework that powers production backend systems.</description>
+    <pubDate>Thu, 11 Jun 2026 00:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>Introducing the Standalone HTTP Server Package</title>
+    <link>https://gosoline-project.github.io/docs/pr-6/blog/introducing-httpserver-package</link>
+    <guid isPermaLink="true">https://gosoline-project.github.io/docs/pr-6/blog/introducing-httpserver-package</guid>
+    <description>The HTTP server has always been one of the most commonly used parts of gosoline.</description>
+    <pubDate>Thu, 11 Jun 2026 00:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>Identity &amp; Naming Patterns: Flexible, Configuration-Driven Resource Naming</title>
+    <link>https://gosoline-project.github.io/docs/pr-6/blog/identity-and-naming-patterns</link>
+    <guid isPermaLink="true">https://gosoline-project.github.io/docs/pr-6/blog/identity-and-naming-patterns</guid>
+    <description>Managing cloud resources across multiple environments, teams, and services is hard enough without fighting your own naming conventions.</description>
+    <pubDate>Thu, 19 Feb 2026 00:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>Log Sampling in Go: Less Noise, More Debuggability</title>
+    <link>https://gosoline-project.github.io/docs/pr-6/blog/sampling-fingers-crossed-logging</link>
+    <guid isPermaLink="true">https://gosoline-project.github.io/docs/pr-6/blog/sampling-fingers-crossed-logging</guid>
+    <description>High-traffic services have a logging problem: the more successful traffic you handle, the more you pay to store and query logs that rarely matter.</description>
+    <pubDate>Thu, 15 Jan 2026 00:00:00 GMT</pubDate>
+  </item>
+</channel>
+</rss>

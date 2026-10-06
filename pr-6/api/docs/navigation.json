@@ -1,0 +1,457 @@
+{
+  "actions": [],
+  "cta": null,
+  "featured": [],
+  "root": "/",
+  "selectors": [],
+  "sidebar": [
+    {
+      "kind": "page",
+      "label": "Overview",
+      "pageId": "filesystem:index.mdx",
+      "route": "/"
+    },
+    {
+      "children": [
+        {
+          "kind": "page",
+          "label": "The Application",
+          "pageId": "filesystem:fundamentals/application.mdx",
+          "route": "/fundamentals/application"
+        },
+        {
+          "kind": "page",
+          "label": "Naming Patterns",
+          "pageId": "filesystem:fundamentals/naming-patterns.mdx",
+          "route": "/fundamentals/naming-patterns"
+        }
+      ],
+      "directory": "card",
+      "display": "group",
+      "kind": "group",
+      "label": "Fundamentals",
+      "path": "/fundamentals",
+      "route": "/fundamentals"
+    },
+    {
+      "children": [
+        {
+          "kind": "page",
+          "label": "Create a consumer",
+          "pageId": "filesystem:getting-started/create-a-consumer.mdx",
+          "route": "/getting-started/create-a-consumer"
+        },
+        {
+          "kind": "page",
+          "label": "Create an application",
+          "pageId": "filesystem:getting-started/create-an-application.mdx",
+          "route": "/getting-started/create-an-application"
+        },
+        {
+          "children": [
+            {
+              "kind": "page",
+              "label": "Test your consumer",
+              "pageId": "filesystem:getting-started/testing/test-your-consumer.mdx",
+              "route": "/getting-started/testing/test-your-consumer"
+            }
+          ],
+          "directory": "card",
+          "display": "group",
+          "kind": "group",
+          "label": "Testing",
+          "path": "/getting-started/testing",
+          "route": "/getting-started/testing"
+        }
+      ],
+      "directory": "card",
+      "display": "group",
+      "kind": "group",
+      "label": "Getting started",
+      "path": "/getting-started",
+      "route": "/getting-started"
+    },
+    {
+      "children": [
+        {
+          "kind": "page",
+          "label": "Load configurations",
+          "pageId": "filesystem:how-to/load-configs.mdx",
+          "route": "/how-to/load-configs"
+        },
+        {
+          "children": [
+            {
+              "kind": "page",
+              "label": "Build an HTTP service",
+              "pageId": "filesystem:how-to/http-server/build-an-http-service.mdx",
+              "route": "/how-to/http-server/build-an-http-service"
+            },
+            {
+              "kind": "page",
+              "label": "Stream with Server-Sent Events",
+              "pageId": "filesystem:how-to/http-server/stream-with-sse.mdx",
+              "route": "/how-to/http-server/stream-with-sse"
+            },
+            {
+              "kind": "page",
+              "label": "Serve a frontend",
+              "pageId": "filesystem:how-to/http-server/serve-a-frontend.mdx",
+              "route": "/how-to/http-server/serve-a-frontend"
+            },
+            {
+              "kind": "page",
+              "label": "Configure your server",
+              "pageId": "filesystem:how-to/http-server/configure-your-server.mdx",
+              "route": "/how-to/http-server/configure-your-server"
+            },
+            {
+              "kind": "page",
+              "label": "Add middleware",
+              "pageId": "filesystem:how-to/http-server/add-middleware.mdx",
+              "route": "/how-to/http-server/add-middleware"
+            },
+            {
+              "kind": "page",
+              "label": "Authenticate requests",
+              "pageId": "filesystem:how-to/http-server/authentication.mdx",
+              "route": "/how-to/http-server/authentication"
+            },
+            {
+              "kind": "page",
+              "label": "Concurrency and connection pressure",
+              "pageId": "filesystem:how-to/http-server/concurrency-and-connection-pressure.mdx",
+              "route": "/how-to/http-server/concurrency-and-connection-pressure"
+            },
+            {
+              "kind": "page",
+              "label": "Chaos middleware",
+              "pageId": "filesystem:how-to/http-server/chaos-middleware.mdx",
+              "route": "/how-to/http-server/chaos-middleware"
+            },
+            {
+              "kind": "page",
+              "label": "Real-world example",
+              "pageId": "filesystem:how-to/http-server/real-world-example.mdx",
+              "route": "/how-to/http-server/real-world-example"
+            }
+          ],
+          "directory": "card",
+          "display": "group",
+          "kind": "group",
+          "label": "HTTP Server",
+          "path": "/how-to/http-server",
+          "route": "/how-to/http-server"
+        },
+        {
+          "children": [
+            {
+              "kind": "page",
+              "label": "Use loggers",
+              "pageId": "filesystem:how-to/logging/use-loggers.mdx",
+              "route": "/how-to/logging/use-loggers"
+            },
+            {
+              "kind": "page",
+              "label": "Sampling & fingers-crossed",
+              "pageId": "filesystem:how-to/logging/sampling-and-fingers-crossed.mdx",
+              "route": "/how-to/logging/sampling-and-fingers-crossed"
+            },
+            {
+              "kind": "page",
+              "label": "Use context with logs",
+              "pageId": "filesystem:how-to/logging/log-context.mdx",
+              "route": "/how-to/logging/log-context"
+            },
+            {
+              "kind": "page",
+              "label": "Implement a log handler",
+              "pageId": "filesystem:how-to/logging/implement-a-log-handler.mdx",
+              "route": "/how-to/logging/implement-a-log-handler"
+            }
+          ],
+          "directory": "card",
+          "display": "group",
+          "kind": "group",
+          "label": "Logging",
+          "path": "/how-to/logging"
+        },
+        {
+          "children": [
+            {
+              "kind": "page",
+              "label": "Working with Relational Databases",
+              "pageId": "filesystem:how-to/databases-sql/index.mdx",
+              "route": "/how-to/databases-sql"
+            },
+            {
+              "kind": "page",
+              "label": "sqlc - SQL Client",
+              "pageId": "filesystem:how-to/databases-sql/sqlc.mdx",
+              "route": "/how-to/databases-sql/sqlc"
+            },
+            {
+              "kind": "page",
+              "label": "sqlr - SQL Repository",
+              "pageId": "filesystem:how-to/databases-sql/sqlr.mdx",
+              "route": "/how-to/databases-sql/sqlr"
+            },
+            {
+              "kind": "page",
+              "label": "sqlh - SQL HTTP Handlers",
+              "pageId": "filesystem:how-to/databases-sql/sqlh.mdx",
+              "route": "/how-to/databases-sql/sqlh"
+            }
+          ],
+          "directory": "card",
+          "display": "group",
+          "kind": "group",
+          "label": "Relational databases",
+          "path": "/how-to/databases-sql",
+          "route": "/how-to/databases-sql"
+        },
+        {
+          "children": [
+            {
+              "kind": "page",
+              "label": "Understand inputs and outputs",
+              "pageId": "filesystem:how-to/streaming-applications/understand-inputs-and-outputs.mdx",
+              "route": "/how-to/streaming-applications/understand-inputs-and-outputs"
+            },
+            {
+              "kind": "page",
+              "label": "Create a producer",
+              "pageId": "filesystem:how-to/streaming-applications/create-a-producer.mdx",
+              "route": "/how-to/streaming-applications/create-a-producer"
+            },
+            {
+              "kind": "page",
+              "label": "Create a consumer",
+              "pageId": "filesystem:how-to/streaming-applications/create-a-consumer.mdx",
+              "route": "/how-to/streaming-applications/create-a-consumer"
+            },
+            {
+              "kind": "page",
+              "label": "Use the producer daemon",
+              "pageId": "filesystem:how-to/streaming-applications/use-the-producer-daemon.mdx",
+              "route": "/how-to/streaming-applications/use-the-producer-daemon"
+            }
+          ],
+          "directory": "card",
+          "display": "group",
+          "kind": "group",
+          "label": "Streaming applications",
+          "path": "/how-to/streaming-applications",
+          "route": "/how-to/streaming-applications"
+        },
+        {
+          "children": [
+            {
+              "kind": "page",
+              "label": "Notes on general Kafka usage",
+              "pageId": "filesystem:how-to/kafka/general.mdx",
+              "route": "/how-to/kafka/general"
+            },
+            {
+              "kind": "page",
+              "label": "How to use the Kafka Schema Registry",
+              "pageId": "filesystem:how-to/kafka/use-schema-registry.mdx",
+              "route": "/how-to/kafka/use-schema-registry"
+            }
+          ],
+          "directory": "card",
+          "display": "group",
+          "kind": "group",
+          "label": "Kafka",
+          "path": "/how-to/kafka"
+        },
+        {
+          "children": [
+            {
+              "kind": "page",
+              "label": "Use sampling",
+              "pageId": "filesystem:how-to/sampling/use-sampling.mdx",
+              "route": "/how-to/sampling/use-sampling"
+            }
+          ],
+          "directory": "card",
+          "display": "group",
+          "kind": "group",
+          "label": "Sampling",
+          "path": "/how-to/sampling"
+        },
+        {
+          "kind": "page",
+          "label": "Build a CLI tool",
+          "pageId": "filesystem:how-to/use-cli.mdx",
+          "route": "/how-to/use-cli"
+        },
+        {
+          "kind": "page",
+          "label": "Implement health checks",
+          "pageId": "filesystem:how-to/write-health-checks.mdx",
+          "route": "/how-to/write-health-checks"
+        }
+      ],
+      "directory": "card",
+      "display": "group",
+      "kind": "group",
+      "label": "How-to guides",
+      "path": "/how-to",
+      "route": "/how-to"
+    },
+    {
+      "children": [
+        {
+          "kind": "page",
+          "label": "Naming patterns",
+          "pageId": "filesystem:reference/naming-patterns.mdx",
+          "route": "/reference/naming-patterns"
+        },
+        {
+          "kind": "page",
+          "label": "Package cfg",
+          "pageId": "filesystem:reference/package-cfg.mdx",
+          "route": "/reference/package-cfg"
+        },
+        {
+          "kind": "page",
+          "label": "Package cloud/aws",
+          "pageId": "filesystem:reference/package-cloud_aws.mdx",
+          "route": "/reference/package-cloud_aws"
+        },
+        {
+          "kind": "page",
+          "label": "Package dbx",
+          "pageId": "filesystem:reference/package-dbx.mdx",
+          "route": "/reference/package-dbx"
+        },
+        {
+          "kind": "page",
+          "label": "Package fixtures",
+          "pageId": "filesystem:reference/package-fixtures.mdx",
+          "route": "/reference/package-fixtures"
+        },
+        {
+          "kind": "page",
+          "label": "Package httpserver",
+          "pageId": "filesystem:reference/package-httpserver.mdx",
+          "route": "/reference/package-httpserver"
+        },
+        {
+          "kind": "page",
+          "label": "Package log",
+          "pageId": "filesystem:reference/package-log.mdx",
+          "route": "/reference/package-log"
+        },
+        {
+          "kind": "page",
+          "label": "Package test",
+          "pageId": "filesystem:reference/package-test.mdx",
+          "route": "/reference/package-test"
+        }
+      ],
+      "directory": "card",
+      "display": "group",
+      "kind": "group",
+      "label": "Reference",
+      "path": "/reference",
+      "route": "/reference"
+    },
+    {
+      "children": [
+        {
+          "kind": "page",
+          "label": "App Identity and Naming Patterns",
+          "pageId": "filesystem:migrations/app-identity-and-naming-patterns.mdx",
+          "route": "/migrations/app-identity-and-naming-patterns"
+        },
+        {
+          "kind": "page",
+          "label": "HTTP Server Package",
+          "pageId": "filesystem:migrations/httpserver-package.mdx",
+          "route": "/migrations/httpserver-package"
+        },
+        {
+          "kind": "page",
+          "label": "SQLH CRUD",
+          "pageId": "filesystem:migrations/sqlh-crud.mdx",
+          "route": "/migrations/sqlh-crud"
+        },
+        {
+          "kind": "page",
+          "label": "Stream Consumer Lifecycle",
+          "pageId": "filesystem:migrations/stream-consumer-lifecycle.mdx",
+          "route": "/migrations/stream-consumer-lifecycle"
+        }
+      ],
+      "directory": "card",
+      "display": "group",
+      "kind": "group",
+      "label": "Migrations",
+      "path": "/migrations",
+      "route": "/migrations"
+    },
+    {
+      "children": [
+        {
+          "description": "Articles and announcements from the gosoline project.",
+          "kind": "page",
+          "label": "Gosoline Blog",
+          "pageId": "filesystem:blog/index.mdx",
+          "route": "/blog"
+        },
+        {
+          "description": "Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled.",
+          "kind": "page",
+          "label": "Clearer Stream Processing, Safer Shutdown",
+          "pageId": "filesystem:blog/gosoline-v0-66-0-stream-processing.mdx",
+          "route": "/blog/gosoline-v0-66-0-stream-processing"
+        },
+        {
+          "description": "The HTTP server has always been one of the most commonly used parts of gosoline.",
+          "kind": "page",
+          "label": "Introducing the Standalone HTTP Server Package",
+          "pageId": "filesystem:blog/introducing-httpserver-package.mdx",
+          "route": "/blog/introducing-httpserver-package"
+        },
+        {
+          "description": "gosoline has grown into a mature application framework that powers production backend systems.",
+          "kind": "page",
+          "label": "gosoline goes modular: smaller packages, better APIs",
+          "pageId": "filesystem:blog/gosoline-goes-modular.mdx",
+          "route": "/blog/gosoline-goes-modular"
+        },
+        {
+          "description": "Managing cloud resources across multiple environments, teams, and services is hard enough without fighting your own naming conventions.",
+          "kind": "page",
+          "label": "Identity & Naming Patterns: Flexible, Configuration-Driven Resource Naming",
+          "pageId": "filesystem:blog/identity-and-naming-patterns.mdx",
+          "route": "/blog/identity-and-naming-patterns"
+        },
+        {
+          "description": "High-traffic services have a logging problem: the more successful traffic you handle, the more you pay to store and query logs that rarely matter.",
+          "kind": "page",
+          "label": "Log Sampling in Go: Less Noise, More Debuggability",
+          "pageId": "filesystem:blog/sampling-fingers-crossed-logging.mdx",
+          "route": "/blog/sampling-fingers-crossed-logging"
+        }
+      ],
+      "display": "group",
+      "kind": "group",
+      "label": "Blog",
+      "path": "/blog",
+      "route": "/blog"
+    }
+  ],
+  "tabs": [
+    {
+      "label": "Docs",
+      "path": "/"
+    },
+    {
+      "label": "Blog",
+      "path": "/blog"
+    }
+  ]
+}

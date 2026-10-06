@@ -1,0 +1,34 @@
+{
+  "code": "PAGE_NOT_FOUND",
+  "detail": "We couldn't find the page you're looking for.",
+  "resolution": "Where to look next: https://gosoline-project.github.io/docs/pr-6, https://gosoline-project.github.io/docs/pr-6, https://gosoline-project.github.io/docs/pr-6/blog, https://gosoline-project.github.io/docs/pr-6/sitemap.xml, https://gosoline-project.github.io/docs/pr-6/llms.txt, https://gosoline-project.github.io/docs/pr-6/openapi.json",
+  "status": 404,
+  "title": "Page not found",
+  "type": "about:blank",
+  "links": [
+    {
+      "href": "https://gosoline-project.github.io/docs/pr-6",
+      "label": "Back to home"
+    },
+    {
+      "href": "https://gosoline-project.github.io/docs/pr-6",
+      "label": "Docs"
+    },
+    {
+      "href": "https://gosoline-project.github.io/docs/pr-6/blog",
+      "label": "Blog"
+    },
+    {
+      "href": "https://gosoline-project.github.io/docs/pr-6/sitemap.xml",
+      "label": "Sitemap"
+    },
+    {
+      "href": "https://gosoline-project.github.io/docs/pr-6/llms.txt",
+      "label": "Docs index for AI agents (llms.txt)"
+    },
+    {
+      "href": "https://gosoline-project.github.io/docs/pr-6/openapi.json",
+      "label": "JSON API description (openapi.json)"
+    }
+  ]
+}

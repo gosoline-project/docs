@@ -1,0 +1,11 @@
+{
+  "contentType": "doc",
+  "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/fundamentals/application.json",
+  "lastModified": null,
+  "locale": "",
+  "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/fundamentals/application.md",
+  "route": "/fundamentals/application",
+  "title": "The Application",
+  "url": "https://gosoline-project.github.io/docs/pr-6/fundamentals/application",
+  "markdown": "---\ntitle: The Application\nsidebar:\n  order: 1\n---\n\nEvery gosoline application depends on these same three concerns. Configuration provides the values and settings an application needs. Logging makes its behavior visible during development and operation. Execution coordinates the runtime lifecycle of the application and its modules.\n\nThese building blocks are brought together by the application layer. Rather than treating them as separate concerns that need to be assembled manually, gosoline combines them into one consistent bootstrap process. This gives applications a common foundation and a predictable way to start up, run, and shut down.\n"
+}

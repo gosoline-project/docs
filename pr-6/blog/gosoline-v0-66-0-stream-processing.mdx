@@ -1,0 +1,93 @@
+---
+title: "Clearer Stream Processing, Safer Shutdown"
+description: "Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled."
+type: blog
+date: 2026-09-30
+authors:
+  - name: Jan Kamieth
+    url: https://github.com/j4k4
+    avatar: https://avatars.githubusercontent.com/u/783502?s=400&v=4
+search:
+  tags: [gosoline, streaming, kafka, lifecycle]
+---
+
+Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled. The difficult part is making that flow behave predictably when callbacks run concurrently, a partition changes owners, or a deployment interrupts processing.
+
+Gosoline **[v0.66.0](https://github.com/justtrackio/gosoline/releases/tag/v0.66.0)** brings those concerns together in a simpler stream lifecycle. Inputs call processing callbacks directly, concurrency and ordering become explicit transport decisions, and processing drain is separated from transport cleanup. The result is a clearer model for building and operating streaming services.
+
+## Clear Ownership from Receipt to Cleanup
+
+Previously, inputs exposed message channels, while consumers scheduled callback work and coordinated acknowledgement through separate APIs. Understanding a message's lifecycle meant following it across those boundaries.
+
+The new model gives each layer a focused responsibility:
+
+- **Consumers own application processing**, including a shared shutdown processing deadline for primary and retry work.
+- **Inputs own delivery and transport bookkeeping**, including SQS deletion, Kafka offset commits, and Kinesis checkpoints.
+
+Instead of handing a message to a channel and acknowledging it through another interface later, an input invokes the processing callback and handles the result within its own transport lifecycle.
+
+This puts transport behavior next to the code that understands it. SQS can decide when to delete a message, Kafka can coordinate processing with group rebalances and commits, and Kinesis can track which records belong in the next checkpoint. Normal typed and untyped application callbacks keep their familiar `Consume` contract.
+
+## Shutdown That Gives In-Flight Work Room to Finish
+
+A rollout should stop new work without immediately abandoning everything already in progress. It should also leave time to persist transport state after application processing finishes.
+
+Before v0.66.0, the channel handoff separated transport progress from actual application completion. During a rollout, that could produce several awkward outcomes:
+
+- **Progress recorded too early:** Kafka could commit offsets, or Kinesis advance checkpoints, after handing records downstream while application callbacks were still running. If the process exited before those callbacks finished, the next consumer could resume past unfinished work.
+- **Cleanup interrupted by cancellation:** Kafka's final commits used a context that could already be cancelled, and Kinesis's release allowance could be counting down while downstream work was still draining. Failed final persistence could cause replay and duplicate processing, or delay shard handover.
+- **A shutdown budget that was hard to follow:** per-callback cancellation allowances and separate channel stages did not provide one authoritative processing deadline shared by primary and retry work.
+
+In v0.66.0, transport processing waits for the direct callback to return rather than treating channel delivery as completion. The consumer requests that inputs stop fetching and gives admitted work one shared processing drain window. Primary and retry inputs use the same deadline, rather than each callback having its own independent cancellation grace period. When the window expires, remaining callback contexts are cancelled.
+
+Transport cleanup has its own allowance: Kafka commits receive a separate cancellation grace window, Kinesis starts its checkpoint-and-release window after processing drains, and SQS deletion operations can outlive cancellation of their input context. These mechanisms respect each transport's lifecycle rather than applying one timer to every operation.
+
+That separation makes shutdown easier to reason about: application work has a processing budget, and recording its transport progress is a distinct responsibility. Callbacks still need to respect context cancellation, but the framework now provides a consistent drain signal across inputs.
+
+The same care extends beyond broker-backed inputs. Buffered in-memory messages can drain during graceful shutdown, messages returned by an in-progress Redis blocking read are preserved for processing, and file inputs finish naturally when their source is exhausted.
+
+## Parallelism with an Explicit Ordering Choice
+
+Concurrency is most useful when its meaning matches the source of the work. v0.66.0 puts callback concurrency at the input layer and adds explicit **ordered** and **unordered** processing for Kafka and Kinesis.
+
+For an independent event-processing workload, unordered mode allows multiple records from the same partition or shard to run concurrently. For stateful updates that must happen in sequence, ordered mode processes records sequentially within each Kafka topic-partition or Kinesis shard while allowing work across different partitions or shards to overlap.
+
+For example, a Kafka input assigned eight active partitions with three runners can process three partition work units concurrently in ordered mode. The other partitions wait for capacity, and each partition retains its own sequence. Increasing the runner count beyond the number of active assigned partitions leaves extra capacity unused rather than weakening ordering.
+
+The benefit is an explicit trade-off between parallelism and sequencing. Ordering is local to a partition or shard; separate retry work has its own execution path. The [Kafka usage guide](/docs/pr-6/how-to/kafka/general#runner-count-and-processing-order) explains how those limits interact in practice.
+
+## Stronger Offset and Checkpoint Handling
+
+Concurrent processing makes shutdown bookkeeping especially important. If a later record finishes before an earlier one, advancing transport progress carelessly can skip work that never reached processing.
+
+Kafka processing now preserves a gap-free handled prefix when committing during concurrent execution and shutdown. Kinesis similarly advances checkpoints only through the contiguous handled record prefix. Together with the separate cleanup windows, this strengthens the boundary between admitted work and work left for another consumer to receive.
+
+These are transport-progress guarantees, not exactly-once business processing. Kafka and Kinesis can advance progress for records whose processing callback reports failure; application retry handling remains responsible for recovering that failed work. Failed commits or checkpoints can also cause redelivery. Idempotency and observability still matter, but the framework's responsibilities are more clearly defined.
+
+## SQS Acknowledgement with a Clear Latency–Cost Trade-Off
+
+SQS and SNS-backed inputs now own acknowledgement directly. Individual deletion is the default: once a message's callback succeeds, the input can delete it without waiting for the rest of the receive result to finish.
+
+Optional batch deletion provides another useful choice. Successfully processed messages from a receive result can be deleted together, reducing delete requests at the cost of waiting until that receive result has finished processing. This batches transport acknowledgement, not application callbacks.
+
+The input also validates required message metadata and reports partial batch-deletion failures. SQS retry inputs use the same acknowledgement behavior, giving primary and retry delivery a consistent implementation.
+
+## Health Checks That Notice One Stuck Callback
+
+A busy consumer can look healthy while one callback remains stuck. Successful work elsewhere should not hide that condition.
+
+Consumer health now tracks active processing individually. If one callback exceeds the health-check timeout, the consumer can report unhealthy even while other callbacks continue to finish. That makes health reporting more representative of the work actually in flight.
+
+The refactor also expands test coverage around startup, draining, cancellation, ordering, retry behavior, commits, checkpoints, and acknowledgements. Those are the lifecycle edges that matter most during deployments and failures.
+
+## A Simpler Foundation for Streaming Services
+
+v0.66.0 consolidates the stream lifecycle around a smaller set of concepts with explicit ownership: processing, concurrency, ordering, and transport cleanup.
+
+For application teams, the main wins are easier-to-understand shutdown, transport-aware parallelism, stronger progress bookkeeping, and health checks that expose slow work. For the framework, the direct callback contract provides a common foundation without hiding the differences between Kafka, Kinesis, and SQS.
+
+For further reading about Kafka configuration, concurrency, and runtime behavior, check the [Kafka usage guide](/docs/pr-6/how-to/kafka/general).
+
+For further reading about streaming applications in general, check [Understanding inputs and outputs](/docs/pr-6/how-to/streaming-applications/understand-inputs-and-outputs) and [Creating a consumer](/docs/pr-6/how-to/streaming-applications/create-a-consumer).
+
+This release includes breaking changes. For upgrade details, see the [stream consumer lifecycle migration guide](/docs/pr-6/migrations/stream-consumer-lifecycle).

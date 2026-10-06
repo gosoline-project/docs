@@ -1,0 +1,523 @@
+{
+  "count": 51,
+  "generator": "blume@2.1.3",
+  "pages": [
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/index.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/index.md",
+      "route": "/",
+      "title": "Overview",
+      "url": "https://gosoline-project.github.io/docs/pr-6"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/blog.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/blog.md",
+      "route": "/blog",
+      "title": "Gosoline Blog",
+      "url": "https://gosoline-project.github.io/docs/pr-6/blog",
+      "description": "Articles and announcements from the gosoline project."
+    },
+    {
+      "contentType": "blog",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/blog/gosoline-goes-modular.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/blog/gosoline-goes-modular.md",
+      "route": "/blog/gosoline-goes-modular",
+      "title": "gosoline goes modular: smaller packages, better APIs",
+      "url": "https://gosoline-project.github.io/docs/pr-6/blog/gosoline-goes-modular",
+      "description": "gosoline has grown into a mature application framework that powers production backend systems."
+    },
+    {
+      "contentType": "blog",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/blog/gosoline-v0-66-0-stream-processing.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/blog/gosoline-v0-66-0-stream-processing.md",
+      "route": "/blog/gosoline-v0-66-0-stream-processing",
+      "title": "Clearer Stream Processing, Safer Shutdown",
+      "url": "https://gosoline-project.github.io/docs/pr-6/blog/gosoline-v0-66-0-stream-processing",
+      "description": "Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled."
+    },
+    {
+      "contentType": "blog",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/blog/identity-and-naming-patterns.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/blog/identity-and-naming-patterns.md",
+      "route": "/blog/identity-and-naming-patterns",
+      "title": "Identity & Naming Patterns: Flexible, Configuration-Driven Resource Naming",
+      "url": "https://gosoline-project.github.io/docs/pr-6/blog/identity-and-naming-patterns",
+      "description": "Managing cloud resources across multiple environments, teams, and services is hard enough without fighting your own naming conventions."
+    },
+    {
+      "contentType": "blog",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/blog/introducing-httpserver-package.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/blog/introducing-httpserver-package.md",
+      "route": "/blog/introducing-httpserver-package",
+      "title": "Introducing the Standalone HTTP Server Package",
+      "url": "https://gosoline-project.github.io/docs/pr-6/blog/introducing-httpserver-package",
+      "description": "The HTTP server has always been one of the most commonly used parts of gosoline."
+    },
+    {
+      "contentType": "blog",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/blog/sampling-fingers-crossed-logging.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/blog/sampling-fingers-crossed-logging.md",
+      "route": "/blog/sampling-fingers-crossed-logging",
+      "title": "Log Sampling in Go: Less Noise, More Debuggability",
+      "url": "https://gosoline-project.github.io/docs/pr-6/blog/sampling-fingers-crossed-logging",
+      "description": "High-traffic services have a logging problem: the more successful traffic you handle, the more you pay to store and query logs that rarely matter."
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/fundamentals/application.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/fundamentals/application.md",
+      "route": "/fundamentals/application",
+      "title": "The Application",
+      "url": "https://gosoline-project.github.io/docs/pr-6/fundamentals/application"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/fundamentals/naming-patterns.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/fundamentals/naming-patterns.md",
+      "route": "/fundamentals/naming-patterns",
+      "title": "Naming Patterns",
+      "url": "https://gosoline-project.github.io/docs/pr-6/fundamentals/naming-patterns"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/getting-started/create-a-consumer.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/getting-started/create-a-consumer.md",
+      "route": "/getting-started/create-a-consumer",
+      "title": "Create a consumer",
+      "url": "https://gosoline-project.github.io/docs/pr-6/getting-started/create-a-consumer"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/getting-started/create-an-application.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/getting-started/create-an-application.md",
+      "route": "/getting-started/create-an-application",
+      "title": "Create an application",
+      "url": "https://gosoline-project.github.io/docs/pr-6/getting-started/create-an-application"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/getting-started/testing/test-your-consumer.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/getting-started/testing/test-your-consumer.md",
+      "route": "/getting-started/testing/test-your-consumer",
+      "title": "Test your consumer",
+      "url": "https://gosoline-project.github.io/docs/pr-6/getting-started/testing/test-your-consumer"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/databases-sql.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql.md",
+      "route": "/how-to/databases-sql",
+      "title": "Working with Relational Databases",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/databases-sql/sqlc.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql/sqlc.md",
+      "route": "/how-to/databases-sql/sqlc",
+      "title": "sqlc - SQL Client",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql/sqlc"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/databases-sql/sqlh.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql/sqlh.md",
+      "route": "/how-to/databases-sql/sqlh",
+      "title": "sqlh - SQL HTTP Handlers",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql/sqlh"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/databases-sql/sqlr.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql/sqlr.md",
+      "route": "/how-to/databases-sql/sqlr",
+      "title": "sqlr - SQL Repository",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql/sqlr"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/http-server/add-middleware.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/add-middleware.md",
+      "route": "/how-to/http-server/add-middleware",
+      "title": "Add middleware",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/add-middleware"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/http-server/authentication.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/authentication.md",
+      "route": "/how-to/http-server/authentication",
+      "title": "Authenticate requests",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/authentication"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/http-server/build-an-http-service.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/build-an-http-service.md",
+      "route": "/how-to/http-server/build-an-http-service",
+      "title": "Build an HTTP service",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/build-an-http-service"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/http-server/chaos-middleware.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/chaos-middleware.md",
+      "route": "/how-to/http-server/chaos-middleware",
+      "title": "Chaos middleware",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/chaos-middleware"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/http-server/concurrency-and-connection-pressure.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/concurrency-and-connection-pressure.md",
+      "route": "/how-to/http-server/concurrency-and-connection-pressure",
+      "title": "Concurrency and connection pressure",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/concurrency-and-connection-pressure"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/http-server/configure-your-server.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/configure-your-server.md",
+      "route": "/how-to/http-server/configure-your-server",
+      "title": "Configure your server",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/configure-your-server"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/http-server/real-world-example.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/real-world-example.md",
+      "route": "/how-to/http-server/real-world-example",
+      "title": "Real-world example",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/real-world-example"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/http-server/serve-a-frontend.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/serve-a-frontend.md",
+      "route": "/how-to/http-server/serve-a-frontend",
+      "title": "Serve a frontend",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/serve-a-frontend"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/http-server/stream-with-sse.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/stream-with-sse.md",
+      "route": "/how-to/http-server/stream-with-sse",
+      "title": "Stream with Server-Sent Events",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server/stream-with-sse"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/kafka/general.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/kafka/general.md",
+      "route": "/how-to/kafka/general",
+      "title": "Notes on general Kafka usage",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/kafka/general"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/kafka/use-schema-registry.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/kafka/use-schema-registry.md",
+      "route": "/how-to/kafka/use-schema-registry",
+      "title": "How to use the Kafka Schema Registry",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/kafka/use-schema-registry"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/load-configs.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/load-configs.md",
+      "route": "/how-to/load-configs",
+      "title": "Load configurations",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/load-configs"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/logging/implement-a-log-handler.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/logging/implement-a-log-handler.md",
+      "route": "/how-to/logging/implement-a-log-handler",
+      "title": "Implement a log handler",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/logging/implement-a-log-handler"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/logging/log-context.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/logging/log-context.md",
+      "route": "/how-to/logging/log-context",
+      "title": "Use context with logs",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/logging/log-context"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/logging/sampling-and-fingers-crossed.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/logging/sampling-and-fingers-crossed.md",
+      "route": "/how-to/logging/sampling-and-fingers-crossed",
+      "title": "Sampling & fingers-crossed",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/logging/sampling-and-fingers-crossed"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/logging/use-loggers.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/logging/use-loggers.md",
+      "route": "/how-to/logging/use-loggers",
+      "title": "Use loggers",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/logging/use-loggers"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/sampling/use-sampling.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/sampling/use-sampling.md",
+      "route": "/how-to/sampling/use-sampling",
+      "title": "Use sampling",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/sampling/use-sampling"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/streaming-applications/create-a-consumer.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/create-a-consumer.md",
+      "route": "/how-to/streaming-applications/create-a-consumer",
+      "title": "Create a consumer",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/create-a-consumer"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/streaming-applications/create-a-producer.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/create-a-producer.md",
+      "route": "/how-to/streaming-applications/create-a-producer",
+      "title": "Create a producer",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/create-a-producer"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/streaming-applications/understand-inputs-and-outputs.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/understand-inputs-and-outputs.md",
+      "route": "/how-to/streaming-applications/understand-inputs-and-outputs",
+      "title": "Understand inputs and outputs",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/understand-inputs-and-outputs"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/streaming-applications/use-the-producer-daemon.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/use-the-producer-daemon.md",
+      "route": "/how-to/streaming-applications/use-the-producer-daemon",
+      "title": "Use the producer daemon",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/use-the-producer-daemon"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/use-cli.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/use-cli.md",
+      "route": "/how-to/use-cli",
+      "title": "Build a CLI tool",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/use-cli"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/write-health-checks.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/write-health-checks.md",
+      "route": "/how-to/write-health-checks",
+      "title": "Implement health checks",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/write-health-checks"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/migrations/app-identity-and-naming-patterns.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/migrations/app-identity-and-naming-patterns.md",
+      "route": "/migrations/app-identity-and-naming-patterns",
+      "title": "App Identity and Naming Patterns",
+      "url": "https://gosoline-project.github.io/docs/pr-6/migrations/app-identity-and-naming-patterns"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/migrations/httpserver-package.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/migrations/httpserver-package.md",
+      "route": "/migrations/httpserver-package",
+      "title": "HTTP Server Package",
+      "url": "https://gosoline-project.github.io/docs/pr-6/migrations/httpserver-package"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/migrations/sqlh-crud.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/migrations/sqlh-crud.md",
+      "route": "/migrations/sqlh-crud",
+      "title": "SQLH CRUD",
+      "url": "https://gosoline-project.github.io/docs/pr-6/migrations/sqlh-crud"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/migrations/stream-consumer-lifecycle.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/migrations/stream-consumer-lifecycle.md",
+      "route": "/migrations/stream-consumer-lifecycle",
+      "title": "Stream Consumer Lifecycle",
+      "url": "https://gosoline-project.github.io/docs/pr-6/migrations/stream-consumer-lifecycle"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/reference/naming-patterns.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/reference/naming-patterns.md",
+      "route": "/reference/naming-patterns",
+      "title": "Naming patterns",
+      "url": "https://gosoline-project.github.io/docs/pr-6/reference/naming-patterns"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/reference/package-cfg.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/reference/package-cfg.md",
+      "route": "/reference/package-cfg",
+      "title": "Package cfg",
+      "url": "https://gosoline-project.github.io/docs/pr-6/reference/package-cfg"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/reference/package-cloud_aws.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/reference/package-cloud_aws.md",
+      "route": "/reference/package-cloud_aws",
+      "title": "Package cloud/aws",
+      "url": "https://gosoline-project.github.io/docs/pr-6/reference/package-cloud_aws"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/reference/package-dbx.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/reference/package-dbx.md",
+      "route": "/reference/package-dbx",
+      "title": "Package dbx",
+      "url": "https://gosoline-project.github.io/docs/pr-6/reference/package-dbx"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/reference/package-fixtures.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/reference/package-fixtures.md",
+      "route": "/reference/package-fixtures",
+      "title": "Package fixtures",
+      "url": "https://gosoline-project.github.io/docs/pr-6/reference/package-fixtures"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/reference/package-httpserver.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/reference/package-httpserver.md",
+      "route": "/reference/package-httpserver",
+      "title": "Package httpserver",
+      "url": "https://gosoline-project.github.io/docs/pr-6/reference/package-httpserver"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/reference/package-log.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/reference/package-log.md",
+      "route": "/reference/package-log",
+      "title": "Package log",
+      "url": "https://gosoline-project.github.io/docs/pr-6/reference/package-log"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/reference/package-test.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/reference/package-test.md",
+      "route": "/reference/package-test",
+      "title": "Package test",
+      "url": "https://gosoline-project.github.io/docs/pr-6/reference/package-test"
+    }
+  ],
+  "site": "https://gosoline-project.github.io"
+}

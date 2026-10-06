@@ -1,0 +1,26 @@
+/docs/pr-6/*.md
+  Content-Type: text/markdown; charset=utf-8
+/docs/pr-6/*.mdx
+  Content-Type: text/markdown; charset=utf-8
+/docs/pr-6/*.txt
+  Content-Type: text/plain; charset=utf-8
+/docs/pr-6/*
+  X-Powered-By: Blume
+/docs/pr-6/
+  Link: </docs/pr-6/.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json; profile=\"https://www.rfc-editor.org/info/rfc9727\"", </docs/pr-6/.well-known/ai-catalog.json>; rel="ai-catalog"; type="application/ai-catalog+json", </docs/pr-6/openapi.json>; rel="service-desc"; type="application/json", </docs/pr-6/agent-readability.json>; rel="describedby"; type="application/json", </docs/pr-6/llms.txt>; rel="describedby"; type="text/plain", </docs/pr-6/index.md>; rel="alternate"; type="text/markdown"
+/docs/pr-6/.well-known/api-catalog
+  Content-Type: application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"
+/docs/pr-6/.well-known/ai-catalog.json
+  Access-Control-Allow-Origin: *
+/docs/pr-6/.well-known/ard.json
+  Access-Control-Allow-Origin: *
+/docs/pr-6/.well-known/api-catalog
+  Access-Control-Allow-Origin: *
+/docs/pr-6/.well-known/agent-skills/*.md
+  Content-Type: text/markdown; charset=utf-8
+/docs/pr-6/.well-known/agent-skills/*.tar.gz
+  Content-Type: application/gzip
+/docs/pr-6/blume-assets/*.svg
+  Content-Security-Policy: sandbox
+/docs/pr-6/blume-assets/*.svg
+  X-Content-Type-Options: nosniff

@@ -1,0 +1,12 @@
+{
+  "contentType": "doc",
+  "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/blog.json",
+  "lastModified": null,
+  "locale": "",
+  "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/blog.md",
+  "route": "/blog",
+  "title": "Gosoline Blog",
+  "url": "https://gosoline-project.github.io/docs/pr-6/blog",
+  "description": "Articles and announcements from the gosoline project.",
+  "markdown": "---\ntitle: Gosoline Blog\ndescription: Articles and announcements from the gosoline project.\n---\n\n**[Clearer Stream Processing, Safer Shutdown](/docs/pr-6/blog/gosoline-v0-66-0-stream-processing)**\n\n2026-09-30 — Stream consumers spend most of their time doing something straightforward: receive a message, run application logic, and record that the message was handled.\n\n**[Introducing the Standalone HTTP Server Package](/docs/pr-6/blog/introducing-httpserver-package)**\n\n2026-06-11 — The HTTP server has always been one of the most commonly used parts of gosoline.\n\n**[gosoline goes modular: smaller packages, better APIs](/docs/pr-6/blog/gosoline-goes-modular)**\n\n2026-06-11 — gosoline has grown into a mature application framework that powers production backend systems.\n\n**[Identity & Naming Patterns: Flexible, Configuration-Driven Resource Naming](/docs/pr-6/blog/identity-and-naming-patterns)**\n\n2026-02-19 — Managing cloud resources across multiple environments, teams, and services is hard enough without fighting your own naming conventions.\n\n**[Log Sampling in Go: Less Noise, More Debuggability](/docs/pr-6/blog/sampling-fingers-crossed-logging)**\n\n2026-01-15 — High-traffic services have a logging problem: the more successful traffic you handle, the more you pay to store and query logs that rarely matter.\n"
+}
