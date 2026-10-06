@@ -18,7 +18,7 @@ cloud:
 
 ### General service config
 AWS service clients are created and configured by name. The pattern here is:
-```golang
+```go
 func ProvideClient(ctx context.Context, config cfg.Config, logger log.Logger, name string, optFns ...ClientOption) (*serviceX.Client, error)
 ```
 `ClientOption` belongs to the selected service package and configures that service's `ClientConfig`, including its AWS SDK load options.
@@ -67,7 +67,7 @@ cloud:
 
 ### Cloudwatch
 Call
-```golang
+```go
 import(
     gosoCloudwatch "github.com/justtrackio/gosoline/pkg/cloud/aws/cloudwatch"
 )

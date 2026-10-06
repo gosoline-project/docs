@@ -1,16 +1,8 @@
 ---
-sidebar_position: 3
+sidebar:
+  order: 3
 title: sqlh - SQL HTTP Handlers
 ---
-
-import { CodeBlock } from '../../components.jsx';
-import CrudConfig from "!!raw-loader!./src/sqlh/crud/config.dist.yml";
-import CrudMain from "!!raw-loader!./src/sqlh/crud/main.go";
-import CustomRepositoryConfig from "!!raw-loader!./src/sqlh/custom_repository/config.dist.yml";
-import CustomRepositoryMain from "!!raw-loader!./src/sqlh/custom_repository/main.go";
-import TxConfig from "!!raw-loader!./src/sqlh/tx/config.dist.yml";
-import TxMain from "!!raw-loader!./src/sqlh/tx/main.go";
-import ResultTransformerUserCrud from "!!raw-loader!./src/sqlh/result_transformer/user_crud.go";
 
 The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the current `httpserver`, `sqlc`, and `sqlr` APIs.
 SQLH runs each default CRUD operation in a database transaction and returns a typed value.
@@ -35,7 +27,7 @@ import "github.com/gosoline-project/sqlh"
 
 Configure the HTTP server and the SQL client before the handler starts:
 
-<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{CrudConfig}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml"'>/_code/how-to/databases-sql/src/sqlh/crud/config.dist.config.yml</include>
 
 Each runnable example loads `config.dist.yml` from disk in the current working directory.
 Run each example from its own directory. The migration path in its config is relative to that directory.
@@ -67,13 +59,13 @@ type AuthorUpdateInput struct {
 
 The following example uses one definition for create, update, patch, and output mapping:
 
-<CodeBlock title="main.go" language="go" snippet="entities">{CrudMain}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlh/crud/main.entities.go</include>
 
-<CodeBlock title="main.go" language="go" snippet="input output">{CrudMain}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlh/crud/main.input-output.go</include>
 
 `NewCrudDefinition` accepts the four required callbacks. `SimpleCrudDefinition` wraps the definition in the application factory shape:
 
-<CodeBlock title="main.go" language="go" snippet="transformer">{CrudMain}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlh/crud/main.transformer.go</include>
 
 The `Output` callback returns a Go value. `httpserver.Bind` negotiates its representation from the request's `Accept` header.
 A typed output can implement `StatusCode() int` and `Header() http.Header` to set its status and headers.
@@ -81,15 +73,15 @@ An explicit `httpserver.Response` bypasses negotiation. See [Customizing respons
 
 For a dedicated response DTO, map the entity in the output callback:
 
-<CodeBlock title="user_crud.go" language="go" snippet="types">{ResultTransformerUserCrud}</CodeBlock>
+<include lang="go" meta='title="user_crud.go"'>/_code/how-to/databases-sql/src/sqlh/result_transformer/user_crud.types.go</include>
 
-<CodeBlock title="user_crud.go" language="go" snippet="transformer">{ResultTransformerUserCrud}</CodeBlock>
+<include lang="go" meta='title="user_crud.go"'>/_code/how-to/databases-sql/src/sqlh/result_transformer/user_crud.transformer.go</include>
 
 ### Register Standard Routes
 
 Use `WithCrudHandlers` when the standard route paths and delete response meet your API contract:
 
-<CodeBlock title="main.go" language="go" snippet="crud definition">{CrudMain}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlh/crud/main.crud-definition.go</include>
 
 The generated routes are:
 
@@ -106,7 +98,7 @@ For example, version `1` and entity name `author` produce `/v1/author` and `/v1/
 
 The default delete route uses `DeleteNoContent`. Use `NewCrudHandler` for a delete route that returns the entity:
 
-<CodeBlock title="main.go" language="go" snippet="manual handler">{CrudMain}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlh/crud/main.manual-handler.go</include>
 
 ```go
 router.HandleWith(httpserver.With(NewAuthorHandler(), func(router *httpserver.Router, handler *AuthorCrudHandler) {
@@ -149,9 +141,9 @@ The SQLH repository must use the same SQL client that starts the transaction. Th
 
 The old `sqlh.WithTx`, `BindTx`, `BindTxN`, `BindTxR`, and `BindTxNR` APIs are removed. SQLH `*Operation` callbacks already receive the active `sqlr.TTx`. Use it directly for SQL work. Do not start another transaction inside a callback. For another typed operation outside a CRUD definition, use `TxRunner` and adapt it to the handler signature:
 
-<CodeBlock title="main.go" language="go" snippet="transaction handler">{TxMain}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlh/tx/main.transaction-handler.go</include>
 
-<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{TxConfig}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml"'>/_code/how-to/databases-sql/src/sqlh/tx/config.dist.config.yml</include>
 
 `TxRunner.Run` rolls back transaction-bound SQL changes when the operation returns an error or panics.
 It cannot undo blob-store or other external effects.
@@ -311,7 +303,7 @@ Public names match case-insensitively using Go's Unicode `strings.EqualFold` sem
 
 Use `CrudDefinition.FieldMappings` to define an explicit **complete allowlist**, especially when a response DTO uses different names or only some entity fields should be queryable:
 
-<CodeBlock title="main.go" language="go" snippet="query fields">{CrudMain}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlh/crud/main.query-fields.go</include>
 
 Keys are public API field names; values are exact Go entity field paths, not database columns. Only public-name lookup is case-insensitive; Go paths and database identifiers retain their exact spelling. This map exposes `createdAt` even though the example's output DTO uses `created_at`. A non-nil map replaces automatic discovery entirely, without merging Go names or `sqlh` aliases: fields omitted from it cannot be filtered or sorted, and an empty map permits no public query fields. An explicit entry may select a mapped scalar by its Go path even when its automatic name is aliased or excluded.
 
@@ -603,19 +595,19 @@ SQLH uses a transaction-aware `sqlr.RepositoryTx` by default. Use options when t
 
 The custom factory receives the same `sqlc.Client` that SQLH uses to start transactions:
 
-<CodeBlock title="main.go" language="go" snippet="repository wrapper">{CustomRepositoryMain}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlh/custom_repository/main.repository-wrapper.go</include>
 
 The repository wrapper retains its trusted SQL defaults for direct queries, but SQLH prepares the list builder and copies it into the repository query, so those defaults alone do not affect the list route. The example also applies defaults through a custom `ListInputSource`: `GetOrderBy` returns a public `createdAt` sort only when the request has no ordering, and pagination applies the 100-row fallback only when no page limit was requested. It embeds `sqlh.ListInput` to supply `GetFilter`, force filters, and pagination validation, and its definition explicitly allowlists public query fields. Both client ordering and default ordering go through the same resolver; no raw SQL is accepted from the request. The default count does not apply pagination, so its total remains uncapped.
 
-<CodeBlock title="main.go" language="go" snippet="reporting list input">{CustomRepositoryMain}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlh/custom_repository/main.reporting-list-input.go</include>
 
 The custom list input is selected by the CRUD definition:
 
-<CodeBlock title="main.go" language="go" snippet="custom repository">{CustomRepositoryMain}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlh/custom_repository/main.custom-repository.go</include>
 
 This configuration enables migrations for the selected `reporting` client.
 
-<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{CustomRepositoryConfig}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml"'>/_code/how-to/databases-sql/src/sqlh/custom_repository/config.dist.config.yml</include>
 
 A custom repository must implement the transaction-aware `sqlr.RepositoryTx` interface. The interface includes `Count` in addition to `Create`, `Read`, `Query`, `Update`, `Delete`, and `Close`.
 

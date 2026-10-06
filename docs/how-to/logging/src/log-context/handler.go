@@ -68,6 +68,7 @@ func truncate(ctx context.Context, text string) string {
 
 // snippet-end: truncate
 
+// snippet-start: transform create
 func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -91,6 +92,9 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*
 	return todo, nil
 }
 
+// snippet-end: transform create
+
+// snippet-start: transform update
 func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -107,6 +111,8 @@ func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*
 
 	return todo, nil
 }
+
+// snippet-end: transform update
 
 // snippet-start: parse id helper
 func parseId(id string) (int, error) {

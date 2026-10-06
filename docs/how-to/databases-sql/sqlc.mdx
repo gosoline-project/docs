@@ -1,11 +1,8 @@
 ---
-sidebar_position: 1
+sidebar:
+  order: 1
 title: sqlc - SQL Client
 ---
-
-import { CodeBlock } from '../../components.jsx';
-import Config from "!!raw-loader!./src/sqlc/config.dist.yml";
-import Main from "!!raw-loader!./src/sqlc/main.go";
 
 The `sqlc` package provides a fluent API for building and executing SQL queries against relational databases. It supports MySQL and PostgreSQL, and offers connection management, query building, and transaction handling.
 
@@ -39,7 +36,7 @@ sqlc:
 
 Each connection requires driver and connection details as shown below:
 
-<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{Config}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml"'>/_code/how-to/databases-sql/src/sqlc/config.dist.config.yml</include>
 
 ### Connection Settings
 
@@ -118,7 +115,7 @@ The `reset: true` option is useful for local MySQL development - it drops and re
 
 Create a client using `sqlc.NewClient()` within a gosoline application. The client reads configuration from the specified connection name.
 
-<CodeBlock title="main.go" language="go" snippet="main">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.main.go</include>
 
 The client provides:
 
@@ -143,7 +140,7 @@ The client provides:
 
 Define struct types that map to your database tables using `db` struct tags:
 
-<CodeBlock title="main.go" language="go" snippet="models">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.models.go</include>
 
 The `db` tag specifies the column name. Create composite structs for join results by embedding base types and adding additional fields.
 
@@ -153,7 +150,7 @@ The `db` tag specifies the column name. Create composite structs for join result
 
 Use `Into()` to create an INSERT builder, then `Records()` to pass a struct:
 
-<CodeBlock title="main.go" language="go" snippet="create author">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.create-author.go</include>
 
 The `Exec()` method returns a `Result` with `LastInsertId()` and `RowsAffected()`.
 
@@ -161,7 +158,7 @@ The `Exec()` method returns a `Result` with `LastInsertId()` and `RowsAffected()
 
 Pass a slice of structs to `Records()` for bulk insertion:
 
-<CodeBlock title="main.go" language="go" snippet="create tags">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.create-tags.go</include>
 
 ## Query Operations
 
@@ -169,13 +166,13 @@ Pass a slice of structs to `Records()` for bulk insertion:
 
 Use `From()` to create a SELECT builder. Chain methods like `Where()`, `OrderBy()`, and `Limit()`:
 
-<CodeBlock title="main.go" language="go" snippet="query posts">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.query-posts.go</include>
 
 ### Queries with JOINs
 
 Build conditional joins using `LeftJoin()`, `InnerJoin()`, `RightJoin()`, and `FullOuterJoin()`. These methods return a `JoinBuilder` that must be finalized with `On()`. `CrossJoin()` and `Natural*Join()` return the select builder directly and do not take `On()`:
 
-<CodeBlock title="main.go" language="go" snippet="query joins">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.query-joins.go</include>
 
 Use `As()` for table aliases and column aliases. `Columns()` replaces the current projection list, while `Column()` appends one more projected column.
 
@@ -183,7 +180,7 @@ Use `As()` for table aliases and column aliases. `Columns()` replaces the curren
 
 Use `Query()` when you want to iterate row-by-row. The returned `*sqlc.Rows` supports both primitive `Scan()` calls and `StructScan()` for structs:
 
-<CodeBlock title="main.go" language="go" snippet="query rows">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.query-rows.go</include>
 
 ## SELECT FOR UPDATE
 
@@ -238,7 +235,7 @@ Columns must be simple or dot-qualified identifiers. SQL expressions, wildcards,
 
 Use `Update()` to create an UPDATE builder. Chain `Set()` for column values and `Where()` for conditions:
 
-<CodeBlock title="main.go" language="go" snippet="update">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.update.go</include>
 
 Multiple `Set()` calls are combined in the UPDATE clause. Use `SetExpr()` for SQL expressions:
 
@@ -252,7 +249,7 @@ sqlc.Update("posts").
 
 Use `NamedExec()` when you prefer named placeholders instead of positional arguments:
 
-<CodeBlock title="main.go" language="go" snippet="named exec">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.named-exec.go</include>
 
 `NamedExec()` accepts structs using `db` tags, `map[string]any`, repeated placeholders, and batch inserts from slices.
 
@@ -262,19 +259,19 @@ Use `Prepare()` when you want to reuse the same SQL statement multiple times. Pr
 
 Prepared statements can also be rebound to a transaction using `Stmt.WithTx()` together with `tx.SQLTx()`. When you do this, prepare the statement from the same underlying client or connection source that created the transaction:
 
-<CodeBlock title="main.go" language="go" snippet="prepared statements">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.prepared-statements.go</include>
 
 ## DELETE Operations
 
 Use `Delete()` to create a DELETE builder with `Where()` conditions:
 
-<CodeBlock title="main.go" language="go" snippet="delete">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.delete.go</include>
 
 ## Transactions
 
 Use `WithTx()` to execute multiple operations atomically. The transaction automatically commits on success or rolls back on error:
 
-<CodeBlock title="main.go" language="go" snippet="transaction">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.transaction.go</include>
 
 Inside the transaction callback, use `tx.Q()` instead of `client.Q()` to execute queries within the transaction scope. If the callback returns an error, all changes are rolled back; if it returns `nil`, changes are committed.
 
@@ -288,11 +285,11 @@ Besides `sqlc.Client`, the package also provides a sqlc-owned `DB` wrapper for d
 
 Create a database handle directly when you need access to the underlying `*sql.DB`:
 
-<CodeBlock title="main.go" language="go" snippet="db handle">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.db-handle.go</include>
 
 If you already have an existing `*sql.DB`, wrap it and create a client from it:
 
-<CodeBlock title="main.go" language="go" snippet="wrap db">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlc/main.wrap-db.go</include>
 
 When creating a client from a wrapped handle, make sure the `QueryBuilderConfig` matches your driver. `sqlc.DefaultConfig()` uses MySQL-style placeholders (`?`) and identifier quotes (`` ` ``).
 

@@ -1,116 +1,45 @@
-# Website
+# Gosoline Docs
 
-This website is built using [Docusaurus 2](https://docusaurus.io/), a modern static website generator.
+Documentation and articles for the Gosoline Go application framework, built with [Blume](https://useblume.dev/).
 
-##  Installation
+## Development
 
-```
-$ bun install
-```
+Install the project tools and dependencies:
 
-##  Local Development
-
-```
-$ bun start
+```sh
+mise install
+mise exec -- bun install --frozen-lockfile
+mise exec -- bun run dev
 ```
 
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
+Node and Bun versions are pinned in `mise.toml`. Blume serves the site under `/docs/`, matching GitHub Pages. Use `DOCS_BASE_URL=/` for a preview mounted at the root.
 
-##  Build
+## Verification
 
-```
-$ bun run build
-```
-
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
-
-##  Deployment
-
-Using SSH:
-
-```
-$ USE_SSH=true bun run deploy
+```sh
+mise exec -- bun run typecheck
+mise exec -- bun run validate
+mise exec -- bun run build
+mise exec -- bun run preview
 ```
 
-Not using SSH:
+`validate` checks links, anchors, assets, and includes in strict mode. `build` checks configuration, frontmatter, and routes, and writes the static site to `dist/`.
 
-```
-$ GIT_USER=<Your GitHub username> bun run deploy
-```
+## Content
 
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+Pages live in `docs/`; blog posts live in `docs/blog/`. Frontmatter supplies each page's title and sidebar order. Folder `meta.ts` files supply category labels and generated index cards. Navigation follows the filesystem.
 
-## Custom Components
-
-### CodeBlock
-
-To improve the reusability and maintainability of our code blocks, we've implemented a wrapper around Docusaurus's classic CodeBlock component that you can use to show snippets from a code file.
-
-To use this component, first add snippet comments to your code. For example:
-
-Yaml:
-
-```yaml
-port: 80
-host: example.com
-
-# snippet-start: example
-struct_example:
-  port: 80
-  host: example.com
-  timeout: 5s
-  threshold: 100
-# snippet-end: example
-```
-
-Go:
-
-```go
-package main
-
-import (
-	"github.com/justtrackio/gosoline/pkg/cfg"
-)
-
-// snippet-start: main
-func main() {
-	config := cfg.New()
-	
-	// snippet-start: configure options
-	options := []cfg.Option{
-		cfg.WithConfigSetting("host", "localhost"),
-		cfg.WithConfigSetting("port", "80"),
-	}
-	// snippet-end: configure options
-    
-	if err := config.Option(options...); err != nil {
-		panic(err)
-	}
-}
-// snippet-end: main
-```
-
-Note that:
-
-1. Every snippet must have a `snippet-start` and `snippet-end` comment.
-2. The name of the snippet must be the same.
-3. Snippets can be nested.
-4. Two types of comments are currently supported (`#` and `//`)
-5. The snippet comment belongs on its own line.
-
-To use these snippets in your mdx file, you first need to import the custom `CodeBlock` component:
+Pages show example code with Blume includes of `docs/_code/`, which `scripts/code-excerpts.ts` regenerates before `dev`, `build`, and `validate`:
 
 ```mdx
-import { CodeBlock } from '../components.jsx';
+<include lang="go" meta='title="main.go" lineNumbers'>/_code/how-to/x/src/main.go</include>
+<include lang="go" meta='title="main.go"'>/_code/how-to/x/src/main.input-output.go</include>
 ```
 
-Then, you'll use it the same way you'd use the Docusaurus `CodeBlock` component, but you'll include the snippet name:
+The first is the whole `docs/how-to/x/src/main.go`; the second is its `// snippet-start: input output` region. Files under `examples/` appear under `/_code/examples/`. `highlight-next-line`, `highlight-start`, and `highlight-end` comments in a source highlight its lines. Edit the source file, never `docs/_code/`. Restart `bun run dev` after editing an example source.
 
-```mdx
-import Main from "!!raw-loader!./src/test/test.go";
+## Deployment
 
-<CodeBlock showLineNumbers language="go" snippet="main">{Main}</CodeBlock>
-<CodeBlock showLineNumbers language="go" snippet="configure options">{Main}</CodeBlock>
-```
+GitHub Actions validates and builds pushes to `main`, then replaces the published site on `gh-pages` while preserving existing PR preview directories. Pull requests from this repository build previews under `/docs/pr-<number>/`; closing a PR removes its preview. The workflows use the pinned tools from `mise.toml` and the frozen Bun lockfile.
 
-In the output, you'll get just the snippet from the code file. If you have highlight comments, those will still work in the snippets. If you have nested snippet comments, they won't appear in the output.
+Search uses Blume's built-in local index in production and previews. Markdown page mirrors, `llms.txt`, and `llms-full.txt` are generated with the site. The static GitHub Pages deployment supports these files; request-time services require a server host.

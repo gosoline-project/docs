@@ -1,12 +1,8 @@
 ---
-sidebar_position: 2
+sidebar:
+  order: 2
 title: sqlr - SQL Repository
 ---
-
-import { CodeBlock } from '../../components.jsx';
-import Config from "!!raw-loader!./src/sqlr/auto/config.dist.yml";
-import Auto from "!!raw-loader!./src/sqlr/auto/main.go";
-import Fixtures from "!!raw-loader!./src/sqlr/fixtures/integration_test.go";
 
 The `sqlr` package provides a generic, type-safe repository layer built on top of [`sqlc`](./sqlc.mdx). It offers CRUD operations, relationship management, eager loading via joins and preloads, and transaction support — all using Go generics for compile-time type safety.
 
@@ -28,13 +24,13 @@ import "github.com/gosoline-project/sqlr"
 
 The `sqlr` package uses `sqlc` under the hood for database connections. Configure your database using the same `sqlc` configuration key described in the [sqlc documentation](./sqlc.mdx#configuration):
 
-<CodeBlock title="config.dist.yml" language="yaml" snippet="config">{Config}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml"'>/_code/how-to/databases-sql/src/sqlr/auto/config.dist.config.yml</include>
 
 ## Defining Entities
 
 Entities are Go structs that map to database tables. Embed `sqlr.Entity[K]` to get a primary key (`Id`), and timestamp fields (`CreatedAt`, `UpdatedAt`) that `sqlr` manages automatically by default:
 
-<CodeBlock title="main.go" language="go" snippet="entities">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.entities.go</include>
 
 ### Entity Base Struct
 
@@ -154,7 +150,7 @@ Integer primary key types (`int`, `int64`, `uint`, `uint64`) are automatically t
 
 Create a repository using `sqlr.NewRepository[K, E]()` within a gosoline application. The type parameters specify the primary key type and the entity type:
 
-<CodeBlock title="main.go" language="go" snippet="create repository">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.create-repository.go</include>
 
 The last argument (`"default"` above) is the **sqlc client name**. It must match a key under the `sqlc` block in your configuration file — the repository uses that named client for all database operations. You can have multiple repositories pointing to different clients (e.g., `"default"`, `"analytics"`, `"readonly"`) by passing different names.
 
@@ -493,7 +489,7 @@ qb.OmitAssociation("Profile")
 
 Pass a pointer to an entity. By default, auto-increment IDs and timestamp fields are set automatically:
 
-<CodeBlock title="main.go" language="go" snippet="create">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.create.go</include>
 
 #### Preserve preset IDs and timestamps
 
@@ -513,7 +509,7 @@ err := repo.Create(ctx, &author, func(qb *sqlr.QueryBuilderCreate) {
 
 By default, populate relationship fields on the entity before calling `Create()` and `sqlr` will automatically persist them in the correct order within a single transaction:
 
-<CodeBlock title="main.go" language="go" snippet="create with associations">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.create-with-associations.go</include>
 
 The association save order is:
 
@@ -569,7 +565,7 @@ err := repo.Create(ctx, &post, func(qb *sqlr.QueryBuilderCreate) {
 
 Load a single entity by its primary key:
 
-<CodeBlock title="main.go" language="go" snippet="read">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.read.go</include>
 
 ### Read with Association Loading
 
@@ -591,7 +587,7 @@ author, err := repo.Read(ctx, id, func(qb *sqlr.QueryBuilderRead) {
 
 Modify the entity and pass it to `Update()`. By default, only the base row is updated and the `UpdatedAt` timestamp is refreshed automatically. Any populated association fields on the entity are ignored unless association sync is explicitly enabled for that call or activated by `sync:update` tags on relationship fields:
 
-<CodeBlock title="main.go" language="go" snippet="update">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.update.go</include>
 
 #### Preserve preset timestamps during update
 
@@ -688,7 +684,7 @@ If the parent row does not exist, `Update()` with association synchronization en
 
 Use `QueryBuilderUpdate` when you want `Update()` to reload the entity by primary key after persistence and hydrate relations before returning:
 
-<CodeBlock title="main.go" language="go" snippet="update preload">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.update-preload.go</include>
 
 - `Preload()` on `Update()` uses the same association-path syntax as `Read()` and `Query()`.
 - Conditions and nested paths are supported.
@@ -700,7 +696,7 @@ Use `QueryBuilderUpdate` when you want `Update()` to reload the entity by primar
 
 Remove an entity by its primary key:
 
-<CodeBlock title="main.go" language="go" snippet="delete">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.delete.go</include>
 
 ### Delete with Association Cleanup
 
@@ -731,7 +727,7 @@ err := repo.Delete(ctx, id, func(qb *sqlr.QueryBuilderDelete) {
 
 Use `Query()` with a `QueryBuilderSelect` to filter, sort, and paginate results:
 
-<CodeBlock title="main.go" language="go" snippet="query">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.query.go</include>
 
 The `QueryBuilderSelect` supports:
 
@@ -796,7 +792,7 @@ Use `RepositoryTx.Count(ttx, qb)` when the count must use an active transaction.
 
 Use `Preload()` to load related entities in separate queries. On `Read()` and `Query()`, preloads run as part of the lookup; on `Create()` and `Update()`, preloads run in a follow-up reload after the write succeeds. Preloads support all relationship types: HasOne, HasMany, BelongsTo, and ManyToMany.
 
-<CodeBlock title="main.go" language="go" snippet="query preload">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.query-preload.go</include>
 
 ### Nested Preloads
 
@@ -829,7 +825,7 @@ During `Create()`, `sqlr` performs that post-create reload when you request `Que
 
 Pass conditions to `Preload()` to filter which related entities are loaded:
 
-<CodeBlock title="main.go" language="go" snippet="query preload condition">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.query-preload-condition.go</include>
 
 ## Eager Loading with Joins
 
@@ -837,7 +833,7 @@ Use `LeftJoin()` or `InnerJoin()` to load related entities via SQL JOINs. Joins 
 
 ### Joins on Query
 
-<CodeBlock title="main.go" language="go" snippet="query join">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.query-join.go</include>
 
 `QueryBuilderSelect.DefaultJoin(joinType, relation, conditions...)` adds a fallback join. It supports `sqlc.JoinLeft` and `sqlc.JoinInner`, with optional ON conditions. Use it when framework code needs a relation but application code can define that join:
 
@@ -853,13 +849,13 @@ The first default for a relation wins, including its join type and ON conditions
 
 Joins can also be used with `Read()` to load relations alongside a single entity lookup:
 
-<CodeBlock title="main.go" language="go" snippet="read with join">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.read-with-join.go</include>
 
 ### Join Conditions
 
 Pass conditions to restrict the joined rows:
 
-<CodeBlock title="main.go" language="go" snippet="query join condition">{Auto}</CodeBlock>
+<include lang="go" meta='title="main.go"'>/_code/how-to/databases-sql/src/sqlr/auto/main.query-join-condition.go</include>
 
 ## Error Handling
 
@@ -889,21 +885,21 @@ You can also use `sqlr` to load typed database fixtures through the gosoline `fi
 
 Use `FixtureEntity()` when you want fixture values with explicit primary keys and timestamps:
 
-<CodeBlock title="integration_test.go" language="go" snippet="fixture entities">{Fixtures}</CodeBlock>
+<include lang="go" meta='title="integration_test.go"'>/_code/how-to/databases-sql/src/sqlr/fixtures/integration_test.fixture-entities.go</include>
 
-<CodeBlock title="integration_test.go" language="go" snippet="named fixtures">{Fixtures}</CodeBlock>
+<include lang="go" meta='title="integration_test.go"'>/_code/how-to/databases-sql/src/sqlr/fixtures/integration_test.named-fixtures.go</include>
 
 Use `FixtureSetFactory()` to turn named fixtures into a gosoline fixture set factory backed by an `sqlr` repository:
 
-<CodeBlock title="integration_test.go" language="go" snippet="fixture set factory">{Fixtures}</CodeBlock>
+<include lang="go" meta='title="integration_test.go"'>/_code/how-to/databases-sql/src/sqlr/fixtures/integration_test.fixture-set-factory.go</include>
 
 Register that fixture set factory in your test suite or application setup:
 
-<CodeBlock title="integration_test.go" language="go" snippet="integration suite">{Fixtures}</CodeBlock>
+<include lang="go" meta='title="integration_test.go"'>/_code/how-to/databases-sql/src/sqlr/fixtures/integration_test.integration-suite.go</include>
 
 Then read the seeded entity in your test and assert that the preset IDs, timestamps, and associations were written as expected:
 
-<CodeBlock title="integration_test.go" language="go" snippet="fixture assertion">{Fixtures}</CodeBlock>
+<include lang="go" meta='title="integration_test.go"'>/_code/how-to/databases-sql/src/sqlr/fixtures/integration_test.fixture-assertion.go</include>
 
 Fixture writes preserve the explicit IDs and timestamps already present on your entities. Internally, `sqlr` creates fixtures with auto updates disabled, so seeded values are inserted as-is instead of being regenerated.
 

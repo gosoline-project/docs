@@ -1,12 +1,8 @@
 ---
-sidebar_position: 2
+sidebar:
+  order: 2
 title: Use loggers
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import MinimumLogger from "!!raw-loader!./src/minimal-logger/main.go";
-import LoggerConfig from "!!raw-loader!./src/config-logger/config.dist.yml";
-import ConfigLogger from "!!raw-loader!./src/config-logger/main.go";
 
 With gosoline, there are multiple ways to configure and use a logger.
 
@@ -14,7 +10,7 @@ With gosoline, there are multiple ways to configure and use a logger.
 
 One way to implement a logger is using log functions, without appealing to an external configuration:
 
-<CodeBlock showLineNumbers language="go" title="main.go">{MinimumLogger}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>/_code/how-to/logging/src/minimal-logger/main.go</include>
 
 Here, you:
 
@@ -30,11 +26,11 @@ If you have an application, you can create a logger from your app's configuratio
 
 First, configure your logger in your configuration. For example, in a config file:
 
-<CodeBlock showLineNumbers language="yml" title="config.dist.yml">{LoggerConfig}</CodeBlock>
+<include lang="yml" meta='title="config.dist.yml" lineNumbers'>/_code/how-to/logging/src/config-logger/config.dist.yml</include>
 
 Then, implement your logger alongside your application:
 
-<CodeBlock showLineNumbers language="go" title="main.go">{ConfigLogger}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>/_code/how-to/logging/src/config-logger/main.go</include>
 
 ## Conclusion
 
