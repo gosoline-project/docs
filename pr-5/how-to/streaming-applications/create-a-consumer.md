@@ -1,0 +1,254 @@
+# Create a consumer
+
+A consumer connects a configured input to your callback. Gosoline owns polling, decoding, acknowledgement, retries, health checks, metrics, tracing, and graceful shutdown; your callback owns the business operation.
+
+For a first walkthrough, see [Create a consumer](/docs/pr-5/getting-started/create-a-consumer/.md). This guide focuses on the current typed API and operational behavior.
+
+## Implement a typed callback[​](#implement-a-typed-callback "Direct link to Implement a typed callback")
+
+Define the expected message body and implement `stream.ConsumerCallback[M]`:
+
+```
+type OrderCreated struct {
+
+    Id    string  `json:"id"`
+
+    Total float64 `json:"total"`
+
+}
+
+
+
+func (c *consumer) Consume(ctx context.Context, order OrderCreated, attributes map[string]string) (bool, error) {
+
+    c.logger.Info(ctx, "received order %s with total %.2f", order.Id, order.Total)
+
+
+
+    return true, nil
+
+}
+```
+
+The boolean reports whether processing succeeded. The input determines how that result affects acknowledgement or redelivery:
+
+| Return       | Meaning                                                                            |
+| ------------ | ---------------------------------------------------------------------------------- |
+| `true, nil`  | Processing succeeded                                                               |
+| `false, nil` | Processing did not complete; use native redelivery or the configured retry handler |
+| `false, err` | Processing failed; record the error and retry where configured                     |
+
+Only return `true` after the business operation is complete. The boolean controls the retry decision independently of the error: `true, err` logs the error but still reports success.
+
+| Input                  | Failure behavior                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| SQS / SNS subscription | Failed messages are not deleted and can be redelivered after their visibility timeout. Native retry is selected automatically.      |
+| Kafka                  | Records handed to processing are committed even if processing fails. Enable the consumer retry handler for application failures.    |
+| Kinesis                | Records handed to processing are checkpointed even if processing fails. Enable the consumer retry handler for application failures. |
+| Redis list             | Reading removes the message from the list. Enable the consumer retry handler for application failures.                              |
+| File / in-memory       | Failed messages are not automatically read again. Enable the consumer retry handler when retries are needed.                        |
+
+For an input without native retry, configure `stream.consumer.<name>.retry.enabled: true`; the default retry transport is SQS. This writes failed callback messages to a separate retry queue rather than rewinding the original transport. Retry publication errors are logged; publication is not atomic with Kafka commits or Kinesis checkpoints. Model-selection and decoding errors return before this normal callback-retry path, so enabling retries is not a dead-letter guarantee for malformed messages. Make business operations idempotent because transport redelivery and retries can repeat them.
+
+## Run the consumer[​](#run-the-consumer "Direct link to Run the consumer")
+
+For one callback named `default`, use `application.RunConsumer`:
+
+```
+application.RunConsumer(newConsumer,
+
+    application.WithConfigFile("config.dist.yml", "yml"),
+
+)
+```
+
+The generic type is inferred from the factory's `stream.ConsumerCallback[OrderCreated]` return type.
+
+For several consumers accepting the same model, use `application.RunConsumers` with a `stream.ConsumerCallbackMap[M]`. Each map key must have a matching `stream.consumer.<name>` configuration. Prefer separate applications when callbacks process unrelated model types; use untyped consumers only when message attributes genuinely select among several models.
+
+## Connect the consumer to an input[​](#connect-the-consumer-to-an-input "Direct link to Connect the consumer to an input")
+
+The example maps consumer `default` to input `orders`:
+
+config.dist.yml
+
+```
+app:
+
+  env: dev
+
+  name: order-consumer
+
+
+
+stream:
+
+  consumer:
+
+    default:
+
+      input: orders
+
+      encoding: application/json
+
+
+
+  input:
+
+    orders:
+
+      type: file
+
+      filename: events.jsonl
+```
+
+The file input expects one serialized `stream.Message` per line, not a bare domain object:
+
+events.jsonl
+
+```
+{"body":"{\"id\":\"order-1001\",\"total\":42.5}"}
+
+{"body":"{\"id\":\"order-1002\",\"total\":18.75}"}
+```
+
+For SQS, only the input section changes:
+
+```
+stream:
+
+  consumer:
+
+    default:
+
+      input: orders
+
+
+
+  input:
+
+    orders:
+
+      type: sqs
+
+      queue_id: orders
+```
+
+## Complete example[​](#complete-example "Direct link to Complete example")
+
+main.go
+
+```
+package main
+
+
+
+import (
+
+	"context"
+
+
+
+	"github.com/justtrackio/gosoline/pkg/application"
+
+	"github.com/justtrackio/gosoline/pkg/cfg"
+
+	"github.com/justtrackio/gosoline/pkg/log"
+
+	"github.com/justtrackio/gosoline/pkg/stream"
+
+)
+
+
+
+type OrderCreated struct {
+
+	Id    string  `json:"id"`
+
+	Total float64 `json:"total"`
+
+}
+
+
+
+type consumer struct {
+
+	logger log.Logger
+
+}
+
+
+
+func main() {
+
+	application.RunConsumer(newConsumer,
+
+		application.WithConfigFile("config.dist.yml", "yml"),
+
+	)
+
+}
+
+
+
+func newConsumer(_ context.Context, _ cfg.Config, logger log.Logger) (stream.ConsumerCallback[OrderCreated], error) {
+
+	return &consumer{logger: logger}, nil
+
+}
+
+
+
+func (c *consumer) Consume(ctx context.Context, order OrderCreated, _ map[string]string) (bool, error) {
+
+	c.logger.Info(ctx, "received order %s with total %.2f", order.Id, order.Total)
+
+
+
+	return true, nil
+
+}
+```
+
+Run it from `docs/docs/how-to/streaming-applications/src/consumer`:
+
+```
+go run .
+```
+
+The file input finishes at EOF after its workers finish processing both records, so the example application exits by itself.
+
+The commands use the Gosoline version pinned in the docs repository's `go.mod`. To exercise an unreleased branch in a sibling `gosoline` checkout, create a local Go workspace from the docs repository root with `go work init . ../gosoline` (or add both modules to an existing workspace). Then run the example from its directory. Keep the local workspace out of commits.
+
+## Concurrency and batches[​](#concurrency-and-batches "Direct link to Concurrency and batches")
+
+Configure concurrency on **the input**, using `stream.input.<name>.runner_count`; the default is `1`. The callback instance is shared by its runners, so its state and downstream operations must be safe for concurrent use.
+
+| Input                    | Concurrency and ordering                                                                                                                                                      |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SQS / SNS subscription   | Each runner receives a batch and processes its messages sequentially. Multiple runners can process different batches concurrently.                                            |
+| Kafka                    | The runner count limits concurrent record callbacks. `processing_mode: ordered` preserves processing order within each partition; `unordered` is the default.                 |
+| Kinesis                  | The runner count limits concurrent record callbacks across owned shards. `processing_mode: ordered` preserves processing order within each shard; `unordered` is the default. |
+| File / Redis / in-memory | The runner count controls concurrent callback workers; there is no `processing_mode` setting.                                                                                 |
+
+Kafka and Kinesis ordered mode still allows concurrency across partitions or shards. With several unordered runners, records from the same partition or shard may execute concurrently.
+
+Callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
+
+## Graceful processing[​](#graceful-processing "Direct link to Graceful processing")
+
+`stream.consumer.<name>.grace_time` defaults to `10s` and defines one shared processing deadline after shutdown begins, covering both the primary input and the retry input. Inputs stop fetching new messages; already fetched or admitted work may still reach the callback while draining. When the deadline expires, in-flight callback contexts are canceled.
+
+Final transport operations have separate windows:
+
+* SQS/SNS input `grace_time` allows final deletions after cancellation (default `10s`).
+* Kafka input `grace_time` allows final offset commits after processing finishes (default `10s`); see [Kafka shutdown](/docs/pr-5/how-to/kafka/general/.md#shutdown).
+* Kinesis input `release_delay` allows final checkpoint persistence, shard release, and client deregistration after processing ends (default `5s`).
+* Consumer `retry.grace_time` allows final retry writes; it defaults from `kernel.kill_timeout`.
+
+These windows rely on cooperative cancellation. Keep callback work bounded, pass its context to downstream calls, and give the kernel and deployment shutdown timeouts enough room for processing and final transport operations. Cancellation does not undo an operation or guarantee redelivery: the transport rules above still apply.
+
+## What's next?[​](#whats-next "Direct link to What's next?")
+
+* [Test your consumer](/docs/pr-5/getting-started/testing/test-your-consumer/.md)
+* [Use the producer daemon](/docs/pr-5/how-to/streaming-applications/use-the-producer-daemon/.md)
