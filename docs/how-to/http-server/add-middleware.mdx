@@ -1,5 +1,6 @@
 ---
-sidebar_position: 5
+sidebar:
+  order: 5
 title: Add middleware
 ---
 
@@ -163,16 +164,13 @@ See [Serve a frontend](/how-to/http-server/serve-a-frontend/) for full details.
 
 ## Complete example
 
-import CodeBlock from '@theme/CodeBlock';
-import Main from "!!raw-loader!./src/middleware/main.go";
-import Config from "!!raw-loader!./src/middleware/config.dist.yml";
 
 <details>
 <summary>main.go</summary>
-<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/middleware/main.go</include>
 </details>
 
 <details>
 <summary>config.dist.yml</summary>
-<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{Config}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml" lineNumbers'>./src/middleware/config.dist.yml</include>
 </details>

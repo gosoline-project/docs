@@ -3,10 +3,13 @@
 
 # Production
 /build
+/dist
 
 # Generated files
 .docusaurus
 .cache-loader
+.blume
+.astro
 
 # Misc
 .DS_Store
@@ -16,3 +19,4 @@
 .env.production.local
 
 npm-debug.log*
+.blume-verify/

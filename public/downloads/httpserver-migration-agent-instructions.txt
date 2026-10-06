@@ -1,0 +1,204 @@
+Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.6.4, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
+
+Scope discovery:
+
+- Find all imports of github.com/justtrackio/gosoline/pkg/httpserver.
+- Find all imports of github.com/justtrackio/gosoline/pkg/httpserver/auth.
+- Find all route definer functions with this signature: func(context.Context, cfg.Config, log.Logger) (*httpserver.Definitions, error).
+- Find all application.RunHttpDefaultServer(...) calls.
+- Find all httpserver.New(...) or httpserver.NewWithSettings(...) module registrations from the old package.
+- Find all &httpserver.Definitions{} allocations and Definitions.Group, Definitions.Use, GET, POST, PUT, PATCH, DELETE, OPTIONS, or Handle calls.
+- Find all old handler helpers: CreateHandler, CreateJsonHandler, CreateQueryHandler, CreateUriHandler, CreateMultipleBindingsHandler, CreateRawHandler, CreateReaderHandler, CreateSseHandler, CreateStreamHandler, and CreateDownloadHandler.
+- Find all old handler interfaces: HandlerWithoutInput, HandlerWithInput, HandlerWithMultipleBindings, and HandlerWithStream.
+- Find all uses of httpserver.Request, request.Body, request.Params, request.Url, request.Header, request.Cookies, request.Method, and request.ClientIp.
+- Find all uses of GetStringFromRequest and GetUintFromRequest.
+- Find all uses of old response constructors and fields, especially NewResponse(body, contentType, statusCode, header), ContentTypeText, ContentTypeJson, ContentTypeHtml, ContentTypeProtobuf, Response.AddHeader, Response.WithBody, and Response.WithContentType.
+- Find all HTTP server test setup helpers that return an old httpserver.Definer or implement SetupApiDefinitions.
+- Find endpoints that accept large request bodies and check whether they need a v0.6.4 max_body_bytes override.
+- Find tests or clients that assert internal error response bodies, binding error status codes, CORS partial-origin matching, health-check error details, or profiling listen addresses.
+- Find all router.UseFactory calls and custom httpserver.MiddlewareFactory implementations, because v0.6.4 middleware factories receive server settings as a fourth argument.
+- Find any environment-specific need to expose internal 5xx error details, which now requires httpserver.<name>.errors.privacy: public.
+- Find old global CORS config keys: api_cors_allowed_origin_pattern, api_cors_allowed_headers, and api_cors_allowed_methods.
+
+Do not start with a global import replacement. First classify each usage, because the old package also contained auth and helper APIs that do not map one-to-one to the standalone package.
+
+Migration order:
+
+1. Add the new dependency with: go get github.com/gosoline-project/httpserver@v0.6.4
+2. Migrate server startup and router factories.
+3. Migrate route definitions from returned Definitions to mutating *Router.
+4. Migrate middleware registration.
+5. Migrate auth middleware and auth configuration.
+6. Migrate handlers route group by route group.
+7. Consolidate old route-specific handlers into domain or route-group handlers where they share dependencies.
+8. Migrate request binding and raw request access.
+9. Migrate responses and handled errors.
+10. Review v0.6.4 runtime behavior: request body limits, binding errors, configurable error privacy, CORS origin matching, health responses, and profiling bind address.
+11. Migrate tests.
+12. Run formatting and tests.
+
+Keep each step small enough that the codebase remains understandable after every edit.
+
+Server startup transformation:
+
+- Replace application.RunHttpDefaultServer(DefineRouter, options...) with httpserver.RunDefaultServer(DefineRouter, options...).
+- Replace old definer signatures from func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger) (*httpserver.Definitions, error) to func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error.
+- Replace application.WithModuleFactory("http", httpserver.New("default", DefineRouter)) with application.WithModuleFactory("http", httpserver.NewServer("default", DefineRouter)).
+- If the application wraps the old httpserver.Definer in helper functions, update those helper types to accept or return httpserver.RouterFactory.
+
+Route definition transformation:
+
+- Replace allocations of &httpserver.Definitions{} with use of the router argument.
+- Preserve all route paths, methods, group prefixes, and middleware order.
+- Do not normalize or redesign paths during the migration.
+- Convert definitions.Use(...) to router.Use(...).
+- Convert definitions.Group("/api") to router.Group("/api").
+- Convert returned definitions to return nil.
+- Convert error returns from return nil, err to return err in router factories.
+- Convert custom UseFactory callbacks from func(ctx, config, logger) (gin.HandlerFunc, error) to func(ctx, config, logger, settings *httpserver.Settings) (gin.HandlerFunc, error).
+- Use settings.Name inside middleware factories when middleware needs the current server name.
+- For package CORS middleware, prefer router.UseFactory(httpserver.CorsFactory). If constructing it manually, call httpserver.Cors(config, "<serverName>").
+
+Handler consolidation instructions:
+
+- Old code commonly creates one handler per route. When those handlers share dependencies or belong to the same domain, consolidate them into one route-group handler.
+- Prefer one handler type per cohesive route group, with one method per endpoint.
+- Register route-group handlers with router.Group(...).HandleWith(httpserver.With(NewHandler, func(r *httpserver.Router, h *Handler) { ... })).
+- Only keep separate handler types if their dependencies, lifecycle, or domain responsibilities are genuinely different.
+
+Handler signature transformations:
+
+- CreateHandler(handler) where handler.Handle(ctx, request) ignores input becomes BindN(h.Method) with func(ctx context.Context) (O, error).
+- CreateJsonHandler(handler) becomes Bind(h.Method) with func(ctx context.Context, input *Input) (O, error) and json tags on the input struct.
+- CreateQueryHandler(handler) becomes Bind(h.Method) with func(ctx context.Context, input *Input) (O, error) and form tags on the input struct.
+- CreateUriHandler(handler) becomes Bind(h.Method) with func(ctx context.Context, input *Input) (O, error) and uri tags on the input struct.
+- CreateMultipleBindingsHandler(handler) becomes Bind(h.Method) with func(ctx context.Context, input *Input) (O, error) and combined tags, or explicit Gin binders if necessary.
+- CreateRawHandler(handler) becomes BindNR(h.Method) with func(ctx context.Context, req *http.Request) (O, error) and explicit req.Body reading.
+- CreateReaderHandler(handler) becomes BindNR(h.Method) with func(ctx context.Context, req *http.Request) (O, error) and direct req.Body use.
+- CreateSseHandler(handler) becomes BindSse or BindSseN.
+The ordinary result type O can be any Go value. Return it directly. See the response migration rules and the dedicated response customization section below.
+
+Replace old GetInput methods with input struct arguments. Old code that returns &Input{} from GetInput and then reads request.Body.(*Input) should become a method that directly accepts input *Input.
+
+Request data migration rules:
+
+- request.Body.(*Input) becomes handler input argument input *Input.
+- GetStringFromRequest(request, "id") becomes a string field tagged `uri:"id" binding:"required"`.
+- GetUintFromRequest(request, "id") becomes a uint field tagged `uri:"id" binding:"required"`.
+- request.Url.RawQuery becomes req.URL.RawQuery via BindR or BindNR.
+- request.Url.Path becomes req.URL.Path via BindR or BindNR.
+- request.Method becomes req.Method via BindR or BindNR.
+- request.Header becomes req.Header via BindR or BindNR.
+- request.Cookies becomes req.Cookies() via BindR or BindNR.
+- request.ClientIp becomes httpserver.ResolveClientIP(req) via BindR or BindNR.
+
+Prefer typed binding over manual request inspection. Use BindR or BindNR only when the handler truly needs the raw *http.Request, for example to read the body directly or resolve the client IP.
+
+In v0.6.4, Bind and BindSse binding or validation failures are client errors and return 400 Bad Request through the default error middleware. Update tests that expected 500 for malformed input.
+
+Response migration rules:
+
+- Bind[I, O] uses func(ctx context.Context, input *I) (O, error). BindR[I, O] uses func(ctx context.Context, req *http.Request, input *I) (O, error). BindN[O] uses func(ctx context.Context) (O, error). BindNR[O] uses func(ctx context.Context, req *http.Request) (O, error).
+- A typed result can implement StatusCode() int or Header() http.Header. See /how-to/http-server/build-an-http-service#customizing-responses for status and header rules.
+- NewResponse("text", ContentTypeText, code, header) becomes NewTextResponse(text, WithStatusCode(code), WithHeaders(header)).
+- NewResponse([]byte(...), contentType, code, header) becomes NewResponse(WithBody(...), WithHeader("Content-Type", contentType), WithStatusCode(code), WithHeaders(header)).
+- A typed result that is a httpserver.Response bypasses response negotiation. Use it only when the handler must control the response directly.
+- Keep NewTextResponse for a fixed text representation, NewStatusResponse for bodyless responses that must bypass negotiation (for example, to preserve 204 for an unsupported Accept value), and NewResponse options for raw bytes or a required media type.
+- Do not use Header() to replace the negotiated Content-Type. The response negotiator sets that header.
+- The Response interface exposes ContentType(), Body(), Header(), and StatusCode(). Do not access fields such as resp.StatusCode or resp.Header in tests.
+- For errors, return the zero value for O and the error. Use NewErrorWithStatus(status, err) when the error must set an explicit status.
+- Custom error-body callbacks use func(statusCode int, err error) any. Return ordinary values for negotiation or a full Response to bypass it.
+- The v0.6.4 default error handler returns the actual error message for 4xx responses and returns {"err":"internal server error"} for 5xx responses.
+- The 5xx behavior is controlled by httpserver.<name>.errors.privacy. The default private value hides internal details. Set privacy to public only when exposing internal 5xx messages is intentional.
+
+Auth migration rules:
+
+- Replace old auth imports from github.com/justtrackio/gosoline/pkg/httpserver/auth with github.com/gosoline-project/httpserver/auth when the old usage maps to a standalone auth helper.
+- Import the standalone auth package separately from github.com/gosoline-project/httpserver.
+- Auth config is scoped to the HTTP server name under httpserver.<name>.auth. RunDefaultServer uses the name default. NewServer("admin", ...) uses the name admin.
+- Pass the same server name to auth constructors that read config, for example auth.NewConfigKeyHandler(config, logger, "default", provider), auth.NewBasicAuthHandler(config, logger, "default"), auth.NewTokenBearerHandler(config, logger, "default", provider), and auth.NewJwtAuthHandler(config, "default").
+- Migrate old api_auth_keys to httpserver.<name>.auth.keys.
+- Migrate old api_auth_basic_users to httpserver.<name>.auth.basic.users.
+- Migrate old api_auth_bearer_id_header to httpserver.<name>.auth.bearer.id_header.
+- Migrate old api_auth_bearer_token_header to httpserver.<name>.auth.bearer.token_header.
+- Keep JWT settings under httpserver.<name>.auth.jwt, and ensure signingSecret, issuer, and expireDuration match the application behavior.
+- Migrate configured API-key auth to auth.NewConfigKeyHandler or auth.NewConfigKeyAuthenticator with an appropriate provider: ProvideValueFromHeader, ProvideValueFromQueryParam, or ProvideValueFromUriPath.
+- Migrate Basic Auth to auth.NewBasicAuthHandler or auth.NewBasicAuthAuthenticator.
+- Migrate bearer-token auth to auth.NewTokenBearerHandler or auth.NewTokenBearerAuthenticator and preserve the provider's token lookup behavior.
+- Migrate JWT auth to auth.NewJwtAuthHandler or auth.NewJWTAuthAuthenticator. The standalone JWT authenticator validates Authorization: Bearer <token> and requires an email claim for the auth subject.
+- When using router.UseFactory, prefer the settings-aware auth middleware factories so the current server name is used automatically: auth.ConfigKeyHandlerFactory(provider), auth.BasicAuthHandlerFactory, auth.TokenBearerHandlerFactory(provider), and auth.JwtAuthHandlerFactory.
+- Use auth.NewChainHandler for routes that accept multiple auth methods. Use auth.OnlyConfiguredAuthenticators with httpserver.<name>.auth.allowedAuthenticators if the enabled methods are configurable.
+- Successful standalone authenticators attach an auth.Subject to the request context. If handlers read old auth data from context.Context, update them to use auth.GetSubject(ctx), or preserve the old context values in application-owned middleware if downstream code requires them.
+- Preserve accepted credentials, rejection status codes, response bodies, and context values used by downstream handlers.
+- Basic Auth unauthorized responses use the configured gosoline app identity name as the Basic realm.
+- The old Google auth helper was not ported to the standalone module. If the application uses NewConfigGoogleHandler or NewConfigGoogleAuthenticator, keep that logic in application-owned Gin middleware or an application-owned auth package.
+- Stop and ask for guidance if the old auth logic depends on package internals that are not obvious from the application code or if Google auth behavior cannot be preserved safely.
+
+CORS migration rules:
+
+- Move api_cors_allowed_origin_pattern to httpserver.<name>.cors.allowed_origin_pattern.
+- Move api_cors_allowed_headers to httpserver.<name>.cors.allowed_headers.
+- Move api_cors_allowed_methods to httpserver.<name>.cors.allowed_methods.
+- RunDefaultServer uses the server name default. NewServer("admin", ...) uses the server name admin.
+- Prefer router.UseFactory(httpserver.CorsFactory) so the current server name is used automatically.
+- If constructing the middleware manually, pass the server name explicitly: httpserver.Cors(config, "default").
+- CORS allowed_origin_pattern is matched against the full Origin value. Do not rely on partial regex matches; use an explicit pattern that matches the complete allowed origin set.
+
+Test migration rules:
+
+- Replace SetupApiDefinitions() httpserver.Definer with SetupHttpServerRouter() httpserver.RouterFactory.
+- Instantiate the new route-group handler directly in handler unit tests.
+- Call handler methods directly for business logic tests.
+- Assert response.StatusCode(), response.Header(), and response.Body() instead of old response fields.
+- Keep integration or routing tests for binding, middleware, and path behavior.
+
+Configuration and runtime behavior rules for v0.6.4:
+
+- The main server configuration lives under httpserver.<name>. RunDefaultServer uses the name default.
+- The server adds /health automatically. Unhealthy modules are reported as "unhealthy"; underlying error messages are logged but not returned in the response body.
+- Incoming request bodies are limited by httpserver.<name>.max_body_bytes. The default is 10485760 bytes (10 MiB). Set it to 0 to disable the limit, or raise it when the old service intentionally accepted larger bodies.
+- The body limit is applied after decompression, so compressed uploads are limited by their decompressed size.
+- Internal 5xx error details are hidden by default and with httpserver.<name>.errors.privacy: private. Use privacy: public only when clients should see internal 5xx messages.
+- CORS settings live under httpserver.<name>.cors. The allowed_origin_pattern is matched against the full Origin value. Do not rely on partial regex matches; use an explicit pattern that matches the complete allowed origin set.
+- Profiling is configured under profiling and, when enabled, listens on 127.0.0.1:<profiling.api.port>.
+- Keep compression exclusions for SSE endpoints; gzip buffering breaks real-time SSE streams.
+
+Validation checklist:
+
+- No application code still imports github.com/justtrackio/gosoline/pkg/httpserver, unless intentionally left for a separate migration step.
+- No application code imports github.com/justtrackio/gosoline/pkg/httpserver/auth, unless Google auth or custom auth behavior was explicitly deferred.
+- No route definer returns *httpserver.Definitions.
+- No &httpserver.Definitions{} allocations remain.
+- No old Create*Handler calls remain.
+- No old handler interfaces remain in application code.
+- No code reads old httpserver.Response fields directly.
+- All routes from the old router are present in the new router with the same HTTP method and path.
+- All middleware is registered in the same effective order.
+- Auth config has been moved below httpserver.<name>.auth and auth constructors receive the matching server name.
+- CORS config has been moved from api_cors_* keys to httpserver.<name>.cors.* and package CORS registration uses CorsFactory or Cors(config, name).
+- All request binding tags still match the route parameters, query parameters, and body fields expected by clients.
+- All old request.ClientIp usages are replaced with ResolveClientIP(req) in BindR or BindNR handlers.
+- All handled client errors still return the intended HTTP status code.
+- Large-body endpoints have an explicit max_body_bytes setting if the v0.6.4 default 10 MiB limit is too small.
+- Tests expecting binding failures now assert 400 Bad Request.
+- Tests expecting internal error details in 5xx JSON responses now assert the sanitized default/private body, configure httpserver.<name>.errors.privacy: public, or install a custom error handler intentionally.
+- CORS tests use full-origin matches and do not depend on partial regex matching.
+- Health-check tests do not expect underlying module error strings in the HTTP response.
+- Profiling tests or deployment checks expect the profiling API on loopback only.
+- Tests compile and cover at least one route using URI binding, one route using JSON binding, and one middleware-protected route if applicable.
+
+Commands to run:
+
+- Run the repository's normal formatting and test commands.
+- For a typical Go application, run: gofumpt -w . && go test ./...
+- If the repository uses gosoline's fixture or integration build tags, use the repository-specific commands instead, for example: go test -tags fixtures,integration ./...
+- If tests fail, fix compile errors first, then binding and response behavior regressions.
+- Do not change public route paths, request field names, or status codes merely to make tests pass unless the migration explicitly requires it.
+
+Stop conditions:
+
+- Stop and ask for human guidance if route behavior is ambiguous and there are no tests or callers to confirm it.
+- Stop and ask for human guidance if old auth code depends on shared package internals, including Google auth behavior, that cannot be reproduced safely.
+- Stop and ask for human guidance if multiple old route-specific handlers have conflicting initialization logic and it is unclear whether they should be consolidated.
+- Stop and ask for human guidance if a route depends on Gin-specific behavior and there is no clear equivalent without changing behavior.
+- Stop and ask for human guidance if the migration would require unrelated application refactoring.

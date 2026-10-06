@@ -1,11 +1,8 @@
 ---
-sidebar_position: 10
+sidebar:
+  order: 10
 title: Build a CLI tool
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import Main from "!!raw-loader!./src/cli/main.go";
-import ConfigDist from "!!raw-loader!./src/cli/config.dist.yml";
 
 The `pkg/cli` package lets you build multi-command CLI tools that run inside the gosoline application lifecycle, giving each command access to the same config, logger, and kernel modules as any other gosoline application.
 
@@ -234,14 +231,14 @@ $ myapp version
 <details>
 <summary>main.go</summary>
 
-<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/cli/main.go</include>
 
 </details>
 
 <details>
 <summary>config.dist.yml</summary>
 
-<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{ConfigDist}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml" lineNumbers'>./src/cli/config.dist.yml</include>
 
 </details>
 

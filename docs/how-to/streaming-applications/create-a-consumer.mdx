@@ -1,12 +1,8 @@
 ---
-sidebar_position: 3
+sidebar:
+  order: 3
 title: Create a consumer
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import Main from "!!raw-loader!./src/consumer/main.go";
-import Config from "!!raw-loader!./src/consumer/config.dist.yml";
-import Events from "!!raw-loader!./src/consumer/events.jsonl";
 
 A consumer connects a configured input to your callback. Gosoline owns polling, decoding, acknowledgement, retries, health checks, metrics, tracing, and graceful shutdown; your callback owns the business operation.
 
@@ -67,11 +63,11 @@ For several consumers accepting the same model, use `application.RunConsumers` w
 
 The example maps consumer `default` to input `orders`:
 
-<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{Config}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml" lineNumbers'>./src/consumer/config.dist.yml</include>
 
 The file input expects one serialized `stream.Message` per line, not a bare domain object:
 
-<CodeBlock showLineNumbers language="json" title="events.jsonl">{Events}</CodeBlock>
+<include lang="json" meta='title="events.jsonl" lineNumbers'>./src/consumer/events.jsonl</include>
 
 For SQS, only the input section changes:
 
@@ -89,7 +85,7 @@ stream:
 
 ## Complete example
 
-<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/consumer/main.go</include>
 
 Run it from `docs/docs/how-to/streaming-applications/src/consumer`:
 

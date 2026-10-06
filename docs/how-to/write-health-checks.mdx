@@ -2,12 +2,6 @@
 title: Implement health checks
 ---
 
-import CodeBlock from '@theme/CodeBlock';
-import ConfigDist from "!!raw-loader!./src/health-check/config.dist.yml";
-import Module from "!!raw-loader!./src/health-check/module.go";
-import Main from "!!raw-loader!./src/health-check/main.go";
-import Output from "!!raw-loader!./src/health-check/output.txt";
-
 You can check the health of a running gosoline application. 
 
 In this guide, you'll learn how to:
@@ -82,7 +76,7 @@ In `module.go`, add the following code:
 <details>
 <summary>module.go</summary>
 
-<CodeBlock showLineNumbers language="go">{Module}</CodeBlock>
+<include lang="go" meta='lineNumbers'>./src/health-check/module.go</include>
 
 </details>
 
@@ -90,10 +84,9 @@ Now, you'll walkthrough this file in detail to learn how it works.
 
 First, you declare `healthy`, a boolean to store the health of the module:
 
-```go title=module.go
+```go title=module.go {3}
 type HelloWorldModule struct {
 	logger log.Logger
-  // highlight-next-line
 	healthy atomic.Bool
 }
 ```
@@ -108,14 +101,12 @@ func (h *HelloWorldModule) IsHealthy(ctx context.Context) (bool, error) {
 
 Next, you add a timer that simulates some work that has to be done before the module is considered healthy, then set `healthy` to `true`:
 
-```go title=module.go
+```go title=module.go {2-5}
 func (h *HelloWorldModule) Run(ctx context.Context) error {
-  // highlight-start
 	timer := clock.NewRealTimer(time.Second * 3)
 	<-timer.Chan()
 
 	h.healthy.Store(true)
-	// highlight-end
 
 	h.logger.Info(ctx, "Hello World")
 
@@ -130,7 +121,7 @@ Now, add your app's `main.go` file:
 <details>
 <summary>main.go</summary>
 
-<CodeBlock showLineNumbers language="go">{Main}</CodeBlock>
+<include lang="go" meta='lineNumbers'>./src/health-check/main.go</include>
 
 </details>
 
@@ -139,17 +130,17 @@ Then, add your app's configuration, including health-checks:
 <details>
 <summary>config.dist.yml.go</summary>
 
-<CodeBlock showLineNumbers language="yaml">{ConfigDist}</CodeBlock>
+<include lang="yaml" meta='lineNumbers'>./src/health-check/config.dist.yml</include>
 
 </details>
 
 And when you run your app, you'll see something like the following output:
 
-<CodeBlock showLineNumbers language="text" title="stdout">{Output}</CodeBlock>
+<include lang="text" meta='title="stdout" lineNumbers'>./src/health-check/output.txt</include>
 
 Note that the kernel waits the `wait_interval` and checks the health of the application's modules several times:
 
-```stdout
+```text
 12:34:26.605 kernel  info    waiting for module hello-world in stage 2048 to get healthy  application: hello-world, group: health-check
 12:34:27.605 kernel  info    waiting for module hello-world in stage 2048 to get healthy  application: hello-world, group: health-check
 12:34:28.606 kernel  info    waiting for module hello-world in stage 2048 to get healthy  application: hello-world, group: health-check

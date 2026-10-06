@@ -1,12 +1,8 @@
 ---
-sidebar_position: 3
+sidebar:
+  order: 4
 title: Stream Consumer Lifecycle
 ---
-
-import AgentInstructions from "!!raw-loader!./src/stream-consumer-lifecycle-migration-agent-instructions.txt";
-import { CopyToClipboardButton } from '../components.jsx';
-
-# Migrating to the Callback-Based Stream Consumer Lifecycle
 
 This guide covers the breaking stream changes introduced in Gosoline **v0.66.0** by commit [`04b54462`](https://github.com/justtrackio/gosoline/commit/04b54462dfb9cfa789577d3972d6098cd7d69860), **stream: unify input processing and shutdown**. Follow this guide when upgrading from an earlier release to v0.66.0 or later.
 
@@ -306,4 +302,6 @@ The application migration instructions below flag these integrations for separat
 
 Copy the prepared instructions to give an AI agent an operational migration task. They include discovery, configuration mappings, behavior decisions, validation, and stop conditions.
 
-<CopyToClipboardButton text={AgentInstructions} label="Copy AI migration instructions" />
+[Download the migration instructions](/downloads/stream-consumer-lifecycle-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
+
+<include lang="text" meta='title="AI migration instructions"'>./src/stream-consumer-lifecycle-migration-agent-instructions.txt</include>

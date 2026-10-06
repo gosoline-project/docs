@@ -1,12 +1,8 @@
 ---
-sidebar_position: 1
+sidebar:
+  order: 1
 title: Test your consumer
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import ConfigDist from "!!raw-loader!./src/integration-test-consumer/config.dist.yml";
-import Consumer from "!!raw-loader!./src/integration-test-consumer/consumer.go";
-import ConsumerTest from "!!raw-loader!./src/integration-test-consumer/consumer_test.go";
 
 In this tutorial, you'll create an integration test for a message queue consumer that reads from an input and writes to an output.
 
@@ -17,14 +13,14 @@ This tutorial tests a minimal application with the following files:
 <details>
 <summary>config.dist.yml</summary>
 
-<CodeBlock showLineNumbers language="yaml">{ConfigDist}</CodeBlock>
+<include lang="yaml" meta='lineNumbers'>./src/integration-test-consumer/config.dist.yml</include>
 
 </details>
 
 <details>
 <summary>consumer.go</summary>
 
-<CodeBlock showLineNumbers language="go" title="consumer.go">{Consumer}</CodeBlock>
+<include lang="go" meta='title="consumer.go" lineNumbers'>./src/integration-test-consumer/consumer.go</include>
 
 </details>
 
@@ -36,7 +32,7 @@ Here is a preview of all the code you'll cover in this tutorial:
 <details>
 <summary>consumer_test.go</summary>
 
-<CodeBlock showLineNumbers language="go">{ConsumerTest}</CodeBlock>
+<include lang="go" meta='lineNumbers'>./src/integration-test-consumer/consumer_test.go</include>
 
 </details>
 
@@ -157,7 +153,7 @@ In your integration test case, you:
 5. You can also provide an `Assert` function which is executed at the end of the test case in which everything else could be checked. Here, you can access the test environment. In this example, we get the output stream and check if there was exactly one message written.
 
 
-:::info Technical Detail
+:::info[Technical Detail]
 
 In the sample configuration file we provided, the IO type was `sqs`. Even so, during the test, the type will automatically be set to `inMemory`. This is to bypass the need for external dependencies.
 

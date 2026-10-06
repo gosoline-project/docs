@@ -1,12 +1,8 @@
 ---
-sidebar_position: 2
+sidebar:
+  order: 2
 title: Create a consumer
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import ConfigDist from "!!raw-loader!./src/create-a-consumer/config.dist.yml";
-import Consumer from "!!raw-loader!./src/create-a-consumer/consumer.go";
-import Main from "!!raw-loader!./src/create-a-consumer/main.go";
 
 One of the primary use cases for gosoline is to create a message queue consumer. In this tutorial, you'll do just that!
 
@@ -47,7 +43,7 @@ In `consumer.go`, add the following code:
 <details>
 <summary>consumer.go</summary>
 
-<CodeBlock showLineNumbers language="go">{Consumer}</CodeBlock>
+<include lang="go" meta='lineNumbers'>./src/create-a-consumer/consumer.go</include>
 
 </details>
 
@@ -137,7 +133,7 @@ Together, these methods implement the `ConsumerCallback` interface.
 
 In `main.go`, add the following code:
 
-<CodeBlock showLineNumbers language="go" title="main.go">{Main}</CodeBlock>
+<include lang="go" meta='title="main.go" lineNumbers'>./src/create-a-consumer/main.go</include>
 
 Here, you execute your consumer. `RunConsumer()` expects a parameter of the type `stream.ConsumerCallbackFactory` to create and run the consumer. `NewConsumer()` implements this interface.
 
@@ -145,7 +141,7 @@ Here, you execute your consumer. `RunConsumer()` expects a parameter of the type
 
 In `config.dist.yml`, configure your server:
 
-<CodeBlock showLineNumbers language="yaml" title="config.dist.yml">{ConfigDist}</CodeBlock>
+<include lang="yaml" meta='title="config.dist.yml" lineNumbers'>./src/create-a-consumer/config.dist.yml</include>
 
 Here, you set some minimal configurations for your web server. By default, the gosoline expects that there is an input configured with the config key `stream.input.consumer`. This defines the input source. In this tutorial, you'll use a file as source with the configured filename, "events.json".
 

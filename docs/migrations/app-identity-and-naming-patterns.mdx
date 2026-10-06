@@ -1,9 +1,8 @@
 ---
-sidebar_position: 1
+sidebar:
+  order: 1
 title: App Identity and Naming Patterns
 ---
-
-# Migrating to Identity and Naming Patterns
 
 This guide details how to migrate your gosoline application to the new `Identity` system and dynamic resource naming.
 
@@ -205,7 +204,7 @@ The string representation of a `ModelId` (used for message routing attributes, e
 
 If this pattern is missing, calling `modelId.String()` will return an error.
 
-:::caution
+:::warning
 1. The `{modelId}` placeholder is **NOT** used in this pattern. The model name is automatically appended as the last dot-separated segment.
 2. Patterns may freely mix placeholders with static text and use any delimiter between placeholders. Only `{app.env}`, `{app.name}`, and `{app.tags.<key>}` placeholders are allowed.
 3. When parsing, each placeholder matches non-dot characters (`[^.]+`), and the model name is everything after the final dot.
@@ -731,7 +730,7 @@ func main() {
 }
 ```
 
-:::caution
+:::warning
 At a minimum, most applications will need to add back `WithConfigFile` since without it gosoline will not load any configuration file. If your application previously relied on the `--config` flag, you must also add `WithConfigFileFlag`.
 :::
 
