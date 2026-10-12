@@ -8,7 +8,7 @@ require (
 	github.com/gosoline-project/sqlc v0.4.1-0.20261006061447-28784fc09493
 	github.com/gosoline-project/sqlh v0.8.1-0.20261006061923-738a33257bd7
 	github.com/gosoline-project/sqlr v0.9.2-0.20261006061840-abbc53d44b5f
-	github.com/justtrackio/gosoline v0.66.2-0.20261005101741-c0a846fd1d7c
+	github.com/justtrackio/gosoline v0.66.4-0.20261008062420-55b7e90d8cea
 )
 
 require (
