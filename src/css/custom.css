@@ -39,3 +39,14 @@
 .blog-wrapper .container {
   max-width: 1600px;
 }
+
+/* Wrap documentation tables to keep them within the article width on narrow screens. */
+.theme-doc-markdown table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.theme-doc-markdown th,
+.theme-doc-markdown td {
+  overflow-wrap: anywhere;
+}

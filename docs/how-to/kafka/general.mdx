@@ -245,16 +245,50 @@ This is to have a single source of truth for the settings and because the Kafka 
 
 ### Metrics
 
-Enable Gosoline's metric collection and a writer to export Kafka metrics. The following are framework metric names; the exported naming/representation depends on the configured writer:
+Enable Gosoline's metric collection and a writer to export Kafka metrics. The tables list canonical authored names, instrument types, authored units, and attributes. They are not backend-exported spellings: OpenTelemetry prefixes the namespace with `gosoline.` and converts durations authored in milliseconds to seconds (for example, `kafka.consumer.process.duration` becomes `gosoline.kafka.consumer.process.duration` with unit `s`); CloudWatch PascalCases metric leaves, and Prometheus applies its own name, type, and unit suffixes. See the [metric schema reference](/reference/metric-schema/) for current exporter mappings.
 
-| Area | Metrics |
-|---|---|
-| Consumer | `RecordsConsumed`, `RecordsConsumedFailed`, `PollCount`, `PollDuration`, `ProcessDuration`, `CommitDuration`, `RebalanceCount`, `SleepDuration` |
-| Producer | `RecordsSent`, `RecordsSentFailed`, `ProduceBatchSize`, `ProduceDuration` |
-| Broker connectivity and throttling | `BrokerConnects`, `BrokerConnectsFailed`, `BrokerThrottleCount`, `BrokerThrottleTime` |
-| Wire batches | `ProduceBatchRecords`, `ProduceBatchBytes`, `ProduceBatchBytesCompressed`, `FetchBatchRecords`, `FetchBatchBytes`, `FetchBatchBytesCompressed` |
+For Kafka client metrics, `client.type` is `consumer` or `producer`, `client.name` is the configured input/output name, and `topic.name` is the resolved topic. The `error.type` value `{{default}}` marks the default outcome.
 
-Client/topic metrics use `ClientType`, `Client`, and `Topic` dimensions. Wire-batch metrics include both topic totals and partition-level values with `Partition`; broker metrics use `Broker`. `Client` is the configured input/output name. Consumed counts and committed offsets do not establish business success; correlate failure counts, retry logs, and commit errors. Monitor application consumer metrics alongside Kafka-specific metrics for decoding and callback failures.
+#### Consumer metrics (`kafka.consumer`)
+
+| Authored metric | Instrument; authored unit (OTel unit) | Attributes | Meaning |
+|---|---|---|---|
+| `kafka.consumer.consumed.messages` | Counter; count (OTel `{message}`) | `client.type`, `client.name`, `topic.name`, `error.type` | Records in the poll work set split into non-failed (`error.type="{{default}}"`) and callback-failed (`error.type="processing_failed"`) counts. These are disjoint outcomes and sum to the work-set size. On shutdown, records skipped before callback admission can fall in the default bucket, so it is not proof of successful business processing. |
+| `kafka.consumer.polls` | Counter; count (OTel `{poll}`) | `client.type`, `client.name`, `topic.name` | Poll calls counted when the following processing/commit path completes successfully; errors or cancellation that abort that path suppress the sample (successful shutdown drains may still count). |
+| `kafka.consumer.poll.duration` | Histogram; milliseconds (OTel `s`) | `client.type`, `client.name`, `topic.name` | Duration of a `poll()` request, recorded when the following processing/commit path completes successfully; errors or cancellation that abort that path suppress the sample (successful shutdown drains may still count). |
+| `kafka.consumer.process.duration` | Histogram; milliseconds (OTel `s`) | `client.type`, `client.name`, `topic.name` | One observation for a poll's processing cycle, including configured `consume_delay` waits, callback processing, and offset-commit work. |
+| `kafka.consumer.commit.duration` | Histogram; milliseconds (OTel `s`) | `client.type`, `client.name`, `topic.name` | Duration of an offset commit. |
+| `kafka.consumer.sleep.duration` | Histogram; milliseconds (OTel `s`) | `client.type`, `client.name`, `topic.name` | Completed per-record `consume_delay` waits before processing; canceled waits produce no observation. |
+| `kafka.consumer.rebalances` | Counter; count (OTel `{rebalance}`) | `client.type`, `client.name`, `topic.name` | Consumer-group rebalances this consumer participated in. |
+
+#### Producer metrics (`kafka.producer`)
+
+| Authored metric | Instrument; authored unit (OTel unit) | Attributes | Meaning |
+|---|---|---|---|
+| `kafka.producer.sent.messages` | Counter; count (OTel `{message}`) | `client.type`, `client.name`, `topic.name`, `error.type` | Records returned by the synchronous producer call split into successful (`error.type="{{default}}"`) and failed (`error.type="send_failed"`) outcomes. The buckets are disjoint; for a partial failure their sum is the records in that call. |
+| `kafka.producer.batch.records` | Histogram; count (OTel `{record}`) | `client.type`, `client.name`, `topic.name` | Number of records passed to one synchronous producer call; this is not a franz-go wire-batch count. |
+| `kafka.producer.produce.duration` | Histogram; milliseconds (OTel `s`) | `client.type`, `client.name`, `topic.name` | Duration of one synchronous producer call. |
+
+#### Broker connectivity and throttling metrics (`kafka`)
+
+| Authored metric | Instrument; authored unit (OTel unit) | Attributes | Meaning |
+|---|---|---|---|
+| `kafka.connects` | Counter; count (OTel `{connect}`) | `client.type`, `client.name`, `broker.address`, `error.type` | Broker connection attempts; successful (`error.type="{{default}}"`) and failed (`error.type="connect_failed"`) attempts are distinguished. |
+| `kafka.throttles` | Counter; count (OTel `{throttle}`) | `client.type`, `client.name`, `broker.address` | Broker-throttled requests. |
+| `kafka.throttle.duration` | Histogram; milliseconds (OTel `s`) | `client.type`, `client.name`, `broker.address` | Time a broker throttled a Kafka client. |
+
+#### Wire-batch metrics (`kafka`)
+
+| Authored metric | Instrument; authored unit (OTel unit) | Attributes | Meaning |
+|---|---|---|---|
+| `kafka.produce.batch.records` | Histogram; count (OTel `{record}`) | `client.type`, `client.name`, `topic.name`, `partition.id` | Records in one franz-go produce wire batch. |
+| `kafka.produce.batch.size` | Histogram; bytes (OTel `By`) | `client.type`, `client.name`, `topic.name`, `partition.id` | Uncompressed bytes in one produce wire batch. |
+| `kafka.produce.batch.compressed.size` | Histogram; bytes (OTel `By`) | `client.type`, `client.name`, `topic.name`, `partition.id` | Compressed bytes in one produce wire batch. |
+| `kafka.fetch.batch.records` | Histogram; count (OTel `{record}`) | `client.type`, `client.name`, `topic.name`, `partition.id` | Records in one franz-go fetch wire batch. |
+| `kafka.fetch.batch.size` | Histogram; bytes (OTel `By`) | `client.type`, `client.name`, `topic.name`, `partition.id` | Uncompressed bytes in one fetch wire batch. |
+| `kafka.fetch.batch.compressed.size` | Histogram; bytes (OTel `By`) | `client.type`, `client.name`, `topic.name`, `partition.id` | Compressed bytes in one fetch wire batch. |
+
+Consumer and producer client metrics are aggregated at client/topic granularity and do not carry `partition.id`. Only the broker connectivity/throttling metrics carry `broker.address`; wire-batch hooks carry `topic.name` and `partition.id`, not `broker.address`. Client metrics describe transport activity, not business success or durable effects; correlate callback/output errors, retry activity, commits, and application outcomes.
 
 ### Topic creation and metadata
 

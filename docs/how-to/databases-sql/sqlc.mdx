@@ -14,8 +14,10 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlc@v0.4.1
+go get github.com/gosoline-project/sqlc@v0.4.1-0.20261013124322-f3bdb6518b42
 ```
+
+This documentation branch pins a migration prerelease snapshot, not a stable `v0.4.1` release.
 
 Then import the package in your Go code:
 
@@ -66,6 +68,15 @@ Each connection requires driver and connection details as shown below:
 | `timeouts.timeout` | MySQL driver connection timeout. For PostgreSQL, use `parameters.connect_timeout`. | `0` |
 
 Use `parameters` for driver-specific settings such as PostgreSQL `sslmode` or `connect_timeout`. PostgreSQL connections use `uri.*` and `parameters`; the MySQL-specific settings above are ignored by the PostgreSQL driver.
+
+## Metrics
+
+Settings-based SQLC database construction emits a legacy metric named `DbConnectionCount` through Gosoline's metric writer with an empty metric namespace. This SQLC-specific series is separate from the framework's namespaced `db.client.*` and `db.repo.*` metrics.
+
+- The `Type="new"` datum is written once for each `database/sql/driver.Driver.Open` attempt, before SQLC calls the underlying driver. It counts attempts, including failed opens, not only successful connections.
+- SQLC samples `sql.DB.Stats()` every minute and writes `Type="open"` (`OpenConnections`), `Type="inUse"` (`InUse`), and `Type="idle"` (`Idle`) values under the same `DbConnectionCount` name.
+
+These legacy observations reach an exporter only when the application wires `application.WithMetrics`, sets `metric.enabled: true`, and configures at least one writer under `metric.writers`; SQLC has no separate metric-enable setting. Framework metrics are different: `db.client.connections` is an undimensioned counter of driver `Open` attempts, `db.client.connection.count` is a gauge with `connection.state=used|idle`, and `db.repo.*` covers framework repository operations and notifications. Do not interpret those framework names as aliases for SQLC's `DbConnectionCount`.
 
 ## Migrations
 
@@ -211,7 +222,7 @@ query := sqlc.FromG[Experiment]("experiments").
     ForUpdate()
 ```
 
-Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. SQLR v0.9.1 also applies a repository query's `ForUpdate()` setting to its preloads.
+Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. The SQLR migration-prerelease snapshot pinned by this documentation branch also applies a repository query's `ForUpdate()` setting to its preloads.
 
 ## JSON Ordering
 

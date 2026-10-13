@@ -79,7 +79,18 @@ The file output makes the lifecycle visible without requiring a queue. In produc
 
 When all background runners are busy and the output channel reaches `buffer_size`, producer writes block until capacity becomes available. This is intentional backpressure; size the buffer and runner count for expected traffic instead of making the buffer unbounded.
 
-Remote output errors happen in a background runner after the producer call has returned. The daemon logs these errors and emits metrics including message count, batch size, aggregate size, and idle duration. Monitor daemon logs and metrics because callers cannot receive asynchronous output failures.
+Remote output errors happen in a background runner after the producer call has returned. The daemon logs these errors; callers cannot receive asynchronous output failures.
+
+The following are the daemon's canonical authored metrics in the `stream` namespace; each series carries `producer.name`, the configured name under `stream.producer.<name>`. OpenTelemetry prefixes names with `gosoline.` and converts the authored millisecond duration to seconds; CloudWatch and Prometheus apply their own naming and unit conventions. See the [metric schema reference](/reference/metric-schema/) for exporter mappings.
+
+| Authored metric | Instrument and authored unit (OpenTelemetry unit) | Attributes | Meaning |
+|---|---|---|---|
+| `stream.produced.messages` | Counter; count (OTel `{message}`) | `producer.name` | Input messages in calls to a running daemon's `Write`, counted before aggregation and batching. This does not establish that those stages or remote delivery succeeded. |
+| `stream.batch.messages` | Histogram; count (OTel `{message}`) | `producer.name` | Number of messages in each output batch passed to the configured output after aggregation and batching. The observation is written after the output call returns, including when that call reports an error. |
+| `stream.aggregate.messages` | Histogram; count (OTel `{message}`) | `producer.name` | Number of original stream messages combined in each aggregate when aggregation is enabled; this is a message count, not a byte size. |
+| `stream.idle.duration` | Histogram; milliseconds (OTel `s`) | `producer.name` | Time an output worker waits for the next batch on the daemon's output channel, capped at the configured `interval`. It is not output or broker-request latency. |
+
+These metrics have no output-success/error attribute. Use daemon error logs to identify failed asynchronous output calls; do not interpret the batch histogram as a success counter.
 
 On graceful kernel shutdown, the daemon flushes pending aggregates and batches before closing its output workers. Abrupt process termination can still lose buffered messages.
 
