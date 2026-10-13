@@ -1,58 +1,54 @@
-13:34:26.600 main    info    applied priority 8 config post processor 'gosoline.log.handler_main'  application: hello-world, group: health-check
-13:34:26.601 main    info    applied priority 1 config post processor 'gosoline.dx.autoCreate'  application: hello-world, group: health-check
-13:34:26.601 main    info    applied priority 1 config post processor 'gosoline.dx.useRandomPort'  application: hello-world, group: health-check
-12:34:26.604 kernel  info    starting kernel                                     application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg api.health.path=/health                         application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg api.health.port=8090                            application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg app_family=how-to                               application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg app_group=health-check                          application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg app_name=hello-world                            application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg app_project=gosoline                            application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg appctx.metadata.server.port=0                   application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg dx.auto_create=true                             application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg dx.use_random_port=true                         application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg env=dev                                         application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg kernel.health_check.timeout=10s                 application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg kernel.health_check.wait_interval=1s            application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg kernel.kill_timeout=10s                         application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg log.handlers.main.formatter=console             application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg log.handlers.main.level=info                    application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg log.handlers.main.timestamp_format=15:04:05.000  application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg log.handlers.main.type=iowriter                 application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg log.handlers.main.writer=stdout                 application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg metric.application={app_name}                   application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg metric.cloudwatch.naming.pattern={project}/{env}/{family}/{group}-{app}  application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg metric.enabled=false                            application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg metric.environment={env}                        application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg metric.family={app_family}                      application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg metric.group={app_group}                        application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg metric.interval=1m0s                            application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg metric.project={app_project}                    application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg metric.writer=                                  application: hello-world, group: health-check
-12:34:26.604 kernel  info    cfg fingerprint: ef5386d483b4b86e621859e38ecf2442   application: hello-world, group: health-check
-12:34:26.604 kernel  info    stage 0 up and running with 1 modules               application: hello-world, group: health-check
-12:34:26.604 kernel  info    running background module metric in stage 0         application: hello-world, group: health-check
-12:34:26.605 kernel  info    running background module metadata-server in stage 1024  application: hello-world, group: health-check
-12:34:26.605 kernel  info    running background module api-health-check in stage 1024  application: hello-world, group: health-check
-12:34:26.605 metrics info    metrics not enabled..                               application: hello-world, group: health-check
-12:34:26.605 kernel  info    stopped background module metric                    application: hello-world, group: health-check
-12:34:26.605 kernel  info    stage 1024 up and running with 2 modules            application: hello-world, group: health-check
-12:34:26.605 kernel  info    waiting for module hello-world in stage 2048 to get healthy  application: hello-world, group: health-check
-12:34:26.605 kernel  info    running foreground module hello-world in stage 2048  application: hello-world, group: health-check
-12:34:26.605 metadata-server info    serving metadata on address [::]:44891              application: hello-world, group: health-check
-12:34:27.605 kernel  info    waiting for module hello-world in stage 2048 to get healthy  application: hello-world, group: health-check
-12:34:28.606 kernel  info    waiting for module hello-world in stage 2048 to get healthy  application: hello-world, group: health-check
-12:34:29.606 hello-world info    Hello World                                         application: hello-world, group: health-check
-12:34:29.606 kernel  info    stopped foreground module hello-world               application: hello-world, group: health-check
-12:34:29.606 kernel  info    stage 2048 up and running with 1 modules            application: hello-world, group: health-check
-12:34:29.606 kernel  info    kernel up and running                               application: hello-world, group: health-check
-12:34:29.606 kernel  info    stopping kernel due to: no more foreground modules in running state  application: hello-world, group: health-check
-12:34:29.606 kernel  info    stopping stage 2048                                 application: hello-world, group: health-check
-12:34:29.606 kernel  info    stopped stage 2048                                  application: hello-world, group: health-check
-12:34:29.606 kernel  info    stopping stage 1024                                 application: hello-world, group: health-check
-12:34:29.607 kernel  info    stopped background module api-health-check          application: hello-world, group: health-check
-12:34:29.607 kernel  info    stopped background module metadata-server           application: hello-world, group: health-check
-12:34:29.607 kernel  info    stopped stage 1024                                  application: hello-world, group: health-check
-12:34:29.607 kernel  info    stopping stage 0                                    application: hello-world, group: health-check
-12:34:29.607 kernel  info    stopped stage 0                                     application: hello-world, group: health-check
-12:34:29.607 kernel  info    leaving kernel with exit code 0                     application: hello-world, group: health-check
+15:09:29.102 main    info    applied priority 1 config post processor 'gosoline.dx.useRandomPort'  application: hello-world
+15:09:29.102 main    info    applied priority 1 config post processor 'gosoline.reslife.autoCreate'  application: hello-world
+15:09:29.102 main    info    applied priority 8 config post processor 'gosoline.log.handler_main'  application: hello-world
+15:09:29.103 kernel  info    starting kernel                                     application: hello-world
+15:09:29.103 kernel  info    cfg app.env=dev                                     application: hello-world
+15:09:29.103 kernel  info    cfg app.name=hello-world                            application: hello-world
+15:09:29.103 kernel  info    cfg appctx.metadata.server.port=0                   application: hello-world
+15:09:29.103 kernel  info    cfg dx.use_random_port=true                         application: hello-world
+15:09:29.103 kernel  info    cfg httpserver.health-check.path=/health            application: hello-world
+15:09:29.103 kernel  info    cfg httpserver.health-check.port=8090               application: hello-world
+15:09:29.103 kernel  info    cfg httpserver.health-check.timeout.drain=0s        application: hello-world
+15:09:29.103 kernel  info    cfg httpserver.health-check.timeout.idle=1m0s       application: hello-world
+15:09:29.103 kernel  info    cfg httpserver.health-check.timeout.read=1m0s       application: hello-world
+15:09:29.103 kernel  info    cfg httpserver.health-check.timeout.shutdown=1m0s   application: hello-world
+15:09:29.103 kernel  info    cfg httpserver.health-check.timeout.write=1m0s      application: hello-world
+15:09:29.103 kernel  info    cfg kernel.health_check.timeout=10s                 application: hello-world
+15:09:29.103 kernel  info    cfg kernel.health_check.wait_interval=1s            application: hello-world
+15:09:29.103 kernel  info    cfg kernel.kill_timeout=30s                         application: hello-world
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.dynamodb.naming.pattern={app.env}-kinsumer-autoscale-leaders  application: hello-world
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.ecs.client=default           application: hello-world
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.ecs.cluster={app.env}        application: hello-world
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.ecs.service={app.name}       application: hello-world
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.enabled=false                application: hello-world
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.leader_election=kinsumer-autoscale  application: hello-world
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.orchestrator=ecs             application: hello-world
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.period=1m0s                  application: hello-world
+15:09:29.103 kernel  info    cfg log.handlers.main.channels.kernel.level=        application: hello-world
+15:09:29.103 kernel  info    cfg log.handlers.main.channels.main.level=          application: hello-world
+15:09:29.103 kernel  info    cfg log.handlers.main.formatter=console             application: hello-world
+15:09:29.103 kernel  info    cfg log.handlers.main.level=info                    application: hello-world
+15:09:29.103 kernel  info    cfg log.handlers.main.timestamp_format=15:04:05.000  application: hello-world
+15:09:29.103 kernel  info    cfg log.handlers.main.type=iowriter                 application: hello-world
+15:09:29.103 kernel  info    cfg log.handlers.main.writer=stdout                 application: hello-world
+15:09:29.103 kernel  info    cfg resource_lifecycles.create.enabled=true         application: hello-world
+15:09:29.103 kernel  info    cfg fingerprint: c3bbbde8d0193517f02ef31853922032   application: hello-world
+15:09:29.103 kernel  info    stage 0 up and running with 1 modules               application: hello-world
+15:09:29.103 kernel  info    waiting 1s for module hello-world in stage 2048 to get healthy: time left 9.9999975s  application: hello-world
+15:09:29.103 kernel  info    running foreground module hello-world in stage 2048  application: hello-world
+15:09:29.103 kernel  info    running background module http-health-check in stage 0  application: hello-world
+15:09:30.104 kernel  info    waiting 1s for module hello-world in stage 2048 to get healthy: time left 8.998905459s  application: hello-world
+15:09:31.104 kernel  info    waiting 1s for module hello-world in stage 2048 to get healthy: time left 7.998746834s  application: hello-world
+15:09:32.103 hello-world info    Hello World                                         application: hello-world
+15:09:32.103 kernel  info    stopped foreground module hello-world               application: hello-world
+15:09:32.103 kernel  info    stopping kernel due to: no more foreground modules in running state  application: hello-world
+15:09:32.103 kernel  info    stopping stage 2048                                 application: hello-world
+15:09:32.103 kernel  info    stage 2048 up and running with 1 modules            application: hello-world
+15:09:32.103 kernel  info    stopped stage 2048                                  application: hello-world
+15:09:32.103 kernel  info    stopping stage 0                                    application: hello-world
+15:09:32.103 kernel  info    kernel up and running after 3.000736083s            application: hello-world
+15:09:32.103 httpserver-health-check info    trying to gracefully shutdown httpserver health check  application: hello-world
+15:09:32.104 httpserver-health-check info    leaving httpserver health check                     application: hello-world
+15:09:32.104 kernel  info    stopped background module http-health-check         application: hello-world
+15:09:32.104 kernel  info    stopped stage 0                                     application: hello-world
+15:09:32.104 kernel  info    leaving kernel with exit code 0                     application: hello-world

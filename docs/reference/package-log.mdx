@@ -303,7 +303,7 @@ log:
 
 ### Metric
 
-No configuration needed. Writes a metric data point for every warn and error log.
+No configuration is needed. The canonical Gosoline metric `metric.log.records` is a counter with authored unit `count`: the metric handler increments it once for each warn- or error-level record, setting the `level` attribute to `warn` or `error`; other levels are not counted. OpenTelemetry exports it as `gosoline.metric.log.records` with unit `{record}`; other metric backends may render Gosoline metric names using their own conventions.
 
 ### Sentry
 

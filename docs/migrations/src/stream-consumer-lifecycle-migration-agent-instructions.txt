@@ -16,7 +16,7 @@ Discovery:
 5. Find custom stream.Input implementations, Input.Data calls, AcknowledgeableInput, Ack/AckBatch, base-consumer APIs, low-level consumer constructors, and generated input/transport mocks.
 6. Find direct Kafka and Kinesis consumers, readers, handlers, channel adapters, and settings literals.
 7. Find aggregate_message_mode, callbacks returning false or true with an error, non-ignorable GetModel errors, decoding failures, and retry-publication failure handling.
-8. Find dashboards and alerts using Kafka Partition dimensions, WaitDuration, or CommitFailures, and metadata clients expecting consumer runner_count.
+8. Find dashboards and alerts using pre-v0.66.0 Kafka metric dimensions/names (`Partition`, `WaitDuration`, `CommitFailures`), and metadata clients expecting consumer runner_count.
 9. Find KafkaSourceMessage, MetaDataKafkaOriginalMessage, NewKafkaMessageAttrs, and code/tests relying on original Kafka-record metadata.
 10. Inspect actual input-instance wiring. A shared config name does not always mean a shared instance: normal construction calls NewConfigurableInput; ProvideConfigurableInput caches, and in-memory wiring can share instances. Kafka/SQS instances cannot be run twice.
 
@@ -129,11 +129,12 @@ Shutdown and observability:
 
 - Review kernel.kill_timeout and deployment termination grace together. Include receive/pop latency, shared processing drain, retry publication, transport cleanup, and other module shutdown. Operations may overlap; grace settings are not a universal maximum-duration formula.
 - Verify callback dependencies respect context cancellation and runnable callback cleanup cannot deadlock processing.
-- Kafka metrics use consumer/topic granularity instead of former per-partition dimensions. WaitDuration and CommitFailures are no longer emitted.
-- Kafka/Kinesis SleepDuration contributes to ProcessDuration when delay is used; Kafka ProcessDuration also includes commit work.
+- Historical metric note for the v0.66.0 lifecycle migration: the framework names and dimensions below are not current V2 canonical metric names. For current names, types, authored/OpenTelemetry units, attributes, and exporter mappings, see /reference/metric-schema/.
+- At v0.66.0, Kafka metrics moved to consumer/topic granularity instead of former per-partition dimensions; legacy `WaitDuration` and `CommitFailures` were no longer emitted.
+- In that v0.66.0 metric contract, Kafka/Kinesis `SleepDuration` contributed to `ProcessDuration` when delay was used; Kafka `ProcessDuration` also included commit work.
 - Consumer health tracks active processing independently: a slow callback can cause unhealthy status while other callbacks succeed. Review thresholds against expected worst-case duration.
 - Consumer metadata no longer contains runner_count.
-- ProcessedCount counts attempts; RetryPutCount counts publication attempts; Kafka RecordsConsumed counts fetched records, including work skipped during shutdown. None alone proves durable success. Successful Run completion also does not prove cleanup persistence.
+- At the v0.66.0 lifecycle boundary, `ProcessedCount` counted attempts, `RetryPutCount` counted retry-publication attempts, and Kafka `RecordsConsumed` counted fetched records, including work skipped during shutdown. None alone proves durable success. Successful Run completion also does not prove cleanup persistence.
 
 Validation:
 
