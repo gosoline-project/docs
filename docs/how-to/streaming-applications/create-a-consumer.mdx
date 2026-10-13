@@ -163,15 +163,15 @@ At input completion or shutdown, pending work is drained within the shared consu
 
 ## Consumer metrics
 
-The current V2 stream consumer instruments are:
+The names below are canonical Gosoline metric names as authored. They are not backend-exported names: OpenTelemetry prefixes the namespace with `gosoline.` and converts duration values from authored milliseconds to seconds; CloudWatch and Prometheus apply their own name and unit conventions. See the [metric schema reference](/reference/metric-schema/) for exporter mappings.
 
-| Metric | Instrument and unit | Meaning |
-|---|---|---|
-| `gosoline.stream.process.duration` | Histogram, milliseconds | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one per batch callback invocation, not one per message. |
-| `gosoline.stream.consumed.messages` | Counter, messages | Number of messages processed, tagged by `consumer.name` and `error.type`. The default error type contributes every processed message to the total. |
-| `gosoline.stream.retry.operations` | Counter, operations | Retry queue reads (`operation: get`) and writes (`operation: put`), tagged by `consumer.name` and `operation`. |
+| Authored metric | Instrument and authored unit (OpenTelemetry unit) | Attributes | Meaning |
+|---|---|---|---|
+| `stream.process.duration` (`gosoline.stream.process.duration`) | Histogram; milliseconds (OTel `s`) | `consumer.name` | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one duration for the whole batch callback, not one per message. |
+| `stream.consumed.messages` (`gosoline.stream.consumed.messages`) | Counter; count (OTel `{message}`) | `consumer.name`, `error.type` | Number of messages processed. The `error.type="{{default}}"` series is the all-processed total; `error.type="processing_failed"` counts failed messages. |
+| `stream.retry.operations` (`gosoline.stream.retry.operations`) | Counter; count (OTel `{operation}`) | `consumer.name`, `operation` | Retry-queue `get`/`put` attempts; not a retried-record count or evidence that a queue operation succeeded. |
 
-For `consumed.messages`, `error.type: processing_failed` is an additional count of failed messages, not a disjoint category: failed messages are already included in the default total. For a batch, the total increases by its record count while `process.duration` adds a single observation for the whole callback operation. Do not add the failure series to the total when calculating overall volume. These current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle migration](/migrations/stream-consumer-lifecycle/).
+For `stream.consumed.messages`, the `processing_failed` series is an overlapping per-message subset of the `{{default}}` total, not a disjoint outcome: callback failures are already included in the total. In a batch, the total and any failure count increase by the number of records, while `process.duration` adds one observation for the full batch callback. Do not add the failure series to the total or subtract it to infer successes. Ignored model errors and canceled processing do not emit the failure series. These current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle migration](/migrations/stream-consumer-lifecycle/).
 
 ## Graceful processing
 

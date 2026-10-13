@@ -293,13 +293,24 @@ The following middleware is automatically applied to every server:
 | Middleware | Purpose |
 |---|---|
 | Sampling | Apply sampling decisions |
-| Metric | Record request metrics |
+| Metric | Record request-duration, rejection, active-request, and open-connection metrics |
 | Logging | Log requests (fingers-crossed) |
 | Compression | Gzip compression |
 | Max body size | Limit incoming request bodies |
 | Error | Catch and format errors |
 | Recovery | Panic recovery |
 | Connection lifecycle | Manage connection age |
+
+The following are canonical Gosoline metric names. The duration histogram's observation count is the request count for each attribute set; `response.status_code` is an attribute, not a separate status metric. Rejection counts do not carry a response-status attribute. The gauges are server-level and carry only `name`.
+
+| Canonical metric | Kind | Attributes | Description |
+|---|---|---|---|
+| `http.server.request.duration` | Histogram | `name`, `route`, `request.method`, `response.status_code` | Duration of each matched HTTP request; observation count is the request count. |
+| `http.server.rejected.requests` | Counter | `name`, `route`, `request.method` | Requests rejected before handling. |
+| `http.server.active_request.count` | Gauge | `name` | Requests currently handled by the server. |
+| `http.server.connection.count` | Gauge | `name` | Connections currently held open by the server. |
+
+These are authored canonical names, not backend-rendered names. OTEL prefixes the namespace with `gosoline.` and exports durations in seconds; CloudWatch renders names in PascalCase and durations in milliseconds; Prometheus uses the fixed `gosoline` prefix, normalized metric names, and base-unit/counter suffixes. Application identity belongs on scrape-target labels, not in the metric name.
 
 ## Validation
 
