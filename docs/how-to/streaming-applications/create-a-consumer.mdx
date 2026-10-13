@@ -161,6 +161,18 @@ Batch consumers acknowledge primary messages when admitted to an **in-memory buf
 
 At input completion or shutdown, pending work is drained within the shared consumer grace deadline. See the [released runnable example](https://github.com/justtrackio/gosoline/tree/v0.68.3/examples/stream/batch-consumer), [callback API](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch_module_factory.go), and [batch implementation](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch.go) before choosing batching for an existing consumer.
 
+## Consumer metrics
+
+The current V2 stream consumer instruments are:
+
+| Metric | Instrument and unit | Meaning |
+|---|---|---|
+| `gosoline.stream.process.duration` | Histogram, milliseconds | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one per batch callback invocation, not one per message. |
+| `gosoline.stream.consumed.messages` | Counter, messages | Number of messages processed, tagged by `consumer.name` and `error.type`. The default error type contributes every processed message to the total. |
+| `gosoline.stream.retry.operations` | Counter, operations | Retry queue reads (`operation: get`) and writes (`operation: put`), tagged by `consumer.name` and `operation`. |
+
+For `consumed.messages`, `error.type: processing_failed` is an additional count of failed messages, not a disjoint category: failed messages are already included in the default total. For a batch, the total increases by its record count while `process.duration` adds a single observation for the whole callback operation. Do not add the failure series to the total when calculating overall volume. These current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle migration](/migrations/stream-consumer-lifecycle/).
+
 ## Graceful processing
 
 `stream.consumer.<name>.grace_time` defaults to `10s` and defines one shared processing deadline after shutdown begins, covering both the primary input and the retry input. Inputs stop fetching new messages; already fetched or admitted work may still reach the callback while draining. When the deadline expires, in-flight callback contexts are canceled.
