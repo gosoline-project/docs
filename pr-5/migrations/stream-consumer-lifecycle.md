@@ -288,18 +288,20 @@ Review `kernel.kill_timeout` and the deployment termination budget together. All
 
 Verify callback dependencies also respect cancellation. Successful `Run` termination does not prove that deletion, commit, or checkpoint persistence succeeded; some shutdown cleanup failures are logged without failing the run.
 
+The named stream and Kafka metrics in this section describe the historical metric contract for the v0.66.0 lifecycle migration, including `WaitDuration`, `CommitFailures`, `SleepDuration`, `ProcessDuration`, `ProcessedCount`, `RetryPutCount`, and `RecordsConsumed`. They are not the current V2 metric names. See the [current metric schema reference](/docs/pr-5/reference/metric-schema/.md) for current names, types, authored and OpenTelemetry units, attributes, and exporter mappings.
+
 Update monitoring and metadata clients:
 
-| Change                                                                                            | Migration action                                                                                      |
-| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Kafka metrics use consumer/topic granularity rather than partition dimensions.                    | Update queries and alerts using `Partition`.                                                          |
-| Kafka `WaitDuration` and `CommitFailures` are no longer emitted.                                  | Replace dashboards and alerts relying on those names.                                                 |
-| Kafka/Kinesis expose `SleepDuration` with consumption delay; it contributes to `ProcessDuration`. | Account for deliberate delay in latency and lag alerts.                                               |
-| Kafka `ProcessDuration` also includes commit work.                                                | Review comparisons with previous callback timings.                                                    |
-| Health tracks active processing independently.                                                    | A slow callback can make the consumer unhealthy while others succeed; review health-check thresholds. |
-| Consumer metadata no longer includes `runner_count`.                                              | Update metadata consumers and assertions.                                                             |
+| Change                                                                                                 | Migration action                                                                                      |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| At the v0.66.0 migration, Kafka metrics moved to consumer/topic granularity from partition dimensions. | Update queries and alerts using `Partition`.                                                          |
+| Kafka `WaitDuration` and `CommitFailures` are no longer emitted after the v0.66.0 lifecycle change.    | Replace dashboards and alerts relying on those historical names.                                      |
+| Kafka/Kinesis expose `SleepDuration` with consumption delay; it contributes to `ProcessDuration`.      | Account for deliberate delay in latency and lag alerts.                                               |
+| Kafka `ProcessDuration` also includes commit work.                                                     | Review comparisons with previous callback timings.                                                    |
+| Health tracks active processing independently.                                                         | A slow callback can make the consumer unhealthy while others succeed; review health-check thresholds. |
+| Consumer metadata no longer includes `runner_count`.                                                   | Update metadata consumers and assertions.                                                             |
 
-Counters are not evidence of successful durable effects: stream `ProcessedCount` counts processing attempts, retry-put count counts publication attempts, and Kafka `RecordsConsumed` counts fetched records, including work skipped during shutdown. Correlate them with errors, queue depth, commits/checkpoints, and application outcomes.
+At the v0.66.0 lifecycle migration boundary, `ProcessedCount` counted processing attempts, `RetryPutCount` counted retry-publication attempts, and Kafka `RecordsConsumed` counted fetched records, including work skipped during shutdown. These historical counters do not prove successful durable effects; correlate them with errors, queue depth, commits/checkpoints, and application outcomes.
 
 ## 12. Review Message and Integration Compatibility[​](#12-review-message-and-integration-compatibility "Direct link to 12. Review Message and Integration Compatibility")
 

@@ -2,6 +2,10 @@
 
 This guide details how to migrate your gosoline application to the new `Identity` system and dynamic resource naming.
 
+info
+
+This guide covers the earlier application-identity and resource-naming migration. Metric emission has a separate current V2 contract; consult the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md) for current names, units, dimensions, and writer behavior.
+
 ## 1. Update Configuration[​](#1-update-configuration "Direct link to 1. Update Configuration")
 
 The flat application hierarchy (`project`, `family`, `group`) has been replaced with a flexible tagging system. Move these keys into the `app.tags` structure.
@@ -721,29 +725,9 @@ This section lists the configuration keys, their old and new defaults, and the c
 2. Replace old-style placeholders with new-style ones.
 3. If you need a custom delimiter, set `naming.table_delimiter`.
 
-### Metric Calculator DynamoDB Table[​](#metric-calculator-dynamodb-table "Direct link to Metric Calculator DynamoDB Table")
+### Historical: Metric calculator DynamoDB table[​](#historical-metric-calculator-dynamodb-table "Direct link to Historical: Metric calculator DynamoDB table")
 
-|                 | Value                                                                             |
-| --------------- | --------------------------------------------------------------------------------- |
-| **Config Key**  | `metric.calculator.dynamodb.naming.table_pattern` (renamed from `naming.pattern`) |
-| **Old Default** | `{project}-{env}-{family}`                                                        |
-| **New Default** | `{app.env}-metric-calculator-leaders`                                             |
-
-warning
-
-The default pattern has changed significantly. It no longer uses `{project}` or `{family}` and now includes a descriptive suffix. If you relied on the old default, explicitly set the pattern:
-
-```
-metric:
-
-  calculator:
-
-    dynamodb:
-
-      naming:
-
-        table_pattern: "{app.tags.project}-{app.env}-{app.tags.family}-metric-calculator-leaders"
-```
+Earlier editions of this migration described `metric.calculator.dynamodb.naming.table_pattern` and its leader-election table default. That calculator configuration and its per-runner metrics are no longer part of the current V2 contract; do not add the historical setting back to current applications. See the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the removed metrics and current guidance.
 
 ### CloudWatch Namespace[​](#cloudwatch-namespace "Direct link to CloudWatch Namespace")
 
@@ -755,17 +739,11 @@ metric:
 | **Delimiter Config**  | `metric.writer_settings.cloudwatch.naming.namespace_delimiter` |
 | **Delimiter Default** | `/`                                                            |
 
-CloudWatch uses `/` as the delimiter, creating hierarchical namespaces in AWS Console.
+This CloudWatch namespace setting remains supported. It controls the CloudWatch service namespace, not the rendered metric name.
 
-### Prometheus Namespace[​](#prometheus-namespace "Direct link to Prometheus Namespace")
+### Prometheus metric prefix[​](#prometheus-metric-prefix "Direct link to Prometheus metric prefix")
 
-|                       | Value                                                          |
-| --------------------- | -------------------------------------------------------------- |
-| **Config Key**        | `metric.writer_settings.prometheus.naming.namespace_pattern`   |
-| **Old Default**       | `{project}-{env}-{family}-{group}-{app}`                       |
-| **New Default**       | `{app.namespace}-{app.name}`                                   |
-| **Delimiter Config**  | `metric.writer_settings.prometheus.naming.namespace_delimiter` |
-| **Delimiter Default** | `_` (underscores, following Prometheus naming conventions)     |
+The Prometheus writer now uses the fixed `gosoline` prefix, independent of `app.namespace` and `app.name`. Put application identity on the scrape target through service discovery/target labels. The former `metric.writer_settings.prometheus.naming.namespace_pattern` and `metric.writer_settings.prometheus.naming.namespace_delimiter` settings no longer control names; this older migration entry is historical. See the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md).
 
 ### Redis Key Prefix[​](#redis-key-prefix "Direct link to Redis Key Prefix")
 
@@ -881,23 +859,22 @@ application.Default(
 
 The following options were removed from `Default()` and must now be added explicitly if needed:
 
-| Removed Option                                                   | Capability Lost                                     |
-| ---------------------------------------------------------------- | --------------------------------------------------- |
-| `WithConfigFile("./config.dist.yml", "yml")`                     | Automatic loading of `config.dist.yml`              |
-| `WithConfigFileFlag`                                             | `--config` CLI flag for specifying config files     |
-| `WithHttpHealthCheck`                                            | HTTP health check endpoint                          |
-| `WithMetadataServer`                                             | HTTP server exposing build info and module metadata |
-| `WithMetricsCalculatorModule`                                    | Metrics calculator module                           |
-| `WithLoggerApplicationTag("group")`                              | `group` tag added to all log entries                |
-| `WithLoggerMetricHandler`                                        | Logger metric handler (counts log entries by level) |
-| `WithLoggerSentryHandler(...)`                                   | Sentry error reporting integration                  |
-| `WithMetrics`                                                    | Metrics collection and export                       |
-| `WithProducerDaemon`                                             | Background producer daemon for stream batching      |
-| `WithTaskRunner`                                                 | Task runner module                                  |
-| `WithProfiling`                                                  | Profiling module (pprof)                            |
-| `WithTracing`                                                    | Distributed tracing (X-Ray / OpenTelemetry)         |
-| `WithUTCClock(true)`                                             | UTC clock as default time source                    |
-| `WithMiddlewareFactory(reslife.LifeCycleManagerMiddleware, ...)` | Resource lifecycle management middleware            |
+| Removed Option                                                   | Capability Lost                                                               |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `WithConfigFile("./config.dist.yml", "yml")`                     | Automatic loading of `config.dist.yml`                                        |
+| `WithConfigFileFlag`                                             | `--config` CLI flag for specifying config files                               |
+| `WithHttpHealthCheck`                                            | HTTP health check endpoint                                                    |
+| `WithMetadataServer`                                             | HTTP server exposing build info and module metadata                           |
+| `WithLoggerApplicationTag("group")`                              | `group` tag added to all log entries                                          |
+| `WithLoggerMetricHandler`                                        | Logger metric handler (counts warning- and error-level log entries, by level) |
+| `WithLoggerSentryHandler(...)`                                   | Sentry error reporting integration                                            |
+| `WithMetrics`                                                    | Metrics collection and export                                                 |
+| `WithProducerDaemon`                                             | Background producer daemon for stream batching                                |
+| `WithTaskRunner`                                                 | Task runner module                                                            |
+| `WithProfiling`                                                  | Profiling module (pprof)                                                      |
+| `WithTracing`                                                    | Distributed tracing (X-Ray / OpenTelemetry)                                   |
+| `WithUTCClock(true)`                                             | UTC clock as default time source                                              |
+| `WithMiddlewareFactory(reslife.LifeCycleManagerMiddleware, ...)` | Resource lifecycle management middleware                                      |
 
 ### How to Migrate[​](#how-to-migrate "Direct link to How to Migrate")
 
@@ -951,8 +928,6 @@ func main() {
         // Metrics & observability
 
         application.WithMetrics,
-
-        application.WithMetricsCalculatorModule,
 
         application.WithTracing,
 

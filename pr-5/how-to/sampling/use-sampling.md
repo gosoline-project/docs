@@ -37,7 +37,7 @@ sampling:
 
 info
 
-When sampling is enabled and a new decision is made, gosoline emits a metric `sampling_decision` (count) with dimension `sampled=true|false`.
+When sampling is enabled and a new decision is made, Gosoline records the canonical metric `smpl.decisions` as a counter with authored unit `count` and the `sampled` attribute set to `true` or `false`. OpenTelemetry exports it as `gosoline.smpl.decisions` with unit `{decision}`; other metric backends may render Gosoline metric names using their own conventions.
 
 ### Built-in strategies[​](#built-in-strategies "Direct link to Built-in strategies")
 

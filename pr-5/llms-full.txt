@@ -74,6 +74,7 @@
 - [Migrating to the Standalone HTTP Server Package](/migrations/httpserver-package.md): This guide explains how to migrate from the old github.com/justtrackio/gosoline/pkg/httpserver package directly to the standalone github.com/gosoline-project/httpserver module at v0.6.4.
 - [Migrating an Existing Service to SQLH CRUD](/migrations/sqlh-crud.md): This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers.
 - [Migrating to the Callback-Based Stream Consumer Lifecycle](/migrations/stream-consumer-lifecycle.md): This guide covers the breaking stream changes introduced in Gosoline v0.66.0 by commit 04b54462, stream: unify input processing and shutdown. Follow this guide when upgrading from an earlier release to v0.66.0 or later.
+- [Metric schema](/reference/metric-schema.md): This page is the contract for metrics authored by Gosoline. The canonical names, instrument types,
 - [Naming patterns](/reference/naming-patterns.md): Gosoline uses naming patterns to generate consistent names for resources (SQS queues, SNS topics, DynamoDB tables, Kafka topics, Redis keys, metric namespaces, tracing service names, ...).
 - [cfg package](/reference/package-cfg.md): With the cfg package, you can configure and use configurations in your gosoline project.
 - [Package cloud/aws](/reference/package-cloud_aws.md): The cloud/aws package
@@ -364,7 +365,7 @@ February 19, 2026 ·
 
 <!-- -->
 
-5 min read
+6 min read
 
 [![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
 
@@ -638,6 +639,8 @@ See the [Naming Patterns reference](/docs/pr-5/reference/naming-patterns/.md#mod
 ## Migration quick start[​](#migration-quick-start "Direct link to Migration quick start")
 
 For full step-by-step instructions covering stream input/output config, `mdlsub` publishers, Go code changes, and per-service pattern updates, see the [migration guide](/docs/pr-5/migrations/app-identity-and-naming-patterns/.md).
+
+*Historical metric note:* This February 2026 article records the naming behavior at publication. The current V2 schema supersedes its Prometheus-prefix statements: Prometheus now uses the fixed `gosoline` prefix, while application identity belongs on scrape-target labels. See the current [Metric schema reference](/docs/pr-5/reference/metric-schema/.md) and [Naming Patterns reference](/docs/pr-5/reference/naming-patterns/.md).
 
 **Tags:**
 
@@ -1387,7 +1390,7 @@ February 19, 2026 ·
 
 <!-- -->
 
-5 min read
+6 min read
 
 [![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
 
@@ -1413,7 +1416,7 @@ February 19, 2026 ·
 
 <!-- -->
 
-5 min read
+6 min read
 
 [![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
 
@@ -1518,7 +1521,7 @@ February 19, 2026 ·
 
 <!-- -->
 
-5 min read
+6 min read
 
 [![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
 
@@ -1676,7 +1679,7 @@ February 19, 2026 ·
 
 <!-- -->
 
-5 min read
+6 min read
 
 [![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
 
@@ -1838,9 +1841,9 @@ Copyright © 2026 justtrack
 
 ---
 
-## [📄️Naming patterns](/docs/pr-5/reference/naming-patterns/.md)
+## [📄️Metric schema](/docs/pr-5/reference/metric-schema/.md)
 
-[Gosoline uses naming patterns to generate consistent names for resources (SQS queues, SNS topics, DynamoDB tables, Kafka topics, Redis keys, metric namespaces, tracing service names, ...).](/docs/pr-5/reference/naming-patterns/.md)
+[This page is the contract for metrics authored by Gosoline. The canonical names, instrument types,](/docs/pr-5/reference/metric-schema/.md)
 
 
 ---
@@ -1970,7 +1973,11 @@ app:
 * **Define once, use everywhere**: Set your hierarchy in one place
 * **Easy updates**: Change your naming convention globally by updating one config value
 * **Simplified patterns**: Use `{app.namespace}` instead of repeating the same placeholders
-* **Delimiter flexibility**: Different services can use appropriate delimiters (CloudWatch uses `/`, Prometheus uses `_`, most AWS services use `-`)
+* **Delimiter flexibility**: Resource patterns use service-specific delimiters; CloudWatch naming uses `/` and most AWS resource names use `-`.
+
+### Metrics use a separate schema[​](#metrics-use-a-separate-schema "Direct link to Metrics use a separate schema")
+
+Metric names are not resource names. The CloudWatch namespace can still be configured from application identity, but Gosoline's Prometheus writer uses a fixed `gosoline` prefix; application identity belongs on the scrape target through service discovery/target labels. For the V2 metric names, units, and backend rendering, see the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md).
 
 ## How Naming Patterns Work[​](#how-naming-patterns-work "Direct link to How Naming Patterns Work")
 
@@ -2647,115 +2654,89 @@ Running the application will result in the following output:
 stdout
 
 ```
-08:43:03.536 main    info    applied priority 1 config post processor 'gosoline.dx.autoCreate'  application: hello-world, group: grp
+15:09:17.803 main    info    applied priority 8 config post processor 'gosoline.log.handler_main'  application: hello-world
 
-08:43:03.536 main    info    applied priority 1 config post processor 'gosoline.dx.useRandomPort'  application: hello-world, group: grp
+15:09:17.803 main    info    applied priority 1 config post processor 'gosoline.dx.useRandomPort'  application: hello-world
 
-08:43:03.536 main    info    applied priority 8 config post processor 'gosoline.log.handler_main'  application: hello-world, group: grp
+15:09:17.803 main    info    applied priority 1 config post processor 'gosoline.reslife.autoCreate'  application: hello-world
 
-07:43:03.537 kernel  info    starting kernel                                     application: hello-world, group: grp
+15:09:17.803 kernel  info    starting kernel                                     application: hello-world
 
-07:43:03.537 kernel  info    cfg api.health.path=/health                         application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg app.env=dev                                     application: hello-world
 
-07:43:03.537 kernel  info    cfg api.health.port=0                               application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg app.name=hello-world                            application: hello-world
 
-07:43:03.537 kernel  info    cfg app_family=get-started                          application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg app.namespace={app.tags.project}.{app.env}.{app.tags.family}.{app.tags.group}  application: hello-world
 
-07:43:03.537 kernel  info    cfg app_group=grp                                   application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg app.tags.family=get-started                     application: hello-world
 
-07:43:03.537 kernel  info    cfg app_name=hello-world                            application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg app.tags.group=grp                              application: hello-world
 
-07:43:03.537 kernel  info    cfg app_project=gosoline                            application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg app.tags.project=gosoline                       application: hello-world
 
-07:43:03.537 kernel  info    cfg appctx.metadata.server.port=0                   application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg appctx.metadata.server.port=0                   application: hello-world
 
-07:43:03.537 kernel  info    cfg dx.auto_create=true                             application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg dx.use_random_port=true                         application: hello-world
 
-07:43:03.537 kernel  info    cfg dx.use_random_port=true                         application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg httpserver.health-check.port=0                  application: hello-world
 
-07:43:03.537 kernel  info    cfg env=dev                                         application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg kernel.health_check.timeout=1m0s                application: hello-world
 
-07:43:03.537 kernel  info    cfg kernel.health_check.timeout=1m0s                application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg kernel.health_check.wait_interval=10ms          application: hello-world
 
-07:43:03.537 kernel  info    cfg kernel.health_check.wait_interval=3s            application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg kernel.kill_timeout=30s                         application: hello-world
 
-07:43:03.537 kernel  info    cfg kernel.kill_timeout=10s                         application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg kinsumer.autoscale.dynamodb.naming.pattern={app.env}-kinsumer-autoscale-leaders  application: hello-world
 
-07:43:03.537 kernel  info    cfg log.handlers.main.formatter=console             application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg kinsumer.autoscale.ecs.client=default           application: hello-world
 
-07:43:03.537 kernel  info    cfg log.handlers.main.level=info                    application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg kinsumer.autoscale.ecs.cluster={app.env}        application: hello-world
 
-07:43:03.537 kernel  info    cfg log.handlers.main.timestamp_format=15:04:05.000  application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg kinsumer.autoscale.ecs.service={app.name}       application: hello-world
 
-07:43:03.537 kernel  info    cfg log.handlers.main.type=iowriter                 application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg kinsumer.autoscale.enabled=false                application: hello-world
 
-07:43:03.537 kernel  info    cfg log.handlers.main.writer=stdout                 application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg kinsumer.autoscale.leader_election=kinsumer-autoscale  application: hello-world
 
-07:43:03.537 kernel  info    cfg metric.application={app_name}                   application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg kinsumer.autoscale.orchestrator=ecs             application: hello-world
 
-07:43:03.537 kernel  info    cfg metric.cloudwatch.naming.pattern={project}/{env}/{family}/{group}-{app}  application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg kinsumer.autoscale.period=1m0s                  application: hello-world
 
-07:43:03.537 kernel  info    cfg metric.enabled=false                            application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg log.handlers.main.channels.kernel.level=        application: hello-world
 
-07:43:03.537 kernel  info    cfg metric.environment={env}                        application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg log.handlers.main.channels.main.level=          application: hello-world
 
-07:43:03.537 kernel  info    cfg metric.family={app_family}                      application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg log.handlers.main.formatter=console             application: hello-world
 
-07:43:03.537 kernel  info    cfg metric.group={app_group}                        application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg log.handlers.main.level=info                    application: hello-world
 
-07:43:03.537 kernel  info    cfg metric.interval=1m0s                            application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg log.handlers.main.timestamp_format=15:04:05.000  application: hello-world
 
-07:43:03.537 kernel  info    cfg metric.project={app_project}                    application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg log.handlers.main.type=iowriter                 application: hello-world
 
-07:43:03.537 kernel  info    cfg metric.writer=                                  application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg log.handlers.main.writer=stdout                 application: hello-world
 
-07:43:03.537 kernel  info    cfg fingerprint: f673796f9852c4b7e669201638f06f60   application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg resource_lifecycles.create.enabled=true         application: hello-world
 
-07:43:03.537 kernel  info    stage 0 up and running with 1 modules               application: hello-world, group: grp
+15:09:17.803 kernel  info    cfg fingerprint: ec1a0765339d8ad26b6f13ae9b10514c   application: hello-world
 
-07:43:03.538 kernel  info    running background module metric in stage 0         application: hello-world, group: grp
+15:09:17.803 kernel  info    stage 2048 up and running with 1 modules            application: hello-world
 
-07:43:03.538 kernel  info    stage 1024 up and running with 2 modules            application: hello-world, group: grp
+15:09:17.803 kernel  info    kernel up and running after 415µs                   application: hello-world
 
-07:43:03.538 kernel  info    stage 2048 up and running with 1 modules            application: hello-world, group: grp
+15:09:17.803 kernel  info    running foreground module hello-world in stage 2048  application: hello-world
 
-07:43:03.538 kernel  info    kernel up and running                               application: hello-world, group: grp
+15:09:17.804 hello-world info    Hello World                                         application: hello-world
 
-07:43:03.538 kernel  info    running background module api-health-check in stage 1024  application: hello-world, group: grp
+15:09:17.804 kernel  info    stopped foreground module hello-world               application: hello-world
 
-07:43:03.538 metrics info    metrics not enabled..                               application: hello-world, group: grp
+15:09:17.804 kernel  info    stopping kernel due to: no more foreground modules in running state  application: hello-world
 
-07:43:03.538 kernel  info    running background module metadata-server in stage 1024  application: hello-world, group: grp
+15:09:17.804 kernel  info    stopping stage 2048                                 application: hello-world
 
-07:43:03.538 kernel  info    stopped background module metric                    application: hello-world, group: grp
+15:09:17.804 kernel  info    stopped stage 2048                                  application: hello-world
 
-07:43:03.538 kernel  info    running foreground module hello-world in stage 2048  application: hello-world, group: grp
-
-07:43:03.538 hello-world info    Hello World                                         application: hello-world, group: grp
-
-07:43:03.538 kernel  info    stopped foreground module hello-world               application: hello-world, group: grp
-
-07:43:03.538 kernel  info    stopping kernel due to: no more foreground modules in running state  application: hello-world, group: grp
-
-07:43:03.538 kernel  info    stopping stage 2048                                 application: hello-world, group: grp
-
-07:43:03.538 kernel  info    stopped stage 2048                                  application: hello-world, group: grp
-
-07:43:03.538 kernel  info    stopping stage 1024                                 application: hello-world, group: grp
-
-07:43:03.538 kernel  info    stopped background module api-health-check          application: hello-world, group: grp
-
-07:43:03.538 metadata-server info    serving metadata on address [::]:45745              application: hello-world, group: grp
-
-07:43:03.538 kernel  info    stopped background module metadata-server           application: hello-world, group: grp
-
-07:43:03.538 kernel  info    stopped stage 1024                                  application: hello-world, group: grp
-
-07:43:03.538 kernel  info    stopping stage 0                                    application: hello-world, group: grp
-
-07:43:03.538 kernel  info    stopped stage 0                                     application: hello-world, group: grp
-
-07:43:03.538 kernel  info    leaving kernel with exit code 0                     application: hello-world, group: grp
+15:09:17.804 kernel  info    leaving kernel with exit code 0                     application: hello-world
 ```
 
 
@@ -3397,8 +3378,10 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```
-go get github.com/gosoline-project/sqlc@v0.4.0
+go get github.com/gosoline-project/sqlc@v0.4.1-0.20261013124322-f3bdb6518b42
 ```
+
+This documentation branch pins a migration prerelease snapshot, not a stable `v0.4.1` release.
 
 Then import the package in your Go code:
 
@@ -3495,6 +3478,15 @@ sqlc:
 | `timeouts.timeout`        | MySQL driver connection timeout. For PostgreSQL, use `parameters.connect_timeout`. | `0`                  |
 
 Use `parameters` for driver-specific settings such as PostgreSQL `sslmode` or `connect_timeout`. PostgreSQL connections use `uri.*` and `parameters`; the MySQL-specific settings above are ignored by the PostgreSQL driver.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+Settings-based SQLC database construction emits a legacy metric named `DbConnectionCount` through Gosoline's metric writer with an empty metric namespace. This SQLC-specific series is separate from the framework's namespaced `db.client.*` and `db.repo.*` metrics.
+
+* The `Type="new"` datum is written once for each `database/sql/driver.Driver.Open` attempt, before SQLC calls the underlying driver. It counts attempts, including failed opens, not only successful connections.
+* SQLC samples `sql.DB.Stats()` every minute and writes `Type="open"` (`OpenConnections`), `Type="inUse"` (`InUse`), and `Type="idle"` (`Idle`) values under the same `DbConnectionCount` name.
+
+These legacy observations reach an exporter only when the application wires `application.WithMetrics`, sets `metric.enabled: true`, and configures at least one writer under `metric.writers`; SQLC has no separate metric-enable setting. Framework metrics are different: `db.client.connections` is an undimensioned counter of driver `Open` attempts, `db.client.connection.count` is a gauge with `connection.state=used|idle`, and `db.repo.*` covers framework repository operations and notifications. Do not interpret those framework names as aliases for SQLC's `DbConnectionCount`.
 
 ## Migrations[​](#migrations "Direct link to Migrations")
 
@@ -3863,7 +3855,7 @@ query := sqlc.FromG[Experiment]("experiments").
     ForUpdate()
 ```
 
-Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. SQLR v0.9.1 also applies a repository query's `ForUpdate()` setting to its preloads.
+Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. The SQLR migration-prerelease snapshot pinned by this documentation branch also applies a repository query's `ForUpdate()` setting to its preloads.
 
 ## UPDATE Operations[​](#update-operations "Direct link to UPDATE Operations")
 
@@ -4206,13 +4198,13 @@ The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the c
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
-Install SQLH v0.8.0:
+Install the SQLH snapshot pinned by this documentation branch:
 
 ```
-go get github.com/gosoline-project/sqlh@v0.8.0
+go get github.com/gosoline-project/sqlh@v0.8.1-0.20261013125801-b3d114e8cae0
 ```
 
-SQLH v0.8.0 uses `httpserver` v0.6.4, `sqlc` v0.4.0, and `sqlr` v0.9.1. Use these versions for the examples. SQLH v0.8.0 requires Go 1.27.0 or newer.
+The examples use the docs module's migration prerelease pins: SQLH `v0.8.1-0.20261013125801-b3d114e8cae0`, `httpserver` `v0.6.5-0.20261013124439-0538a07a7c58`, `sqlc` `v0.4.1-0.20261013124322-f3bdb6518b42`, SQLR `v0.9.2-0.20261013125204-bbd729912067`, and Gosoline `v0.68.1-0.20261013123101-dd90ce372ff3`. These are branch snapshots, not stable releases. SQLH requires Go 1.27.0 or newer.
 
 Then import the package:
 
@@ -5659,8 +5651,10 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```
-go get github.com/gosoline-project/sqlr@v0.9.1
+go get github.com/gosoline-project/sqlr@v0.9.2-0.20261013125204-bbd729912067
 ```
+
+This documentation branch pins a migration prerelease snapshot, not a stable `v0.9.2` release.
 
 Then import the package in your Go code:
 
@@ -7338,7 +7332,7 @@ The httpserver includes a built-in middleware chain and supports custom middlewa
 Every httpserver automatically includes these middleware, applied in order:
 
 1. **Sampling** — Applies sampling decisions based on HTTP headers
-2. **Metric** — Records request count, response time, and status code metrics
+2. **Metric** — Records request-duration observations and request rejections, and tracks active requests and connections
 3. **Logging** — Logs request details using fingers-crossed scope (only logs on errors)
 4. **Compression** — Handles gzip compression/decompression
 5. **Max body size** — Limits incoming request bodies with `httpserver.<name>.max_body_bytes`
@@ -7349,7 +7343,9 @@ Every httpserver automatically includes these middleware, applied in order:
 10. **Concurrency** — Limits concurrent requests
 11. **Chaos** — Randomly introduces failures for resilience testing (disabled by default)
 
-You don't need to configure these — they are enabled by default (except chaos, which is opt-in).
+The metric middleware records each matched request in the `http.server.request.duration` histogram. Its attributes are `name` (the named server), `route`, `request.method`, and `response.status_code`; the histogram observation count is the request count for each attribute set, so status is an attribute of the duration observation rather than a separate status metric. Rejections before handling are counted separately by `http.server.rejected.requests`, with `name`, `route`, and `request.method` attributes (no response-status attribute). The server-level gauges `http.server.active_request.count` and `http.server.connection.count` carry only `name`, not the route, method, or response status.
+
+These are canonical Gosoline metric names; the configured writer determines their exported names and units. The middleware is installed by default; metric export requires the application to wire `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`. Chaos is the only opt-in built-in middleware.
 
 ## Request body size limit[​](#request-body-size-limit "Direct link to Request body size limit")
 
@@ -8153,8 +8149,10 @@ Together with built-in middleware for logging, metrics, compression, and gracefu
 Install the package:
 
 ```
-go get github.com/gosoline-project/httpserver@v0.6.4
+go get github.com/gosoline-project/httpserver@v0.6.5-0.20261013124439-0538a07a7c58
 ```
+
+The documentation module pins this migration prerelease snapshot; it is not a stable `v0.6.5` release.
 
 The entry point for any HTTP server is a `RouterFactory` — a function that receives a `*Router` and registers routes on it:
 
@@ -9419,14 +9417,14 @@ Set `max_connections: 0` (the default) to disable this limit.
 
 ### Metrics[​](#metrics "Direct link to Metrics")
 
-The server emits two gauge metrics (sampled every 10 seconds and on every change):
+The server emits two gauge metrics (sampled every 10 seconds and on every request or connection state change):
 
-| Metric                   | Description                                 |
-| ------------------------ | ------------------------------------------- |
-| `HttpConcurrentRequests` | Number of requests currently being handled. |
-| `HttpOpenConnections`    | Number of currently open TCP connections.   |
+| Canonical metric                   | Description                                 |
+| ---------------------------------- | ------------------------------------------- |
+| `http.server.active_request.count` | Number of requests currently being handled. |
+| `http.server.connection.count`     | Number of currently open TCP connections.   |
 
-Both metrics carry a `ServerName` dimension set to the server name (e.g. `default`).
+Both gauges carry only the `name` attribute, set to the named server (for example, `default`). Unlike request-level metrics, they are not split by route, `request.method`, or `response.status_code`. The names in this table are canonical Gosoline names; metric writers render them according to the selected backend.
 
 ## Connection lifecycle advisor[​](#connection-lifecycle-advisor "Direct link to Connection lifecycle advisor")
 
@@ -10985,16 +10983,50 @@ Batching will still be done by the producer daemon, but it will use the `max_bat
 
 ### Metrics[​](#metrics "Direct link to Metrics")
 
-Enable Gosoline's metric collection and a writer to export Kafka metrics. The following are framework metric names; the exported naming/representation depends on the configured writer:
+Enable Gosoline's metric collection and a writer to export Kafka metrics. The tables list canonical authored names, instrument types, authored units, and attributes. They are not backend-exported spellings: OpenTelemetry prefixes the namespace with `gosoline.` and converts durations authored in milliseconds to seconds (for example, `kafka.consumer.process.duration` becomes `gosoline.kafka.consumer.process.duration` with unit `s`); CloudWatch PascalCases metric leaves, and Prometheus applies its own name, type, and unit suffixes. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for current exporter mappings.
 
-| Area                               | Metrics                                                                                                                                         |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Consumer                           | `RecordsConsumed`, `RecordsConsumedFailed`, `PollCount`, `PollDuration`, `ProcessDuration`, `CommitDuration`, `RebalanceCount`, `SleepDuration` |
-| Producer                           | `RecordsSent`, `RecordsSentFailed`, `ProduceBatchSize`, `ProduceDuration`                                                                       |
-| Broker connectivity and throttling | `BrokerConnects`, `BrokerConnectsFailed`, `BrokerThrottleCount`, `BrokerThrottleTime`                                                           |
-| Wire batches                       | `ProduceBatchRecords`, `ProduceBatchBytes`, `ProduceBatchBytesCompressed`, `FetchBatchRecords`, `FetchBatchBytes`, `FetchBatchBytesCompressed`  |
+For Kafka client metrics, `client.type` is `consumer` or `producer`, `client.name` is the configured input/output name, and `topic.name` is the resolved topic. The `error.type` value `{{default}}` marks the default outcome.
 
-Client/topic metrics use `ClientType`, `Client`, and `Topic` dimensions. Wire-batch metrics include both topic totals and partition-level values with `Partition`; broker metrics use `Broker`. `Client` is the configured input/output name. Consumed counts and committed offsets do not establish business success; correlate failure counts, retry logs, and commit errors. Monitor application consumer metrics alongside Kafka-specific metrics for decoding and callback failures.
+#### Consumer metrics (`kafka.consumer`)[​](#consumer-metrics-kafkaconsumer "Direct link to consumer-metrics-kafkaconsumer")
+
+| Authored metric                    | Instrument; authored unit (OTel unit) | Attributes                                               | Meaning                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------- | ------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kafka.consumer.consumed.messages` | Counter; count (OTel `{message}`)     | `client.type`, `client.name`, `topic.name`, `error.type` | Records in the poll work set split into non-failed (`error.type="{{default}}"`) and callback-failed (`error.type="processing_failed"`) counts. These are disjoint outcomes and sum to the work-set size. On shutdown, records skipped before callback admission can fall in the default bucket, so it is not proof of successful business processing. |
+| `kafka.consumer.polls`             | Counter; count (OTel `{poll}`)        | `client.type`, `client.name`, `topic.name`               | Poll calls counted when the following processing/commit path completes successfully; errors or cancellation that abort that path suppress the sample (successful shutdown drains may still count).                                                                                                                                                    |
+| `kafka.consumer.poll.duration`     | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `topic.name`               | Duration of a `poll()` request, recorded when the following processing/commit path completes successfully; errors or cancellation that abort that path suppress the sample (successful shutdown drains may still count).                                                                                                                              |
+| `kafka.consumer.process.duration`  | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `topic.name`               | One observation for a poll's processing cycle, including configured `consume_delay` waits, callback processing, and offset-commit work.                                                                                                                                                                                                               |
+| `kafka.consumer.commit.duration`   | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `topic.name`               | Duration of an offset commit.                                                                                                                                                                                                                                                                                                                         |
+| `kafka.consumer.sleep.duration`    | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `topic.name`               | Completed per-record `consume_delay` waits before processing; canceled waits produce no observation.                                                                                                                                                                                                                                                  |
+| `kafka.consumer.rebalances`        | Counter; count (OTel `{rebalance}`)   | `client.type`, `client.name`, `topic.name`               | Consumer-group rebalances this consumer participated in.                                                                                                                                                                                                                                                                                              |
+
+#### Producer metrics (`kafka.producer`)[​](#producer-metrics-kafkaproducer "Direct link to producer-metrics-kafkaproducer")
+
+| Authored metric                   | Instrument; authored unit (OTel unit) | Attributes                                               | Meaning                                                                                                                                                                                                                                       |
+| --------------------------------- | ------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kafka.producer.sent.messages`    | Counter; count (OTel `{message}`)     | `client.type`, `client.name`, `topic.name`, `error.type` | Records returned by the synchronous producer call split into successful (`error.type="{{default}}"`) and failed (`error.type="send_failed"`) outcomes. The buckets are disjoint; for a partial failure their sum is the records in that call. |
+| `kafka.producer.batch.records`    | Histogram; count (OTel `{record}`)    | `client.type`, `client.name`, `topic.name`               | Number of records passed to one synchronous producer call; this is not a franz-go wire-batch count.                                                                                                                                           |
+| `kafka.producer.produce.duration` | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `topic.name`               | Duration of one synchronous producer call.                                                                                                                                                                                                    |
+
+#### Broker connectivity and throttling metrics (`kafka`)[​](#broker-connectivity-and-throttling-metrics-kafka "Direct link to broker-connectivity-and-throttling-metrics-kafka")
+
+| Authored metric           | Instrument; authored unit (OTel unit) | Attributes                                                   | Meaning                                                                                                                                    |
+| ------------------------- | ------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `kafka.connects`          | Counter; count (OTel `{connect}`)     | `client.type`, `client.name`, `broker.address`, `error.type` | Broker connection attempts; successful (`error.type="{{default}}"`) and failed (`error.type="connect_failed"`) attempts are distinguished. |
+| `kafka.throttles`         | Counter; count (OTel `{throttle}`)    | `client.type`, `client.name`, `broker.address`               | Broker-throttled requests.                                                                                                                 |
+| `kafka.throttle.duration` | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `broker.address`               | Time a broker throttled a Kafka client.                                                                                                    |
+
+#### Wire-batch metrics (`kafka`)[​](#wire-batch-metrics-kafka "Direct link to wire-batch-metrics-kafka")
+
+| Authored metric                       | Instrument; authored unit (OTel unit) | Attributes                                                 | Meaning                                       |
+| ------------------------------------- | ------------------------------------- | ---------------------------------------------------------- | --------------------------------------------- |
+| `kafka.produce.batch.records`         | Histogram; count (OTel `{record}`)    | `client.type`, `client.name`, `topic.name`, `partition.id` | Records in one franz-go produce wire batch.   |
+| `kafka.produce.batch.size`            | Histogram; bytes (OTel `By`)          | `client.type`, `client.name`, `topic.name`, `partition.id` | Uncompressed bytes in one produce wire batch. |
+| `kafka.produce.batch.compressed.size` | Histogram; bytes (OTel `By`)          | `client.type`, `client.name`, `topic.name`, `partition.id` | Compressed bytes in one produce wire batch.   |
+| `kafka.fetch.batch.records`           | Histogram; count (OTel `{record}`)    | `client.type`, `client.name`, `topic.name`, `partition.id` | Records in one franz-go fetch wire batch.     |
+| `kafka.fetch.batch.size`              | Histogram; bytes (OTel `By`)          | `client.type`, `client.name`, `topic.name`, `partition.id` | Uncompressed bytes in one fetch wire batch.   |
+| `kafka.fetch.batch.compressed.size`   | Histogram; bytes (OTel `By`)          | `client.type`, `client.name`, `topic.name`, `partition.id` | Compressed bytes in one fetch wire batch.     |
+
+Consumer and producer client metrics are aggregated at client/topic granularity and do not carry `partition.id`. Only the broker connectivity/throttling metrics carry `broker.address`; wire-batch hooks carry `topic.name` and `partition.id`, not `broker.address`. Client metrics describe transport activity, not business success or durable effects; correlate callback/output errors, retry activity, commits, and application outcomes.
 
 ### Topic creation and metadata[​](#topic-creation-and-metadata "Direct link to Topic creation and metadata")
 
@@ -13719,7 +13751,7 @@ sampling:
 
 info
 
-When sampling is enabled and a new decision is made, gosoline emits a metric `sampling_decision` (count) with dimension `sampled=true|false`.
+When sampling is enabled and a new decision is made, Gosoline records the canonical metric `smpl.decisions` as a counter with authored unit `count` and the `sampled` attribute set to `true` or `false`. OpenTelemetry exports it as `gosoline.smpl.decisions` with unit `{decision}`; other metric backends may render Gosoline metric names using their own conventions.
 
 ### Built-in strategies[​](#built-in-strategies "Direct link to Built-in strategies")
 
@@ -14219,15 +14251,15 @@ Callbacks receive individual models. Transport fetch batches and producer-daemon
 
 ## Consumer metrics[​](#consumer-metrics "Direct link to Consumer metrics")
 
-The current V2 stream consumer instruments are:
+The names below are canonical Gosoline metric names as authored. They are not backend-exported names: OpenTelemetry prefixes the namespace with `gosoline.` and converts duration values from authored milliseconds to seconds; CloudWatch and Prometheus apply their own name and unit conventions. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
 
-| Metric                              | Instrument and unit     | Meaning                                                                                                                                                                                  |
-| ----------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gosoline.stream.process.duration`  | Histogram, milliseconds | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one per batch callback invocation, not one per message. |
-| `gosoline.stream.consumed.messages` | Counter, messages       | Number of messages processed, tagged by `consumer.name` and `error.type`. The default error type contributes every processed message to the total.                                       |
-| `gosoline.stream.retry.operations`  | Counter, operations     | Retry queue reads (`operation: get`) and writes (`operation: put`), tagged by `consumer.name` and `operation`.                                                                           |
+| Authored metric                                                  | Instrument and authored unit (OpenTelemetry unit) | Attributes                    | Meaning                                                                                                                                                                                          |
+| ---------------------------------------------------------------- | ------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stream.process.duration` (`gosoline.stream.process.duration`)   | Histogram; milliseconds (OTel `s`)                | `consumer.name`               | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one duration for the whole batch callback, not one per message. |
+| `stream.consumed.messages` (`gosoline.stream.consumed.messages`) | Counter; count (OTel `{message}`)                 | `consumer.name`, `error.type` | Number of messages processed. The `error.type="{{default}}"` series is the all-processed total; `error.type="processing_failed"` counts failed messages.                                         |
+| `stream.retry.operations` (`gosoline.stream.retry.operations`)   | Counter; count (OTel `{operation}`)               | `consumer.name`, `operation`  | Retry-queue `get`/`put` attempts; not a retried-record count or evidence that a queue operation succeeded.                                                                                       |
 
-For `consumed.messages`, `error.type: processing_failed` is an additional count of failed messages, not a disjoint category: failed messages are already included in the default total. For a batch, the total increases by its record count while `process.duration` adds a single observation for the whole callback operation. Do not add the failure series to the total when calculating overall volume. These current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle migration](/docs/pr-5/migrations/stream-consumer-lifecycle/.md).
+For `stream.consumed.messages`, the `processing_failed` series is an overlapping per-message subset of the `{{default}}` total, not a disjoint outcome: callback failures are already included in the total. In a batch, the total and any failure count increase by the number of records, while `process.duration` adds one observation for the full batch callback. Do not add the failure series to the total or subtract it to infer successes. Ignored model errors and canceled processing do not emit the failure series. These current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle migration](/docs/pr-5/migrations/stream-consumer-lifecycle/.md).
 
 ## Graceful processing[​](#graceful-processing "Direct link to Graceful processing")
 
@@ -14957,7 +14989,18 @@ The file output makes the lifecycle visible without requiring a queue. In produc
 
 When all background runners are busy and the output channel reaches `buffer_size`, producer writes block until capacity becomes available. This is intentional backpressure; size the buffer and runner count for expected traffic instead of making the buffer unbounded.
 
-Remote output errors happen in a background runner after the producer call has returned. The daemon logs these errors and emits metrics including message count, batch size, aggregate size, and idle duration. Monitor daemon logs and metrics because callers cannot receive asynchronous output failures.
+Remote output errors happen in a background runner after the producer call has returned. The daemon logs these errors; callers cannot receive asynchronous output failures.
+
+The following are the daemon's canonical authored metrics in the `stream` namespace; each series carries `producer.name`, the configured name under `stream.producer.<name>`. OpenTelemetry prefixes names with `gosoline.` and converts the authored millisecond duration to seconds; CloudWatch and Prometheus apply their own naming and unit conventions. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
+
+| Authored metric             | Instrument and authored unit (OpenTelemetry unit) | Attributes      | Meaning                                                                                                                                                                                                      |
+| --------------------------- | ------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stream.produced.messages`  | Counter; count (OTel `{message}`)                 | `producer.name` | Input messages in calls to a running daemon's `Write`, counted before aggregation and batching. This does not establish that those stages or remote delivery succeeded.                                      |
+| `stream.batch.messages`     | Histogram; count (OTel `{message}`)               | `producer.name` | Number of messages in each output batch passed to the configured output after aggregation and batching. The observation is written after the output call returns, including when that call reports an error. |
+| `stream.aggregate.messages` | Histogram; count (OTel `{message}`)               | `producer.name` | Number of original stream messages combined in each aggregate when aggregation is enabled; this is a message count, not a byte size.                                                                         |
+| `stream.idle.duration`      | Histogram; milliseconds (OTel `s`)                | `producer.name` | Time an output worker waits for the next batch on the daemon's output channel, capped at the configured `interval`. It is not output or broker-request latency.                                              |
+
+These metrics have no output-success/error attribute. Use daemon error logs to identify failed asynchronous output calls; do not interpret the batch histogram as a success counter.
 
 On graceful kernel shutdown, the daemon flushes pending aggregates and batches before closing its output workers. Abrupt process termination can still lose buffered messages.
 
@@ -15793,121 +15836,113 @@ And when you run your app, you'll see something like the following output:
 stdout
 
 ```
-13:34:26.600 main    info    applied priority 8 config post processor 'gosoline.log.handler_main'  application: hello-world, group: health-check
+15:09:29.102 main    info    applied priority 1 config post processor 'gosoline.dx.useRandomPort'  application: hello-world
 
-13:34:26.601 main    info    applied priority 1 config post processor 'gosoline.dx.autoCreate'  application: hello-world, group: health-check
+15:09:29.102 main    info    applied priority 1 config post processor 'gosoline.reslife.autoCreate'  application: hello-world
 
-13:34:26.601 main    info    applied priority 1 config post processor 'gosoline.dx.useRandomPort'  application: hello-world, group: health-check
+15:09:29.102 main    info    applied priority 8 config post processor 'gosoline.log.handler_main'  application: hello-world
 
-12:34:26.604 kernel  info    starting kernel                                     application: hello-world, group: health-check
+15:09:29.103 kernel  info    starting kernel                                     application: hello-world
 
-12:34:26.604 kernel  info    cfg api.health.path=/health                         application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg app.env=dev                                     application: hello-world
 
-12:34:26.604 kernel  info    cfg api.health.port=8090                            application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg app.name=hello-world                            application: hello-world
 
-12:34:26.604 kernel  info    cfg app_family=how-to                               application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg appctx.metadata.server.port=0                   application: hello-world
 
-12:34:26.604 kernel  info    cfg app_group=health-check                          application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg dx.use_random_port=true                         application: hello-world
 
-12:34:26.604 kernel  info    cfg app_name=hello-world                            application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg httpserver.health-check.path=/health            application: hello-world
 
-12:34:26.604 kernel  info    cfg app_project=gosoline                            application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg httpserver.health-check.port=8090               application: hello-world
 
-12:34:26.604 kernel  info    cfg appctx.metadata.server.port=0                   application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg httpserver.health-check.timeout.drain=0s        application: hello-world
 
-12:34:26.604 kernel  info    cfg dx.auto_create=true                             application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg httpserver.health-check.timeout.idle=1m0s       application: hello-world
 
-12:34:26.604 kernel  info    cfg dx.use_random_port=true                         application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg httpserver.health-check.timeout.read=1m0s       application: hello-world
 
-12:34:26.604 kernel  info    cfg env=dev                                         application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg httpserver.health-check.timeout.shutdown=1m0s   application: hello-world
 
-12:34:26.604 kernel  info    cfg kernel.health_check.timeout=10s                 application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg httpserver.health-check.timeout.write=1m0s      application: hello-world
 
-12:34:26.604 kernel  info    cfg kernel.health_check.wait_interval=1s            application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg kernel.health_check.timeout=10s                 application: hello-world
 
-12:34:26.604 kernel  info    cfg kernel.kill_timeout=10s                         application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg kernel.health_check.wait_interval=1s            application: hello-world
 
-12:34:26.604 kernel  info    cfg log.handlers.main.formatter=console             application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg kernel.kill_timeout=30s                         application: hello-world
 
-12:34:26.604 kernel  info    cfg log.handlers.main.level=info                    application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.dynamodb.naming.pattern={app.env}-kinsumer-autoscale-leaders  application: hello-world
 
-12:34:26.604 kernel  info    cfg log.handlers.main.timestamp_format=15:04:05.000  application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.ecs.client=default           application: hello-world
 
-12:34:26.604 kernel  info    cfg log.handlers.main.type=iowriter                 application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.ecs.cluster={app.env}        application: hello-world
 
-12:34:26.604 kernel  info    cfg log.handlers.main.writer=stdout                 application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.ecs.service={app.name}       application: hello-world
 
-12:34:26.604 kernel  info    cfg metric.application={app_name}                   application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.enabled=false                application: hello-world
 
-12:34:26.604 kernel  info    cfg metric.cloudwatch.naming.pattern={project}/{env}/{family}/{group}-{app}  application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.leader_election=kinsumer-autoscale  application: hello-world
 
-12:34:26.604 kernel  info    cfg metric.enabled=false                            application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.orchestrator=ecs             application: hello-world
 
-12:34:26.604 kernel  info    cfg metric.environment={env}                        application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg kinsumer.autoscale.period=1m0s                  application: hello-world
 
-12:34:26.604 kernel  info    cfg metric.family={app_family}                      application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg log.handlers.main.channels.kernel.level=        application: hello-world
 
-12:34:26.604 kernel  info    cfg metric.group={app_group}                        application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg log.handlers.main.channels.main.level=          application: hello-world
 
-12:34:26.604 kernel  info    cfg metric.interval=1m0s                            application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg log.handlers.main.formatter=console             application: hello-world
 
-12:34:26.604 kernel  info    cfg metric.project={app_project}                    application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg log.handlers.main.level=info                    application: hello-world
 
-12:34:26.604 kernel  info    cfg metric.writer=                                  application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg log.handlers.main.timestamp_format=15:04:05.000  application: hello-world
 
-12:34:26.604 kernel  info    cfg fingerprint: ef5386d483b4b86e621859e38ecf2442   application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg log.handlers.main.type=iowriter                 application: hello-world
 
-12:34:26.604 kernel  info    stage 0 up and running with 1 modules               application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg log.handlers.main.writer=stdout                 application: hello-world
 
-12:34:26.604 kernel  info    running background module metric in stage 0         application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg resource_lifecycles.create.enabled=true         application: hello-world
 
-12:34:26.605 kernel  info    running background module metadata-server in stage 1024  application: hello-world, group: health-check
+15:09:29.103 kernel  info    cfg fingerprint: c3bbbde8d0193517f02ef31853922032   application: hello-world
 
-12:34:26.605 kernel  info    running background module api-health-check in stage 1024  application: hello-world, group: health-check
+15:09:29.103 kernel  info    stage 0 up and running with 1 modules               application: hello-world
 
-12:34:26.605 metrics info    metrics not enabled..                               application: hello-world, group: health-check
+15:09:29.103 kernel  info    waiting 1s for module hello-world in stage 2048 to get healthy: time left 9.9999975s  application: hello-world
 
-12:34:26.605 kernel  info    stopped background module metric                    application: hello-world, group: health-check
+15:09:29.103 kernel  info    running foreground module hello-world in stage 2048  application: hello-world
 
-12:34:26.605 kernel  info    stage 1024 up and running with 2 modules            application: hello-world, group: health-check
+15:09:29.103 kernel  info    running background module http-health-check in stage 0  application: hello-world
 
-12:34:26.605 kernel  info    waiting for module hello-world in stage 2048 to get healthy  application: hello-world, group: health-check
+15:09:30.104 kernel  info    waiting 1s for module hello-world in stage 2048 to get healthy: time left 8.998905459s  application: hello-world
 
-12:34:26.605 kernel  info    running foreground module hello-world in stage 2048  application: hello-world, group: health-check
+15:09:31.104 kernel  info    waiting 1s for module hello-world in stage 2048 to get healthy: time left 7.998746834s  application: hello-world
 
-12:34:26.605 metadata-server info    serving metadata on address [::]:44891              application: hello-world, group: health-check
+15:09:32.103 hello-world info    Hello World                                         application: hello-world
 
-12:34:27.605 kernel  info    waiting for module hello-world in stage 2048 to get healthy  application: hello-world, group: health-check
+15:09:32.103 kernel  info    stopped foreground module hello-world               application: hello-world
 
-12:34:28.606 kernel  info    waiting for module hello-world in stage 2048 to get healthy  application: hello-world, group: health-check
+15:09:32.103 kernel  info    stopping kernel due to: no more foreground modules in running state  application: hello-world
 
-12:34:29.606 hello-world info    Hello World                                         application: hello-world, group: health-check
+15:09:32.103 kernel  info    stopping stage 2048                                 application: hello-world
 
-12:34:29.606 kernel  info    stopped foreground module hello-world               application: hello-world, group: health-check
+15:09:32.103 kernel  info    stage 2048 up and running with 1 modules            application: hello-world
 
-12:34:29.606 kernel  info    stage 2048 up and running with 1 modules            application: hello-world, group: health-check
+15:09:32.103 kernel  info    stopped stage 2048                                  application: hello-world
 
-12:34:29.606 kernel  info    kernel up and running                               application: hello-world, group: health-check
+15:09:32.103 kernel  info    stopping stage 0                                    application: hello-world
 
-12:34:29.606 kernel  info    stopping kernel due to: no more foreground modules in running state  application: hello-world, group: health-check
+15:09:32.103 kernel  info    kernel up and running after 3.000736083s            application: hello-world
 
-12:34:29.606 kernel  info    stopping stage 2048                                 application: hello-world, group: health-check
+15:09:32.103 httpserver-health-check info    trying to gracefully shutdown httpserver health check  application: hello-world
 
-12:34:29.606 kernel  info    stopped stage 2048                                  application: hello-world, group: health-check
+15:09:32.104 httpserver-health-check info    leaving httpserver health check                     application: hello-world
 
-12:34:29.606 kernel  info    stopping stage 1024                                 application: hello-world, group: health-check
+15:09:32.104 kernel  info    stopped background module http-health-check         application: hello-world
 
-12:34:29.607 kernel  info    stopped background module api-health-check          application: hello-world, group: health-check
+15:09:32.104 kernel  info    stopped stage 0                                     application: hello-world
 
-12:34:29.607 kernel  info    stopped background module metadata-server           application: hello-world, group: health-check
-
-12:34:29.607 kernel  info    stopped stage 1024                                  application: hello-world, group: health-check
-
-12:34:29.607 kernel  info    stopping stage 0                                    application: hello-world, group: health-check
-
-12:34:29.607 kernel  info    stopped stage 0                                     application: hello-world, group: health-check
-
-12:34:29.607 kernel  info    leaving kernel with exit code 0                     application: hello-world, group: health-check
+15:09:32.104 kernel  info    leaving kernel with exit code 0                     application: hello-world
 ```
 
 Note that the kernel waits the `wait_interval` and checks the health of the application's modules several times:
@@ -15926,6 +15961,10 @@ Note that the kernel waits the `wait_interval` and checks the health of the appl
 # Migrating to Identity and Naming Patterns
 
 This guide details how to migrate your gosoline application to the new `Identity` system and dynamic resource naming.
+
+info
+
+This guide covers the earlier application-identity and resource-naming migration. Metric emission has a separate current V2 contract; consult the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md) for current names, units, dimensions, and writer behavior.
 
 ## 1. Update Configuration[​](#1-update-configuration "Direct link to 1. Update Configuration")
 
@@ -16646,29 +16685,9 @@ This section lists the configuration keys, their old and new defaults, and the c
 2. Replace old-style placeholders with new-style ones.
 3. If you need a custom delimiter, set `naming.table_delimiter`.
 
-### Metric Calculator DynamoDB Table[​](#metric-calculator-dynamodb-table "Direct link to Metric Calculator DynamoDB Table")
+### Historical: Metric calculator DynamoDB table[​](#historical-metric-calculator-dynamodb-table "Direct link to Historical: Metric calculator DynamoDB table")
 
-|                 | Value                                                                             |
-| --------------- | --------------------------------------------------------------------------------- |
-| **Config Key**  | `metric.calculator.dynamodb.naming.table_pattern` (renamed from `naming.pattern`) |
-| **Old Default** | `{project}-{env}-{family}`                                                        |
-| **New Default** | `{app.env}-metric-calculator-leaders`                                             |
-
-warning
-
-The default pattern has changed significantly. It no longer uses `{project}` or `{family}` and now includes a descriptive suffix. If you relied on the old default, explicitly set the pattern:
-
-```
-metric:
-
-  calculator:
-
-    dynamodb:
-
-      naming:
-
-        table_pattern: "{app.tags.project}-{app.env}-{app.tags.family}-metric-calculator-leaders"
-```
+Earlier editions of this migration described `metric.calculator.dynamodb.naming.table_pattern` and its leader-election table default. That calculator configuration and its per-runner metrics are no longer part of the current V2 contract; do not add the historical setting back to current applications. See the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the removed metrics and current guidance.
 
 ### CloudWatch Namespace[​](#cloudwatch-namespace "Direct link to CloudWatch Namespace")
 
@@ -16680,17 +16699,11 @@ metric:
 | **Delimiter Config**  | `metric.writer_settings.cloudwatch.naming.namespace_delimiter` |
 | **Delimiter Default** | `/`                                                            |
 
-CloudWatch uses `/` as the delimiter, creating hierarchical namespaces in AWS Console.
+This CloudWatch namespace setting remains supported. It controls the CloudWatch service namespace, not the rendered metric name.
 
-### Prometheus Namespace[​](#prometheus-namespace "Direct link to Prometheus Namespace")
+### Prometheus metric prefix[​](#prometheus-metric-prefix "Direct link to Prometheus metric prefix")
 
-|                       | Value                                                          |
-| --------------------- | -------------------------------------------------------------- |
-| **Config Key**        | `metric.writer_settings.prometheus.naming.namespace_pattern`   |
-| **Old Default**       | `{project}-{env}-{family}-{group}-{app}`                       |
-| **New Default**       | `{app.namespace}-{app.name}`                                   |
-| **Delimiter Config**  | `metric.writer_settings.prometheus.naming.namespace_delimiter` |
-| **Delimiter Default** | `_` (underscores, following Prometheus naming conventions)     |
+The Prometheus writer now uses the fixed `gosoline` prefix, independent of `app.namespace` and `app.name`. Put application identity on the scrape target through service discovery/target labels. The former `metric.writer_settings.prometheus.naming.namespace_pattern` and `metric.writer_settings.prometheus.naming.namespace_delimiter` settings no longer control names; this older migration entry is historical. See the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md).
 
 ### Redis Key Prefix[​](#redis-key-prefix "Direct link to Redis Key Prefix")
 
@@ -16806,23 +16819,22 @@ application.Default(
 
 The following options were removed from `Default()` and must now be added explicitly if needed:
 
-| Removed Option                                                   | Capability Lost                                     |
-| ---------------------------------------------------------------- | --------------------------------------------------- |
-| `WithConfigFile("./config.dist.yml", "yml")`                     | Automatic loading of `config.dist.yml`              |
-| `WithConfigFileFlag`                                             | `--config` CLI flag for specifying config files     |
-| `WithHttpHealthCheck`                                            | HTTP health check endpoint                          |
-| `WithMetadataServer`                                             | HTTP server exposing build info and module metadata |
-| `WithMetricsCalculatorModule`                                    | Metrics calculator module                           |
-| `WithLoggerApplicationTag("group")`                              | `group` tag added to all log entries                |
-| `WithLoggerMetricHandler`                                        | Logger metric handler (counts log entries by level) |
-| `WithLoggerSentryHandler(...)`                                   | Sentry error reporting integration                  |
-| `WithMetrics`                                                    | Metrics collection and export                       |
-| `WithProducerDaemon`                                             | Background producer daemon for stream batching      |
-| `WithTaskRunner`                                                 | Task runner module                                  |
-| `WithProfiling`                                                  | Profiling module (pprof)                            |
-| `WithTracing`                                                    | Distributed tracing (X-Ray / OpenTelemetry)         |
-| `WithUTCClock(true)`                                             | UTC clock as default time source                    |
-| `WithMiddlewareFactory(reslife.LifeCycleManagerMiddleware, ...)` | Resource lifecycle management middleware            |
+| Removed Option                                                   | Capability Lost                                                               |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `WithConfigFile("./config.dist.yml", "yml")`                     | Automatic loading of `config.dist.yml`                                        |
+| `WithConfigFileFlag`                                             | `--config` CLI flag for specifying config files                               |
+| `WithHttpHealthCheck`                                            | HTTP health check endpoint                                                    |
+| `WithMetadataServer`                                             | HTTP server exposing build info and module metadata                           |
+| `WithLoggerApplicationTag("group")`                              | `group` tag added to all log entries                                          |
+| `WithLoggerMetricHandler`                                        | Logger metric handler (counts warning- and error-level log entries, by level) |
+| `WithLoggerSentryHandler(...)`                                   | Sentry error reporting integration                                            |
+| `WithMetrics`                                                    | Metrics collection and export                                                 |
+| `WithProducerDaemon`                                             | Background producer daemon for stream batching                                |
+| `WithTaskRunner`                                                 | Task runner module                                                            |
+| `WithProfiling`                                                  | Profiling module (pprof)                                                      |
+| `WithTracing`                                                    | Distributed tracing (X-Ray / OpenTelemetry)                                   |
+| `WithUTCClock(true)`                                             | UTC clock as default time source                                              |
+| `WithMiddlewareFactory(reslife.LifeCycleManagerMiddleware, ...)` | Resource lifecycle management middleware                                      |
 
 ### How to Migrate[​](#how-to-migrate "Direct link to How to Migrate")
 
@@ -16876,8 +16888,6 @@ func main() {
         // Metrics & observability
 
         application.WithMetrics,
-
-        application.WithMetricsCalculatorModule,
 
         application.WithTracing,
 
@@ -19100,18 +19110,20 @@ Review `kernel.kill_timeout` and the deployment termination budget together. All
 
 Verify callback dependencies also respect cancellation. Successful `Run` termination does not prove that deletion, commit, or checkpoint persistence succeeded; some shutdown cleanup failures are logged without failing the run.
 
+The named stream and Kafka metrics in this section describe the historical metric contract for the v0.66.0 lifecycle migration, including `WaitDuration`, `CommitFailures`, `SleepDuration`, `ProcessDuration`, `ProcessedCount`, `RetryPutCount`, and `RecordsConsumed`. They are not the current V2 metric names. See the [current metric schema reference](/docs/pr-5/reference/metric-schema/.md) for current names, types, authored and OpenTelemetry units, attributes, and exporter mappings.
+
 Update monitoring and metadata clients:
 
-| Change                                                                                            | Migration action                                                                                      |
-| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Kafka metrics use consumer/topic granularity rather than partition dimensions.                    | Update queries and alerts using `Partition`.                                                          |
-| Kafka `WaitDuration` and `CommitFailures` are no longer emitted.                                  | Replace dashboards and alerts relying on those names.                                                 |
-| Kafka/Kinesis expose `SleepDuration` with consumption delay; it contributes to `ProcessDuration`. | Account for deliberate delay in latency and lag alerts.                                               |
-| Kafka `ProcessDuration` also includes commit work.                                                | Review comparisons with previous callback timings.                                                    |
-| Health tracks active processing independently.                                                    | A slow callback can make the consumer unhealthy while others succeed; review health-check thresholds. |
-| Consumer metadata no longer includes `runner_count`.                                              | Update metadata consumers and assertions.                                                             |
+| Change                                                                                                 | Migration action                                                                                      |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| At the v0.66.0 migration, Kafka metrics moved to consumer/topic granularity from partition dimensions. | Update queries and alerts using `Partition`.                                                          |
+| Kafka `WaitDuration` and `CommitFailures` are no longer emitted after the v0.66.0 lifecycle change.    | Replace dashboards and alerts relying on those historical names.                                      |
+| Kafka/Kinesis expose `SleepDuration` with consumption delay; it contributes to `ProcessDuration`.      | Account for deliberate delay in latency and lag alerts.                                               |
+| Kafka `ProcessDuration` also includes commit work.                                                     | Review comparisons with previous callback timings.                                                    |
+| Health tracks active processing independently.                                                         | A slow callback can make the consumer unhealthy while others succeed; review health-check thresholds. |
+| Consumer metadata no longer includes `runner_count`.                                                   | Update metadata consumers and assertions.                                                             |
 
-Counters are not evidence of successful durable effects: stream `ProcessedCount` counts processing attempts, retry-put count counts publication attempts, and Kafka `RecordsConsumed` counts fetched records, including work skipped during shutdown. Correlate them with errors, queue depth, commits/checkpoints, and application outcomes.
+At the v0.66.0 lifecycle migration boundary, `ProcessedCount` counted processing attempts, `RetryPutCount` counted retry-publication attempts, and Kafka `RecordsConsumed` counted fetched records, including work skipped during shutdown. These historical counters do not prove successful durable effects; correlate them with errors, queue depth, commits/checkpoints, and application outcomes.
 
 ## 12. Review Message and Integration Compatibility[​](#12-review-message-and-integration-compatibility "Direct link to 12. Review Message and Integration Compatibility")
 
@@ -19152,6 +19164,229 @@ The application migration instructions below flag these integrations for separat
 Copy the prepared instructions to give an AI agent an operational migration task. They include discovery, configuration mappings, behavior decisions, validation, and stop conditions.
 
 Copy AI migration instructions
+
+
+---
+
+# Metric schema
+
+This page is the contract for metrics authored by Gosoline. The canonical names, instrument types, authored units, dimensions, and descriptions below describe what the emitters actually record; they are not a copy of OpenTelemetry's metric inventory. Gosoline follows OpenTelemetry semantic conventions for metric grammar, units, and attribute shape where useful, but emits its own names. For example, `http.server.request.duration` is authored by Gosoline and exported by OTEL as `gosoline.http.server.request.duration`, not as an unqualified semantic-convention metric.
+
+## Schema version[​](#schema-version "Direct link to Schema version")
+
+The current metric contract is **`v2.0`** (`metric.SchemaVersion`). When the metric daemon is enabled, Gosoline publishes that value as metadata under `metric.schema_version`. Removing or renaming an authored metric name, dimension key, or unit representation is a breaking change; purely additive metric changes are minor. The current V2 release is the single migration from V1 and emits no dual versions. A new build's schema version does not automatically migrate dashboards, alerts, queries, or autoscaling policies.
+
+## Authored names and writer output[​](#authored-names-and-writer-output "Direct link to Authored names and writer output")
+
+A Gosoline metric is authored as a canonical namespace and leaf, joined with a dot—for example, `http.server` + `request.duration` becomes `http.server.request.duration`. The namespace identifies the emitting subsystem; it is not the application identity. A namespace-less application metric instead uses its leaf as its complete authored name.
+
+Each writer renders that canonical name for its backend:
+
+| Authored metric                           | CloudWatch metric name      | Prometheus metric name                          | OTEL metric name                        |
+| ----------------------------------------- | --------------------------- | ----------------------------------------------- | --------------------------------------- |
+| `http.server.request.duration`            | `HttpServerRequestDuration` | `gosoline_http_server_request_duration_seconds` | `gosoline.http.server.request.duration` |
+| Namespace-less counter `my.custom.metric` | `MyCustomMetric`            | `gosoline_my_custom_metric_total`               | `my.custom.metric`                      |
+
+The first row's duration is authored in milliseconds; Prometheus and OTEL values are scaled to seconds, and both names show the seconds base unit. The Prometheus histogram exposition adds its normal sample suffixes to the base name. Prometheus dimension keys also replace dots with underscores, so the HTTP `request.method`, `route`, and `response.status_code` attributes become `request_method`, `route`, and `response_status_code` labels. The default-dimension marker `{{default}}` is rendered as an empty Prometheus label value.
+
+For Gosoline metrics, the Prometheus writer always uses the fixed `gosoline` prefix. It names the framework that authored the metric, not the application. Do not configure an application-specific Prometheus prefix: `metric.writer_settings.prometheus.naming.namespace_pattern` and `metric.writer_settings.prometheus.naming.namespace_delimiter` no longer control metric names. Put application identity on the scrape target through service discovery/target labels; Gosoline does not copy app identity into each metric name.
+
+CloudWatch keeps its separate, still-supported namespace setting:
+
+```
+metric:
+
+  writer_settings:
+
+    cloudwatch:
+
+      naming:
+
+        namespace_pattern: "{app.namespace}-{app.name}"
+
+        namespace_delimiter: "/"
+```
+
+This setting controls the CloudWatch **namespace** in AWS, not the metric name. CloudWatch metric names are rendered from the authored namespace and leaf as one PascalCased name; it does not add `gosoline` to the metric name. The datum's metric namespace and the CloudWatch service namespace are separate concepts. Consequently, writing an application-authored metric with an empty Gosoline namespace does not remove the configured CloudWatch namespace: only its metric name is PascalCased from the leaf.
+
+For a namespace-less custom name, CloudWatch converts canonical separators in the leaf too: `my.custom.metric` becomes `MyCustomMetric`. Prometheus still applies its fixed `gosoline` writer prefix, converts dots in the leaf to underscores, and appends the unit/counter suffix (the example is a counter). OTEL normalizes and exports that namespace-less leaf without a `gosoline.` prefix. These behaviors are intentional; re-key CloudWatch dashboards or alarms using namespace-less custom metrics if they previously depended on the unrendered dotted leaf.
+
+## Units and descriptions[​](#units-and-descriptions "Direct link to Units and descriptions")
+
+The inventory's unit is the unit the emitter authors. Gosoline durations are generally recorded in milliseconds, and Prometheus and OTEL scale those values to seconds and render the base-unit suffix or instrument unit. `cloud.aws.kinesis.acquire.duration` is the one duration authored in seconds. Byte histograms are authored in bytes. Count metrics use count units.
+
+Prometheus appends `_seconds` to duration histograms and `_bytes` to byte histograms; counters append `_total` (a count counter therefore ends in `_total`, without an extra `_count` unit suffix). OTEL puts the unit on the instrument rather than in its metric name. It scales milliseconds to seconds and uses `By` for byte values. For count instruments whose final leaf is plural, it derives a UCUM item annotation from that leaf's singular form: `stream.consumed.messages` uses `{message}`, `kafka.consumer.polls` uses `{poll}`, and `kafka.connects` uses `{connect}`. Nonplural leaves such as `.count` use unit `1`. CloudWatch receives the authored CloudWatch unit. The source inventory below distinguishes a counter from a gauge or histogram: their equal `count` units do not make their measurements interchangeable.
+
+Every framework metric has a registered description. Prometheus and OTEL use that help text; a per-datum `Kind.WithHelp` value overrides the registered description. If no help has been registered for an application-authored metric, the writer falls back to `unit: <unit>`.
+
+## Current framework inventory[​](#current-framework-inventory "Direct link to Current framework inventory")
+
+The V2 inventory contains **62 metrics across 18 namespaces**.
+
+The dimensions listed are the actual attributes emitted with that metric. Entries in `error.type` or `outcome` describe separate series, not separate metric names. The `kafka.consumer` and `kafka.producer` operation metrics are topic-level (no partition attribute). Franz-go wire-batch metrics carry `topic.name` and `partition.id`; connection/throttle metrics instead carry `broker.address`. SQL pool state and SQL open attempts are separate metrics with different semantics.
+
+### `stream`[​](#stream "Direct link to stream")
+
+| Canonical metric            | Type      | Authored unit | Dimensions                    | Description / actual measurement                                                                                                                                          |
+| --------------------------- | --------- | ------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stream.process.duration`   | histogram | ms            | `consumer.name`               | Duration of one consumer processing operation; a batch consumer records one observation for the whole batch.                                                              |
+| `stream.consumed.messages`  | counter   | count         | `consumer.name`, `error.type` | Messages a consumer took in from its input, by error type.                                                                                                                |
+| `stream.retry.operations`   | counter   | count         | `consumer.name`, `operation`  | Retry-queue `get` and `put` attempts; not a count of retried records or proof that a queue operation succeeded.                                                           |
+| `stream.produced.messages`  | counter   | count         | `producer.name`               | Input messages in calls to a running daemon's `Write`, counted before aggregation and batching; this does not establish that those stages or remote delivery succeeded.   |
+| `stream.batch.messages`     | histogram | count         | `producer.name`               | Messages passed to the configured output per batch after aggregation and batching; the observation is recorded after the output call returns even if it reports an error. |
+| `stream.aggregate.messages` | histogram | count         | `producer.name`               | Messages combined by a producer daemon into one aggregate.                                                                                                                |
+| `stream.idle.duration`      | histogram | ms            | `producer.name`               | Time an output worker waits for the next batch on the daemon's output channel, capped at the configured `interval`; it is not output or broker-request latency.           |
+| `stream.message.count`      | gauge     | count         | `list.name`                   | Messages currently held by a Redis list input.                                                                                                                            |
+| `stream.reads`              | counter   | count         | `list.name`                   | Read operations performed by a Redis list input.                                                                                                                          |
+| `stream.writes`             | counter   | count         | `list.name`                   | Messages supplied to a Redis-list output batch, counted after the list's `RPush` calls; not a Redis command count or confirmation that each item was stored.              |
+
+For `stream.consumed.messages`, `error.type="{{default}}"` is the all-processed total, including callback failures; `error.type="processing_failed"` is an overlapping per-record subset. Do not add or subtract those series to infer successful messages.
+
+### `kafka.consumer`[​](#kafkaconsumer "Direct link to kafkaconsumer")
+
+| Canonical metric                   | Type      | Authored unit | Dimensions                                               | Description / actual measurement                                                                                                                                                                                         |
+| ---------------------------------- | --------- | ------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `kafka.consumer.consumed.messages` | counter   | count         | `client.type`, `client.name`, `topic.name`, `error.type` | Records a Kafka consumer took in from its topic, by error type.                                                                                                                                                          |
+| `kafka.consumer.process.duration`  | histogram | ms            | `client.type`, `client.name`, `topic.name`               | Duration of one Kafka consumer processing cycle, including configured consume-delay waiting, record-callback processing, and offset-commit work.                                                                         |
+| `kafka.consumer.polls`             | counter   | count         | `client.type`, `client.name`, `topic.name`               | Poll calls counted when the following processing/commit path completes successfully; errors or cancellation that abort that path suppress the sample (successful shutdown drains may still count).                       |
+| `kafka.consumer.poll.duration`     | histogram | ms            | `client.type`, `client.name`, `topic.name`               | Duration of a `poll()` request, recorded when the following processing/commit path completes successfully; errors or cancellation that abort that path suppress the sample (successful shutdown drains may still count). |
+| `kafka.consumer.commit.duration`   | histogram | ms            | `client.type`, `client.name`, `topic.name`               | Duration of a Kafka consumer offset commit.                                                                                                                                                                              |
+| `kafka.consumer.sleep.duration`    | histogram | ms            | `client.type`, `client.name`, `topic.name`               | Completed per-record configured consume-delay waits before processing; canceled waits produce no observation.                                                                                                            |
+| `kafka.consumer.rebalances`        | counter   | count         | `client.type`, `client.name`, `topic.name`               | Consumer-group rebalances a Kafka consumer took part in.                                                                                                                                                                 |
+
+These consumer metrics are topic-level and do not include a partition dimension.
+
+### `kafka.producer`[​](#kafkaproducer "Direct link to kafkaproducer")
+
+| Canonical metric                  | Type      | Authored unit | Dimensions                                               | Description / actual measurement                                                                      |
+| --------------------------------- | --------- | ------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `kafka.producer.sent.messages`    | counter   | count         | `client.type`, `client.name`, `topic.name`, `error.type` | Records a Kafka producer handed to the broker, by error type.                                         |
+| `kafka.producer.produce.duration` | histogram | ms            | `client.type`, `client.name`, `topic.name`               | Duration of a Kafka producer send.                                                                    |
+| `kafka.producer.batch.records`    | histogram | count         | `client.type`, `client.name`, `topic.name`               | Records passed to one synchronous producer call; this is not a wire-batch count or proof of delivery. |
+
+Producer metrics are topic-level and do not include a partition dimension.
+
+### `kafka` (franz-go hooks)[​](#kafka-franz-go-hooks "Direct link to kafka-franz-go-hooks")
+
+The broker connection/throttle metrics carry `client.type`, `client.name`, and `broker.address`. Only `kafka.connects` also carries `error.type` (`connect_failed` or `{{default}}`); `kafka.throttles` and `kafka.throttle.duration` do not. Produce/fetch wire-batch metrics carry `client.type`, `client.name`, `topic.name`, and `partition.id` instead; they do not carry `broker.address`.
+
+| Canonical metric                      | Type      | Authored unit | Dimensions                                                   | Description / actual measurement                                             |
+| ------------------------------------- | --------- | ------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `kafka.connects`                      | counter   | count         | `client.type`, `client.name`, `broker.address`, `error.type` | Broker connection attempts a Kafka client observed, by `error.type` outcome. |
+| `kafka.throttles`                     | counter   | count         | `client.type`, `client.name`, `broker.address`               | Requests a broker throttled.                                                 |
+| `kafka.throttle.duration`             | histogram | ms            | `client.type`, `client.name`, `broker.address`               | Time a broker throttled a Kafka client for.                                  |
+| `kafka.produce.batch.records`         | histogram | count         | `client.type`, `client.name`, `topic.name`, `partition.id`   | Records a Kafka client produced per batch.                                   |
+| `kafka.produce.batch.size`            | histogram | bytes         | `client.type`, `client.name`, `topic.name`, `partition.id`   | Uncompressed size of a batch a Kafka client produced.                        |
+| `kafka.produce.batch.compressed.size` | histogram | bytes         | `client.type`, `client.name`, `topic.name`, `partition.id`   | Compressed size of a batch a Kafka client produced.                          |
+| `kafka.fetch.batch.records`           | histogram | count         | `client.type`, `client.name`, `topic.name`, `partition.id`   | Records a Kafka client fetched per batch.                                    |
+| `kafka.fetch.batch.size`              | histogram | bytes         | `client.type`, `client.name`, `topic.name`, `partition.id`   | Uncompressed size of a batch a Kafka client fetched.                         |
+| `kafka.fetch.batch.compressed.size`   | histogram | bytes         | `client.type`, `client.name`, `topic.name`, `partition.id`   | Compressed size of a batch a Kafka client fetched.                           |
+
+### `cloud.aws.kinesis`[​](#cloudawskinesis "Direct link to cloudawskinesis")
+
+| Canonical metric                      | Type      | Authored unit | Dimensions                                  | Description / actual measurement                                                                                                                                                                    |
+| ------------------------------------- | --------- | ------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cloud.aws.kinesis.consumed.messages` | counter   | count         | `stream.name`, `partition.id`, `error.type` | Records processed by a Kinesis shard reader; the default series is the completed-batch total and `processing_failed` is an overlapping per-record subset.                                           |
+| `cloud.aws.kinesis.sent.messages`     | counter   | count         | `stream.name`, `error.type`                 | Records sent to a Kinesis stream per `PutRecords` attempt, by Kinesis error reason.                                                                                                                 |
+| `cloud.aws.kinesis.process.duration`  | histogram | ms            | `stream.name`, `partition.id`               | Duration of processing one batch of Kinesis records.                                                                                                                                                |
+| `cloud.aws.kinesis.reads`             | counter   | count         | `stream.name`, `partition.id`               | `GetRecords` calls a Kinesis shard reader performed.                                                                                                                                                |
+| `cloud.aws.kinesis.lag`               | histogram | ms            | `stream.name`, `partition.id`               | AWS-reported milliseconds behind the latest record for this shard reader, from Kinesis `GetRecordsOutput.MillisBehindLatest`; it is not wall-clock age of the last processed record.                |
+| `cloud.aws.kinesis.acquire.duration`  | histogram | s             | `stream.name`, `partition.id`               | Time a Kinesis shard reader waited to acquire a shard.                                                                                                                                              |
+| `cloud.aws.kinesis.sleep.duration`    | histogram | ms            | `stream.name`, `partition.id`               | Completed per-record configured `ConsumeDelay` waits before processing; canceled waits produce no observation.                                                                                      |
+| `cloud.aws.kinesis.wait.duration`     | histogram | ms            | `stream.name`, `partition.id`               | Computed delay scheduled before the next poll: normally the remaining `WaitTime` after the time since the previous `GetRecords` call, and zero when reported lag exceeds `WaitTime + ConsumeDelay`. |
+| `cloud.aws.kinesis.shard.count`       | gauge     | count         | `stream.name`                               | Shards a Kinesis stream currently has.                                                                                                                                                              |
+| `cloud.aws.kinesis.client.count`      | gauge     | count         | `stream.name`                               | Clients currently consuming a Kinesis stream.                                                                                                                                                       |
+| `cloud.aws.kinesis.batch.records`     | histogram | count         | `stream.name`                               | Records included in one `PutRecords` request attempt (including retries).                                                                                                                           |
+
+For Kinesis `consumed.messages`, the `{{default}}` batch-total series includes failed records; `error.type="processing_failed"` is an overlapping per-record subset. For `sent.messages`, `error.type` carries the reason Kinesis reported. `lag` keeps millisecond samples and CloudWatch maximum aggregation; its OTEL histogram exposes the cumulative maximum per stream and shard.
+
+### `kvstore`[​](#kvstore "Direct link to kvstore")
+
+| Canonical metric     | Type    | Authored unit | Dimensions                      | Description / actual measurement                                                                                                                         |
+| -------------------- | ------- | ------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kvstore.reads`      | counter | count         | `model.id`, `store.type`, `hit` | Read operations against a key-value store, by whether the store served them itself.                                                                      |
+| `kvstore.writes`     | counter | count         | `model.id`, `store.type`        | Write operations performed against a key-value store.                                                                                                    |
+| `kvstore.deletes`    | counter | count         | `model.id`, `store.type`        | Delete operations performed against a key-value store.                                                                                                   |
+| `kvstore.item.count` | gauge   | count         | `model.id`, `store.type`        | Estimated item count from a store's optional `SizedStore.EstimateSize()` implementation; the metric is not reported when that capability is unavailable. |
+
+### `db.client`, `db.repo`, and `ddb`[​](#dbclient-dbrepo-and-ddb "Direct link to dbclient-dbrepo-and-ddb")
+
+| Canonical metric                    | Type      | Authored unit | Dimensions                                 | Description / actual measurement                                                                                               |
+| ----------------------------------- | --------- | ------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `db.client.connection.count`        | gauge     | count         | `connection.state` (`used`, `idle`)        | Current SQL pool connections by used/idle state. The framework emits the two states; it does not emit a separate `open` state. |
+| `db.client.connections`             | counter   | count         | none                                       | SQL driver `Open` attempts since process start; one is recorded before each underlying driver's `Open` call.                   |
+| `db.repo.operation.duration`        | histogram | ms            | `operation.name`, `model.id`, `error.type` | Duration of a SQL repository operation.                                                                                        |
+| `db.repo.model_event.notifications` | counter   | count         | `model.id`, `error.type`                   | Model-event notifications a repository published, by error type.                                                               |
+| `ddb.operation.duration`            | histogram | ms            | `operation.name`, `model.id`, `error.type` | Duration of a DynamoDB repository operation.                                                                                   |
+
+The framework's SQL metrics are separate from optional SQLC instrumentation. The published SQLC integration remains a legacy exception: it emits `DbConnectionCount` with an empty Gosoline metric namespace, `Type="new"` once per driver `Open` attempt, and `Type="open"`, `"inUse"`, and `"idle"` connection-pool measurements each minute. That is not an emission of `db.client.connections` or `db.client.connection.count`, and is not part of the 62-name framework V2 inventory above.
+
+### `mdlsub`[​](#mdlsub "Direct link to mdlsub")
+
+| Canonical metric | Type    | Authored unit | Dimensions                                                 | Description / actual measurement                                                                                                                    |
+| ---------------- | ------- | ------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mdlsub.events`  | counter | count         | `model.id`, `outcome` (`applied`, `skipped`), `error.type` | Subscriber events counted on applied/skipped outcomes or an apply failure (`error.type=apply_failed`); deferred/cancelled events produce no metric. |
+
+### `http.server`[​](#httpserver "Direct link to httpserver")
+
+| Canonical metric                   | Type      | Authored unit | Dimensions                                                | Description / actual measurement                        |
+| ---------------------------------- | --------- | ------------- | --------------------------------------------------------- | ------------------------------------------------------- |
+| `http.server.request.duration`     | histogram | ms            | `name`, `route`, `request.method`, `response.status_code` | Duration of an HTTP server request.                     |
+| `http.server.rejected.requests`    | counter   | count         | `name`, `route`, `request.method`                         | HTTP requests the server rejected before handling them. |
+| `http.server.active_request.count` | gauge     | count         | `name`                                                    | HTTP requests the server is currently handling.         |
+| `http.server.connection.count`     | gauge     | count         | `name`                                                    | Connections the HTTP server currently holds open.       |
+
+### `http.client`[​](#httpclient "Direct link to httpclient")
+
+| Canonical metric               | Type      | Authored unit | Dimensions                                             | Description / actual measurement    |
+| ------------------------------ | --------- | ------------- | ------------------------------------------------------ | ----------------------------------- |
+| `http.client.request.duration` | histogram | ms            | `request.method`, `response.status_code`, `error.type` | Duration of an HTTP client request. |
+
+A canceled client request is recorded with `error.type="request_canceled"` before its cancellation error is returned.
+
+### `rpc.server`[​](#rpcserver "Direct link to rpcserver")
+
+| Canonical metric              | Type      | Authored unit | Dimensions          | Description / actual measurement |
+| ----------------------------- | --------- | ------------- | ------------------- | -------------------------------- |
+| `rpc.server.request.duration` | histogram | ms            | `service`, `method` | Duration of a gRPC server call.  |
+
+### Remaining namespaces[​](#remaining-namespaces "Direct link to Remaining namespaces")
+
+| Canonical metric                     | Type      | Authored unit | Dimensions                                                                  | Description / actual measurement                                                                                                                      |
+| ------------------------------------ | --------- | ------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `blob.batch.operations`              | counter   | count         | `operation`                                                                 | S3 `GetObject`, `PutObject`, `CopyObject`, and `DeleteObject` calls counted after each call returns; this counts attempts and does not imply success. |
+| `conc.scheduler.batch.tasks`         | histogram | count         | `name`                                                                      | Number of tasks in the batch supplied to one `batchRunner` call, recorded before the call; not a successful-task count.                               |
+| `conc.scheduler.task.queue.duration` | histogram | ms            | `name`                                                                      | Elapsed time from `ScheduleJob` start before enqueue until its `batchRunner` result is received, including queueing and batch execution.              |
+| `limit.takes`                        | counter   | count         | `name`, `prefix`, `outcome` (`allowed`, `throttled`, `error`), `error.type` | Attempts to take a rate-limiter token, by outcome and error type; recorded when the take ends.                                                        |
+| `smpl.decisions`                     | counter   | count         | `sampled`                                                                   | Sampling decisions made, by outcome.                                                                                                                  |
+| `metric.log.records`                 | counter   | count         | `level`                                                                     | Log records written at warn or error level, by level.                                                                                                 |
+
+## Folded outcomes and removed names[​](#folded-outcomes-and-removed-names "Direct link to Folded outcomes and removed names")
+
+The V2 contract records operation outcomes as dimensions instead of separate outcome metrics. Re-key queries that used these removed names:
+
+| Removed metric name(s)                                                     | Current metric                        | Dimension(s)                                                                              |
+| -------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `stream.errors`                                                            | `stream.consumed.messages`            | `error.type`                                                                              |
+| `kafka.producer.send.errors`                                               | `kafka.producer.sent.messages`        | `error.type`                                                                              |
+| `cloud.aws.kinesis.send.errors`                                            | `cloud.aws.kinesis.sent.messages`     | `error.type` (the Kinesis-reported reason)                                                |
+| `cloud.aws.kinesis.consume.errors`                                         | `cloud.aws.kinesis.consumed.messages` | `error.type`                                                                              |
+| `kvstore.hits`                                                             | `kvstore.reads`                       | `hit` (`true`, `false`)                                                                   |
+| `limit.releases`, `limit.throttles`, `limit.errors`                        | `limit.takes`                         | `outcome` (`allowed`, `throttled`, `error`) and `error.type`                              |
+| `mdlsub.consumed.events`, `mdlsub.skipped.events`, `mdlsub.consume.errors` | `mdlsub.events`                       | `outcome` (`applied`, `skipped`) and `error.type`                                         |
+| `kafka.consumer.consume.errors`                                            | `kafka.consumer.consumed.messages`    | `error.type`                                                                              |
+| `db.repo.model_event.notify.errors`                                        | `db.repo.model_event.notifications`   | `error.type`; the former error-only metric is not emitted and there is no `success` label |
+
+For exclusive outcomes, attempts are the sum over the dimension values. `stream.consumed.messages` and `cloud.aws.kinesis.consumed.messages` are exceptions: their `{{default}}` series is the all- processed total and `processing_failed` is an overlapping subset. Never sum or subtract those values to infer success. `error.type` is a bounded action/reason such as `send_failed`, `connect_failed`, `request_failed`, `request_canceled`, `operation_failed`, `notify_failed`, `apply_failed`, or `processing_failed`, not a Go error type or message.
+
+### Other V1 name changes[​](#other-v1-name-changes "Direct link to Other V1 name changes")
+
+| V1 name                        | V2 name                                                                                               | Description                                           |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `metric.records`               | `metric.log.records`                                                                                  | The leaf now identifies log-volume data.              |
+| `db.client.operation.duration` | `db.repo.operation.duration` for SQL repositories; `ddb.operation.duration` for DynamoDB repositories | Repository telemetry has distinct V2 names by source. |
+
+V2 no longer emits `autoscaling.per_runner.stream.messages`, `autoscaling.per_runner.http.server.requests`, `stream.available.messages`, or `stream.sent.messages`. Those historical calculator/per-runner metrics are not current autoscaling signals; use application- specific signals instead. The active Kinsumer autoscale leader-election table naming pattern remains a separate resource-naming feature; see the [Naming Patterns reference](/docs/pr-5/reference/naming-patterns/.md#kinsumer-autoscale-leader-election-table).
 
 
 ---
@@ -19389,6 +19624,8 @@ KvStore expands `{store}` first and then passes the pattern to the underlying Re
 
 ### Metrics[​](#metrics "Direct link to Metrics")
 
+Metric emission has its own V2 schema and writer naming rules; it is separate from the resource naming patterns below. See the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the current inventory, units, dimensions, help text, and backend-rendered names.
+
 **CloudWatch namespace**
 
 * **Config key:** `metric.writer_settings.cloudwatch.naming.namespace_pattern`
@@ -19396,12 +19633,13 @@ KvStore expands `{store}` first and then passes the pattern to the underlying Re
 * **Delimiter config key:** `metric.writer_settings.cloudwatch.naming.namespace_delimiter`
 * **Default delimiter:** `/`
 
-**Prometheus namespace prefix**
+This setting remains supported and formats the CloudWatch service namespace; it does not format each metric name.
 
-* **Config key:** `metric.writer_settings.prometheus.naming.namespace_pattern`
-* **Default:** `{app.namespace}-{app.name}`
-* **Delimiter config key:** `metric.writer_settings.prometheus.naming.namespace_delimiter`
-* **Default delimiter:** `_`
+**Prometheus metric prefix**
+
+The Prometheus writer uses the fixed `gosoline` prefix. The application identity belongs on the scrape target through service discovery/target labels, not in metric names. The former `metric.writer_settings.prometheus.naming.namespace_pattern` and `metric.writer_settings.prometheus.naming.namespace_delimiter` settings no longer control names.
+
+:::info Historical note Earlier editions of this reference described a configurable Prometheus prefix and a metric-calculator leader-election table. Those are not current metric configuration: the prefix is now fixed, and the calculator configuration was removed. The Kinsumer autoscale leader-election table below remains an active resource-naming pattern. :::
 
 ### Tracing[​](#tracing "Direct link to Tracing")
 
@@ -19424,13 +19662,6 @@ KvStore expands `{store}` first and then passes the pattern to the underlying Re
 * **Config key:** `conc.leader_election.<name>.naming.table_pattern`
 * **Default:** `{app.tags.project}-{app.env}-{app.tags.family}-leader-elections`
 * **Delimiter config key:** `conc.leader_election.<name>.naming.table_delimiter`
-* **Default delimiter:** `-`
-
-### Metric calculator leader election table[​](#metric-calculator-leader-election-table "Direct link to Metric calculator leader election table")
-
-* **Config key:** `metric.calculator.dynamodb.naming.table_pattern`
-* **Default:** `{app.env}-metric-calculator-leaders`
-* **Delimiter config key:** `metric.calculator.dynamodb.naming.table_delimiter`
 * **Default delimiter:** `-`
 
 ### Kinsumer autoscale leader election table[​](#kinsumer-autoscale-leader-election-table "Direct link to Kinsumer autoscale leader election table")
@@ -21386,16 +21617,27 @@ Creates a middleware that serves embedded static files with SPA fallback.
 
 The following middleware is automatically applied to every server:
 
-| Middleware           | Purpose                        |
-| -------------------- | ------------------------------ |
-| Sampling             | Apply sampling decisions       |
-| Metric               | Record request metrics         |
-| Logging              | Log requests (fingers-crossed) |
-| Compression          | Gzip compression               |
-| Max body size        | Limit incoming request bodies  |
-| Error                | Catch and format errors        |
-| Recovery             | Panic recovery                 |
-| Connection lifecycle | Manage connection age          |
+| Middleware           | Purpose                                                                         |
+| -------------------- | ------------------------------------------------------------------------------- |
+| Sampling             | Apply sampling decisions                                                        |
+| Metric               | Record request-duration, rejection, active-request, and open-connection metrics |
+| Logging              | Log requests (fingers-crossed)                                                  |
+| Compression          | Gzip compression                                                                |
+| Max body size        | Limit incoming request bodies                                                   |
+| Error                | Catch and format errors                                                         |
+| Recovery             | Panic recovery                                                                  |
+| Connection lifecycle | Manage connection age                                                           |
+
+The following are canonical Gosoline metric names. The duration histogram's observation count is the request count for each attribute set; `response.status_code` is an attribute, not a separate status metric. Rejection counts do not carry a response-status attribute. The gauges are server-level and carry only `name`.
+
+| Canonical metric                   | Kind      | Attributes                                                | Description                                                                    |
+| ---------------------------------- | --------- | --------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `http.server.request.duration`     | Histogram | `name`, `route`, `request.method`, `response.status_code` | Duration of each matched HTTP request; observation count is the request count. |
+| `http.server.rejected.requests`    | Counter   | `name`, `route`, `request.method`                         | Requests rejected before handling.                                             |
+| `http.server.active_request.count` | Gauge     | `name`                                                    | Requests currently handled by the server.                                      |
+| `http.server.connection.count`     | Gauge     | `name`                                                    | Connections currently held open by the server.                                 |
+
+These are authored canonical names, not backend-rendered names. OTEL prefixes the namespace with `gosoline.` and exports durations in seconds; CloudWatch renders names in PascalCase and durations in milliseconds; Prometheus uses the fixed `gosoline` prefix, normalized metric names, and base-unit/counter suffixes. Application identity belongs on scrape-target labels, not in the metric name.
 
 ## Validation[​](#validation "Direct link to Validation")
 
@@ -21874,7 +22116,7 @@ log:
 
 ### Metric[​](#metric "Direct link to Metric")
 
-No configuration needed. Writes a metric data point for every warn and error log.
+No configuration is needed. The canonical Gosoline metric `metric.log.records` is a counter with authored unit `count`: the metric handler increments it once for each warn- or error-level record, setting the `level` attribute to `warn` or `error`; other levels are not counted. OpenTelemetry exports it as `gosoline.metric.log.records` with unit `{record}`; other metric backends may render Gosoline metric names using their own conventions.
 
 ### Sentry[​](#sentry "Direct link to Sentry")
 

@@ -100,7 +100,11 @@ app:
 * **Define once, use everywhere**: Set your hierarchy in one place
 * **Easy updates**: Change your naming convention globally by updating one config value
 * **Simplified patterns**: Use `{app.namespace}` instead of repeating the same placeholders
-* **Delimiter flexibility**: Different services can use appropriate delimiters (CloudWatch uses `/`, Prometheus uses `_`, most AWS services use `-`)
+* **Delimiter flexibility**: Resource patterns use service-specific delimiters; CloudWatch naming uses `/` and most AWS resource names use `-`.
+
+### Metrics use a separate schema[​](#metrics-use-a-separate-schema "Direct link to Metrics use a separate schema")
+
+Metric names are not resource names. The CloudWatch namespace can still be configured from application identity, but Gosoline's Prometheus writer uses a fixed `gosoline` prefix; application identity belongs on the scrape target through service discovery/target labels. For the V2 metric names, units, and backend rendering, see the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md).
 
 ## How Naming Patterns Work[​](#how-naming-patterns-work "Direct link to How Naming Patterns Work")
 

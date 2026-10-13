@@ -261,7 +261,11 @@
 </ul>
 <hr>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="migration-quick-start">Migration quick start<a href="https://gosoline-project.github.io/docs/pr-5/blog/identity-and-naming-patterns/#migration-quick-start" class="hash-link" aria-label="Direct link to Migration quick start" title="Direct link to Migration quick start" translate="no">​</a></h2>
-<p>For full step-by-step instructions covering stream input/output config, <code>mdlsub</code> publishers, Go code changes, and per-service pattern updates, see the <a class="" href="https://gosoline-project.github.io/docs/pr-5/migrations/app-identity-and-naming-patterns/">migration guide</a>.</p>]]></content>
+<p>For full step-by-step instructions covering stream input/output config, <code>mdlsub</code> publishers, Go code changes, and per-service pattern updates, see the <a class="" href="https://gosoline-project.github.io/docs/pr-5/migrations/app-identity-and-naming-patterns/">migration guide</a>.</p>
+<p><em>Historical metric note:</em> This February 2026 article records the naming behavior at publication. The
+current V2 schema supersedes its Prometheus-prefix statements: Prometheus now uses the fixed <code>gosoline</code>
+prefix, while application identity belongs on scrape-target labels. See the current <a class="" href="https://gosoline-project.github.io/docs/pr-5/reference/metric-schema/">Metric schema
+reference</a> and <a class="" href="https://gosoline-project.github.io/docs/pr-5/reference/naming-patterns/">Naming Patterns reference</a>.</p>]]></content>
         <author>
             <name>Jan Kamieth</name>
             <uri>https://github.com/j4k4</uri>

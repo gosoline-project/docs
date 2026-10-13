@@ -1,3 +1,3 @@
-## [📄️Naming patterns](/docs/pr-5/reference/naming-patterns/.md)
+## [📄️Metric schema](/docs/pr-5/reference/metric-schema/.md)
 
-[Gosoline uses naming patterns to generate consistent names for resources (SQS queues, SNS topics, DynamoDB tables, Kafka topics, Redis keys, metric namespaces, tracing service names, ...).](/docs/pr-5/reference/naming-patterns/.md)
+[This page is the contract for metrics authored by Gosoline. The canonical names, instrument types,](/docs/pr-5/reference/metric-schema/.md)

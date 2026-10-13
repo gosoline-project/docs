@@ -231,6 +231,8 @@ KvStore expands `{store}` first and then passes the pattern to the underlying Re
 
 ### Metrics[​](#metrics "Direct link to Metrics")
 
+Metric emission has its own V2 schema and writer naming rules; it is separate from the resource naming patterns below. See the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the current inventory, units, dimensions, help text, and backend-rendered names.
+
 **CloudWatch namespace**
 
 * **Config key:** `metric.writer_settings.cloudwatch.naming.namespace_pattern`
@@ -238,12 +240,13 @@ KvStore expands `{store}` first and then passes the pattern to the underlying Re
 * **Delimiter config key:** `metric.writer_settings.cloudwatch.naming.namespace_delimiter`
 * **Default delimiter:** `/`
 
-**Prometheus namespace prefix**
+This setting remains supported and formats the CloudWatch service namespace; it does not format each metric name.
 
-* **Config key:** `metric.writer_settings.prometheus.naming.namespace_pattern`
-* **Default:** `{app.namespace}-{app.name}`
-* **Delimiter config key:** `metric.writer_settings.prometheus.naming.namespace_delimiter`
-* **Default delimiter:** `_`
+**Prometheus metric prefix**
+
+The Prometheus writer uses the fixed `gosoline` prefix. The application identity belongs on the scrape target through service discovery/target labels, not in metric names. The former `metric.writer_settings.prometheus.naming.namespace_pattern` and `metric.writer_settings.prometheus.naming.namespace_delimiter` settings no longer control names.
+
+:::info Historical note Earlier editions of this reference described a configurable Prometheus prefix and a metric-calculator leader-election table. Those are not current metric configuration: the prefix is now fixed, and the calculator configuration was removed. The Kinsumer autoscale leader-election table below remains an active resource-naming pattern. :::
 
 ### Tracing[​](#tracing "Direct link to Tracing")
 
@@ -266,13 +269,6 @@ KvStore expands `{store}` first and then passes the pattern to the underlying Re
 * **Config key:** `conc.leader_election.<name>.naming.table_pattern`
 * **Default:** `{app.tags.project}-{app.env}-{app.tags.family}-leader-elections`
 * **Delimiter config key:** `conc.leader_election.<name>.naming.table_delimiter`
-* **Default delimiter:** `-`
-
-### Metric calculator leader election table[​](#metric-calculator-leader-election-table "Direct link to Metric calculator leader election table")
-
-* **Config key:** `metric.calculator.dynamodb.naming.table_pattern`
-* **Default:** `{app.env}-metric-calculator-leaders`
-* **Delimiter config key:** `metric.calculator.dynamodb.naming.table_delimiter`
 * **Default delimiter:** `-`
 
 ### Kinsumer autoscale leader election table[​](#kinsumer-autoscale-leader-election-table "Direct link to Kinsumer autoscale leader election table")

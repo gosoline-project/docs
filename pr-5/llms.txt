@@ -74,6 +74,7 @@
 - [Migrating to the Standalone HTTP Server Package](/migrations/httpserver-package.md): This guide explains how to migrate from the old github.com/justtrackio/gosoline/pkg/httpserver package directly to the standalone github.com/gosoline-project/httpserver module at v0.6.4.
 - [Migrating an Existing Service to SQLH CRUD](/migrations/sqlh-crud.md): This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers.
 - [Migrating to the Callback-Based Stream Consumer Lifecycle](/migrations/stream-consumer-lifecycle.md): This guide covers the breaking stream changes introduced in Gosoline v0.66.0 by commit 04b54462, stream: unify input processing and shutdown. Follow this guide when upgrading from an earlier release to v0.66.0 or later.
+- [Metric schema](/reference/metric-schema.md): This page is the contract for metrics authored by Gosoline. The canonical names, instrument types,
 - [Naming patterns](/reference/naming-patterns.md): Gosoline uses naming patterns to generate consistent names for resources (SQS queues, SNS topics, DynamoDB tables, Kafka topics, Redis keys, metric namespaces, tracing service names, ...).
 - [cfg package](/reference/package-cfg.md): With the cfg package, you can configure and use configurations in your gosoline project.
 - [Package cloud/aws](/reference/package-cloud_aws.md): The cloud/aws package

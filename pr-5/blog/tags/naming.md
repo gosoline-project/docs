@@ -4,7 +4,7 @@ February 19, 2026 ·
 
 <!-- -->
 
-5 min read
+6 min read
 
 [![Jan Kamieth](https://avatars.githubusercontent.com/u/783502?s=400\&v=4)](https://github.com/j4k4)
 

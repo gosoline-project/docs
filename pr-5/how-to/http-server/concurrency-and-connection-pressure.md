@@ -76,14 +76,14 @@ Set `max_connections: 0` (the default) to disable this limit.
 
 ### Metrics[​](#metrics "Direct link to Metrics")
 
-The server emits two gauge metrics (sampled every 10 seconds and on every change):
+The server emits two gauge metrics (sampled every 10 seconds and on every request or connection state change):
 
-| Metric                   | Description                                 |
-| ------------------------ | ------------------------------------------- |
-| `HttpConcurrentRequests` | Number of requests currently being handled. |
-| `HttpOpenConnections`    | Number of currently open TCP connections.   |
+| Canonical metric                   | Description                                 |
+| ---------------------------------- | ------------------------------------------- |
+| `http.server.active_request.count` | Number of requests currently being handled. |
+| `http.server.connection.count`     | Number of currently open TCP connections.   |
 
-Both metrics carry a `ServerName` dimension set to the server name (e.g. `default`).
+Both gauges carry only the `name` attribute, set to the named server (for example, `default`). Unlike request-level metrics, they are not split by route, `request.method`, or `response.status_code`. The names in this table are canonical Gosoline names; metric writers render them according to the selected backend.
 
 ## Connection lifecycle advisor[​](#connection-lifecycle-advisor "Direct link to Connection lifecycle advisor")
 

@@ -7,7 +7,7 @@ The httpserver includes a built-in middleware chain and supports custom middlewa
 Every httpserver automatically includes these middleware, applied in order:
 
 1. **Sampling** — Applies sampling decisions based on HTTP headers
-2. **Metric** — Records request count, response time, and status code metrics
+2. **Metric** — Records request-duration observations and request rejections, and tracks active requests and connections
 3. **Logging** — Logs request details using fingers-crossed scope (only logs on errors)
 4. **Compression** — Handles gzip compression/decompression
 5. **Max body size** — Limits incoming request bodies with `httpserver.<name>.max_body_bytes`
@@ -18,7 +18,9 @@ Every httpserver automatically includes these middleware, applied in order:
 10. **Concurrency** — Limits concurrent requests
 11. **Chaos** — Randomly introduces failures for resilience testing (disabled by default)
 
-You don't need to configure these — they are enabled by default (except chaos, which is opt-in).
+The metric middleware records each matched request in the `http.server.request.duration` histogram. Its attributes are `name` (the named server), `route`, `request.method`, and `response.status_code`; the histogram observation count is the request count for each attribute set, so status is an attribute of the duration observation rather than a separate status metric. Rejections before handling are counted separately by `http.server.rejected.requests`, with `name`, `route`, and `request.method` attributes (no response-status attribute). The server-level gauges `http.server.active_request.count` and `http.server.connection.count` carry only `name`, not the route, method, or response status.
+
+These are canonical Gosoline metric names; the configured writer determines their exported names and units. The middleware is installed by default; metric export requires the application to wire `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`. Chaos is the only opt-in built-in middleware.
 
 ## Request body size limit[​](#request-body-size-limit "Direct link to Request body size limit")
 
