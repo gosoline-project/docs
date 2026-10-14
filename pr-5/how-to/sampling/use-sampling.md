@@ -37,7 +37,7 @@ sampling:
 
 info
 
-When sampling is enabled and a new decision is made, Gosoline records the canonical metric `smpl.decisions` as a counter with authored unit `count` and the `sampled` attribute set to `true` or `false`. OpenTelemetry exports it as `gosoline.smpl.decisions` with unit `{decision}`; other metric backends may render Gosoline metric names using their own conventions.
+When sampling is enabled, a newly calculated decision can emit `smpl.decisions`; see [Metrics](#metrics) for its dimensions, emission conditions, and backend rendering.
 
 ### Built-in strategies[​](#built-in-strategies "Direct link to Built-in strategies")
 
@@ -294,3 +294,11 @@ smpl.AddStrategy("my-strategy", func(ctx context.Context, config cfg.Config) (sm
 * **"It always says sampled"**: if `sampling.enabled` is `false` or no decision is stored, `smplctx.IsSampled(ctx)` returns `true` by default.
 * **"My strategy does nothing"**: some strategies only apply if required data exists on the context (e.g. `tracing` needs a trace in the context).
 * **"I called Decide but later code doesn't see it"**: ensure you propagate the returned context (`ctx = newCtx`).
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table uses canonical Gosoline-authored names and units. OpenTelemetry prefixes this namespaced metric with `gosoline.` and exports its count unit as `{decision}`; duration metrics authored in milliseconds are scaled to seconds for OpenTelemetry and Prometheus. Other writers render names and units per backend. See the [metric schema](/docs/pr-5/reference/metric-schema/.md) for the complete contract.
+
+| Metric           | Instrument | Authored unit | Dimensions                   | Description                                                                                                                                                                                                                                                                                                     |
+| ---------------- | ---------- | ------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `smpl.decisions` | Counter    | `count`       | `sampled`: `true` or `false` | One count for each new decision successfully computed while sampling is enabled. The attribute value is the boolean rendered as a string; when no strategy applies, the decision defaults to `true`. No metric is emitted for disabled sampling, a decision already stored on the context, or a strategy error. |

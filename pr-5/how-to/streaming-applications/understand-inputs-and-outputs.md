@@ -199,7 +199,9 @@ stream:
       group_id: audit-worker
 ```
 
-For Kafka-specific behavior and schema registry configuration, see the [Kafka guides](/docs/pr-5/how-to/kafka/general/.md).
+For Redis list component behavior and metrics, see the separate [Redis list input](/docs/pr-5/reference/package-stream-redis-list-input/.md) and [Redis list output](/docs/pr-5/reference/package-stream-redis-list-output/.md) references.
+
+For Kafka-specific behavior and schema registry configuration, see the [Kafka guides](/docs/pr-5/how-to/kafka/general/.md); its Metrics section links the separate [Kafka client-hook](/docs/pr-5/reference/package-kafka/.md), [consumer](/docs/pr-5/reference/package-kafka-consumer/.md), and [producer](/docs/pr-5/reference/package-kafka-producer/.md) references.
 
 ## What's next?[​](#whats-next "Direct link to What's next?")
 

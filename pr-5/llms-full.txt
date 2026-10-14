@@ -76,12 +76,32 @@
 - [Migrating to the Callback-Based Stream Consumer Lifecycle](/migrations/stream-consumer-lifecycle.md): This guide covers the breaking stream changes introduced in Gosoline v0.66.0 by commit 04b54462, stream: unify input processing and shutdown. Follow this guide when upgrading from an earlier release to v0.66.0 or later.
 - [Metric schema](/reference/metric-schema.md): This page is the contract for metrics authored by Gosoline. The canonical names, instrument types,
 - [Naming patterns](/reference/naming-patterns.md): Gosoline uses naming patterns to generate consistent names for resources (SQS queues, SNS topics, DynamoDB tables, Kafka topics, Redis keys, metric namespaces, tracing service names, ...).
+- [blob package](/reference/package-blob.md): pkg/blob provides batched object-storage access through named stores and a worker-backed BatchRunner. The runner uses the configured S3 client and processes each object in a batch through separate read, write, copy, and delete workers.
 - [cfg package](/reference/package-cfg.md): With the cfg package, you can configure and use configurations in your gosoline project.
+- [Kinesis shard reader](/reference/package-cloud_aws_kinesis-reader.md): ShardReader is the per-shard worker in github.com/justtrackio/gosoline/pkg/cloud/aws/kinesis. It polls a Kinesis shard with GetRecords, passes record payloads to a RecordHandler, and advances the shard checkpoint. It runs until the shard is finished or its context is canceled.
+- [Kinesis RecordWriter](/reference/package-cloud_aws_kinesis-writer.md): RecordWriter in github.com/justtrackio/gosoline/pkg/cloud/aws/kinesis writes records to one configured Kinesis stream using PutRecords. Construct it with NewRecordWriter(ctx, config, logger, settings) and a *RecordWriterSettings; use PutRecord for one record or PutRecords for a batch. The writer resolves the full stream name and Kinesis client from configuration, splits requests at the Kinesis batch limit, and retries records rejected in a response.
 - [Package cloud/aws](/reference/package-cloud_aws.md): The cloud/aws package
+- [conc/scheduler package](/reference/package-conc_scheduler.md): The pkg/conc/scheduler package groups keyed jobs into batches and sends each batch to a caller-provided runner. Each ScheduleJob call receives the result associated with its key.
+- [db-repo package](/reference/package-db-repo.md): pkg/db-repo provides a model-oriented SQL repository interface with create, read, update, delete, and query operations. It also contains the model-event publisher notifier used to send repository notifications.
+- [db package](/reference/package-db.md): pkg/db creates managed SQL connections as *sqlx.DB values from named database settings. It installs a driver wrapper for connection-attempt metrics and reads live pool state from database/sql statistics.
 - [dbx package](/reference/package-dbx.md): The dbx package provides a fluent API to build SQL queries.
+- [ddb package](/reference/package-ddb.md): pkg/ddb provides a DynamoDB repository interface for model persistence. Gosoline's mdlsub.NewOutputDdb wraps its repository with ddb.NewMetricRepository; the wrapper instruments PutItem, while delete operations use DeleteItem and do not pass through this metric hook.
 - [Gosoline Fixture Loader](/reference/package-fixtures.md): While using gosoline you are able to define fixtures directly in code.
+- [Gosoline SDK HTTP server package](/reference/package-gosoline-httpserver.md): The Gosoline SDK's pkg/httpserver package integrates an HTTP server with the application kernel. Import it as github.com/justtrackio/gosoline/pkg/httpserver; httpserver.New(name, definer) returns a kernel module factory and reads server configuration from httpserver.. The SDK installs its request-metric middleware and server metric recorder as part of constructing the server.
+- [grpcserver package](/reference/package-grpcserver.md): The Gosoline SDK's pkg/grpcserver package (import path github.com/justtrackio/gosoline/pkg/grpcserver) wraps a gRPC server as a kernel module. grpcserver.New(name, definer, middlewares...) returns a module factory, reads server settings from grpc_server., and registers the defined services. Register the factory with the application using application.WithModuleFactory.
+- [http package](/reference/package-http.md): The Gosoline SDK's pkg/http package (import path github.com/justtrackio/gosoline/pkg/http) provides a configured, reusable client for outbound HTTP requests. Its Client interface builds requests through NewRequest() and exposes Get, Post, Put, Patch, and Delete operations.
 - [httpserver package](/reference/package-httpserver.md): Package httpserver provides a modular HTTP server built on Gin and the gosoline kernel. It offers structured request binding, typed responses, middleware, SSE streaming, and dependency-injected handler registration.
+- [Kafka consumer metrics](/reference/package-kafka-consumer.md): The pkg/kafka/consumer component polls Kafka records, coordinates callback processing, and commits offsets. A stream input configured with type: kafka uses this consumer path; the public consumer.NewConsumer constructor also creates a consumer directly. These measurements describe the Kafka client processing cycle, not an application's business outcomes.
+- [Kafka producer metrics](/reference/package-kafka-producer.md): The pkg/kafka/producer component sends records synchronously and reports per-call results. A stream output configured with type: kafka uses this producer path; the public producer.NewProducer constructor also creates one directly. These metrics describe producer-call outcomes and timing, distinct from Kafka broker and wire-batch hook measurements.
+- [Kafka client hook metrics](/reference/package-kafka.md): The pkg/kafka package's MetricsHook records broker connection and throttle events plus franz-go produce/fetch wire batches. These are transport-level hook measurements; the Kafka consumer and producer packages emit separate client-operation metrics.
+- [Kinsumer](/reference/package-kinsumer.md): Kinsumer is the current exported Kinesis consumer API in github.com/justtrackio/gosoline/pkg/cloud/aws/kinesis. It coordinates shard ownership and checkpointing across clients, runs per-shard readers, and delivers record payloads to a RecordHandler. Construct it with NewKinsumer(ctx, config, logger, settings) and a *Settings (Settings.StreamName is required), then call Run(ctx, handler) to consume. The Kinsumer interface also exposes Stop and IsHealthy for lifecycle management.
+- [kvstore package](/reference/package-kvstore.md): pkg/kvstore provides generic model-keyed stores with in-memory, Redis, and DynamoDB backends. Its interface supports individual and batch reads, writes, and deletes.
+- [limit package](/reference/package-limit.md): The pkg/limit package provides rate limiters for operations that must wait until a limit permits them to proceed. The common Limiter interface exposes Wait(ctx, prefix) error; a fixed-window limiter can delay a caller after capacity is reached.
 - [log package](/reference/package-log.md): The gosoline logger is based upon a simple interface that uses handlers internally to enable fully customizable log handling.
+- [mdlsub package](/reference/package-mdlsub.md): The pkg/mdlsub package adapts model subscription messages to the stream consumer callback interface. It reads model and version details from message attributes, selects a transformer from the supplied model core, and persists transformed output.
+- [metric package](/reference/package-metric.md): The Gosoline metric package provides the framework metric writer pipeline and an optional Prometheus scrape endpoint. It also supplies a logger handler that records warn- and error-level log records as a framework metric. The Metric schema reference remains the source of truth for canonical Gosoline metric names, units, dimensions, writer transformations, and migration history; this page covers package activation and endpoint-specific exports.
+- [Redis list input](/reference/package-stream-redis-list-input.md): The stream package's Redis list input implements the stream Input interface. It blocks on a configured Redis list with BLPOP, decodes each payload as a stream.Message, and passes decoded messages into the consumer pipeline.
+- [Redis list output](/reference/package-stream-redis-list-output.md): The stream package's Redis list output implements the stream Output interface. It encodes the supplied writable messages into Redis list entries and appends them with RPUSH to the configured list. Use it when a producer should publish stream messages to a Redis list.
 - [Package test](/reference/package-test.md): This package acts as a wrapper over Golang's testing module.
 - [Overview](/index.md): Gosoline is a Golang-based application framework specialized for building microservices in the cloud. It provides tools for handling most of the common challenges like configuration, logging, structured code execution, handling http requests, asynchronous message processing, writing integration tests and much more.
 
@@ -3366,6 +3386,14 @@ The `sqlh` package provides typed, transaction-aware CRUD handlers for SQLR enti
 
 You can use multiple layers together within the same application—using `sqlh` for standard CRUD endpoints while leveraging `sqlc` directly for complex reporting queries.
 
+## Package references and metrics[​](#package-references-and-metrics "Direct link to Package references and metrics")
+
+The SDK's SQL connection and repository emitters have separate component references with their own metric tables:
+
+* [SQL database client package (`pkg/db`)](/docs/pr-5/reference/package-db/.md)
+* [SQL repository package (`pkg/db-repo`)](/docs/pr-5/reference/package-db-repo/.md)
+* [SQLC legacy connection metric](/docs/pr-5/how-to/databases-sql/sqlc/.md)
+
 
 ---
 
@@ -3481,10 +3509,13 @@ Use `parameters` for driver-specific settings such as PostgreSQL `sslmode` or `c
 
 ## Metrics[​](#metrics "Direct link to Metrics")
 
-Settings-based SQLC database construction emits a legacy metric named `DbConnectionCount` through Gosoline's metric writer with an empty metric namespace. This SQLC-specific series is separate from the framework's namespaced `db.client.*` and `db.repo.*` metrics.
+Settings-based SQLC database construction emits the legacy metric `DbConnectionCount` with an empty authored namespace. It is separate from the namespaced SDK metrics documented by the [`db` client reference](/docs/pr-5/reference/package-db/.md) and the [`db-repo` reference](/docs/pr-5/reference/package-db-repo/.md). The pinned SQLC source leaves `Kind` unset and uses `UnitCountAverage`; the pinned Gosoline metric package infers a counter from the count unit, including for sampled pool-state values.
 
-* The `Type="new"` datum is written once for each `database/sql/driver.Driver.Open` attempt, before SQLC calls the underlying driver. It counts attempts, including failed opens, not only successful connections.
-* SQLC samples `sql.DB.Stats()` every minute and writes `Type="open"` (`OpenConnections`), `Type="inUse"` (`InUse`), and `Type="idle"` (`Idle`) values under the same `DbConnectionCount` name.
+| Metric              | Instrument                                                | Authored unit                | Dimensions                             | Description                                                                                                                                                                                                                                                                                       |
+| ------------------- | --------------------------------------------------------- | ---------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DbConnectionCount` | Counter (kind inferred; source datum leaves `Kind` unset) | `count` (`UnitCountAverage`) | `Type`: `new`, `open`, `inUse`, `idle` | `new` adds one before each wrapped `driver.Open` attempt, including failed opens. `open`, `inUse`, and `idle` record `sql.DB.Stats()` values after setup and every minute thereafter. They are point-in-time pool counts but share the same legacy counter contract; do not label them as gauges. |
+
+The metric name is authored without a namespace; the OpenTelemetry writer applies Gosoline's `gosoline.` prefix. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the writer contract and count-unit handling. The pinned [SQLC metric source](https://github.com/gosoline-project/sqlc/blob/f3bdb6518b42/metrics.go#L13-L90) defines the name, unit, and exact `Type` values.
 
 These legacy observations reach an exporter only when the application wires `application.WithMetrics`, sets `metric.enabled: true`, and configures at least one writer under `metric.writers`; SQLC has no separate metric-enable setting. Framework metrics are different: `db.client.connections` is an undimensioned counter of driver `Open` attempts, `db.client.connection.count` is a gauge with `connection.state=used|idle`, and `db.repo.*` covers framework repository operations and notifications. Do not interpret those framework names as aliases for SQLC's `DbConnectionCount`.
 
@@ -7345,7 +7376,7 @@ Every httpserver automatically includes these middleware, applied in order:
 
 The metric middleware records each matched request in the `http.server.request.duration` histogram. Its attributes are `name` (the named server), `route`, `request.method`, and `response.status_code`; the histogram observation count is the request count for each attribute set, so status is an attribute of the duration observation rather than a separate status metric. Rejections before handling are counted separately by `http.server.rejected.requests`, with `name`, `route`, and `request.method` attributes (no response-status attribute). The server-level gauges `http.server.active_request.count` and `http.server.connection.count` carry only `name`, not the route, method, or response status.
 
-These are canonical Gosoline metric names; the configured writer determines their exported names and units. The middleware is installed by default; metric export requires the application to wire `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`. Chaos is the only opt-in built-in middleware.
+These are canonical Gosoline metric names; the configured writer determines their exported names and units. The middleware is installed by default; metric export requires the application to wire `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`. See the [published HTTP server metrics reference](/docs/pr-5/reference/package-httpserver/.md) for the complete table; the SDK's separate [HTTP server implementation](/docs/pr-5/reference/package-gosoline-httpserver/.md) emits the same names. For backend-specific name and unit conversion, see [Metric schema](/docs/pr-5/reference/metric-schema/.md). Chaos is the only opt-in built-in middleware.
 
 ## Request body size limit[​](#request-body-size-limit "Direct link to Request body size limit")
 
@@ -9417,14 +9448,14 @@ Set `max_connections: 0` (the default) to disable this limit.
 
 ### Metrics[​](#metrics "Direct link to Metrics")
 
-The server emits two gauge metrics (sampled every 10 seconds and on every request or connection state change):
+The server emits two gauge metrics with current-state samples at startup, every 10 seconds, on each request or connection state change, and during shutdown:
 
 | Canonical metric                   | Description                                 |
 | ---------------------------------- | ------------------------------------------- |
 | `http.server.active_request.count` | Number of requests currently being handled. |
 | `http.server.connection.count`     | Number of currently open TCP connections.   |
 
-Both gauges carry only the `name` attribute, set to the named server (for example, `default`). Unlike request-level metrics, they are not split by route, `request.method`, or `response.status_code`. The names in this table are canonical Gosoline names; metric writers render them according to the selected backend.
+Both gauges carry only the `name` attribute, set to the named server (for example, `default`). Unlike request-level metrics, they are not split by route, `request.method`, or `response.status_code`. The names in this table are canonical Gosoline names; metric writers render them according to the selected backend. See the [SDK HTTP server metrics reference](/docs/pr-5/reference/package-gosoline-httpserver/.md) and the [published HTTP server package reference](/docs/pr-5/reference/package-httpserver/.md) for the complete per-metric unit and dimension tables, and [Metric schema](/docs/pr-5/reference/metric-schema/.md) for writer conversion details.
 
 ## Connection lifecycle advisor[​](#connection-lifecycle-advisor "Direct link to Connection lifecycle advisor")
 
@@ -10983,50 +11014,52 @@ Batching will still be done by the producer daemon, but it will use the `max_bat
 
 ### Metrics[​](#metrics "Direct link to Metrics")
 
-Enable Gosoline's metric collection and a writer to export Kafka metrics. The tables list canonical authored names, instrument types, authored units, and attributes. They are not backend-exported spellings: OpenTelemetry prefixes the namespace with `gosoline.` and converts durations authored in milliseconds to seconds (for example, `kafka.consumer.process.duration` becomes `gosoline.kafka.consumer.process.duration` with unit `s`); CloudWatch PascalCases metric leaves, and Prometheus applies its own name, type, and unit suffixes. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for current exporter mappings.
+Enable Gosoline's metric collection and a writer to export Kafka metrics. The tables list canonical names, dimensions, and semantics; Instrument and Authored unit cells describe fields explicitly authored on each Datum except where a row labels a V2 contract mapping. The `kafka.consumer.consumed.messages` legacy `metric.Datum` omits both `Kind` and `Unit` for emitted outcomes and its default metric; its Counter/count entries identify the V2 contract mapping, not fields explicitly authored on the Datum. These are not backend-exported spellings. OpenTelemetry prefixes the namespace with `gosoline.` and converts durations authored in milliseconds to seconds (for example, `kafka.consumer.process.duration` becomes `gosoline.kafka.consumer.process.duration` with unit `s`); CloudWatch PascalCases metric leaves, and Prometheus applies its own name, type, and unit suffixes. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
 
-For Kafka client metrics, `client.type` is `consumer` or `producer`, `client.name` is the configured input/output name, and `topic.name` is the resolved topic. The `error.type` value `{{default}}` marks the default outcome.
+Kafka metrics are emitted by distinct package components. See the dedicated [Kafka client-hook](/docs/pr-5/reference/package-kafka/.md), [Kafka consumer](/docs/pr-5/reference/package-kafka-consumer/.md), and [Kafka producer](/docs/pr-5/reference/package-kafka-producer/.md) pages. The tables here remain the complete cross-component view.
+
+For Kafka client metrics, `client.type` is `consumer` or `producer`, `client.name` is the configured input or output name, and `topic.name` is the resolved topic. `error.type` values are metric-specific and are documented in the dimension column.
 
 #### Consumer metrics (`kafka.consumer`)[​](#consumer-metrics-kafkaconsumer "Direct link to consumer-metrics-kafkaconsumer")
 
-| Authored metric                    | Instrument; authored unit (OTel unit) | Attributes                                               | Meaning                                                                                                                                                                                                                                                                                                                                               |
-| ---------------------------------- | ------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kafka.consumer.consumed.messages` | Counter; count (OTel `{message}`)     | `client.type`, `client.name`, `topic.name`, `error.type` | Records in the poll work set split into non-failed (`error.type="{{default}}"`) and callback-failed (`error.type="processing_failed"`) counts. These are disjoint outcomes and sum to the work-set size. On shutdown, records skipped before callback admission can fall in the default bucket, so it is not proof of successful business processing. |
-| `kafka.consumer.polls`             | Counter; count (OTel `{poll}`)        | `client.type`, `client.name`, `topic.name`               | Poll calls counted when the following processing/commit path completes successfully; errors or cancellation that abort that path suppress the sample (successful shutdown drains may still count).                                                                                                                                                    |
-| `kafka.consumer.poll.duration`     | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `topic.name`               | Duration of a `poll()` request, recorded when the following processing/commit path completes successfully; errors or cancellation that abort that path suppress the sample (successful shutdown drains may still count).                                                                                                                              |
-| `kafka.consumer.process.duration`  | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `topic.name`               | One observation for a poll's processing cycle, including configured `consume_delay` waits, callback processing, and offset-commit work.                                                                                                                                                                                                               |
-| `kafka.consumer.commit.duration`   | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `topic.name`               | Duration of an offset commit.                                                                                                                                                                                                                                                                                                                         |
-| `kafka.consumer.sleep.duration`    | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `topic.name`               | Completed per-record `consume_delay` waits before processing; canceled waits produce no observation.                                                                                                                                                                                                                                                  |
-| `kafka.consumer.rebalances`        | Counter; count (OTel `{rebalance}`)   | `client.type`, `client.name`, `topic.name`               | Consumer-group rebalances this consumer participated in.                                                                                                                                                                                                                                                                                              |
+| Metric                             | Instrument                                                       | Authored unit                                                  | Dimensions                                                                                                                                                    | Description                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kafka.consumer.consumed.messages` | Not authored in the legacy `metric.Datum` (V2 contract: Counter) | Not authored in the legacy `metric.Datum` (V2 contract: count) | `client.type` = `consumer`; `client.name` (configured consumer name); `topic.name` (resolved full topic); `error.type` = `{{default}}` or `processing_failed` | Records in the poll work set split into disjoint non-failed (`{{default}}`) and callback-failed (`processing_failed`) counts. They sum to the work-set size. During shutdown, records skipped before callback admission can fall in the default bucket, so it is not proof of successful business processing. |
+| `kafka.consumer.polls`             | Counter                                                          | count                                                          | `client.type` = `consumer`; `client.name` (configured consumer name); `topic.name` (resolved full topic)                                                      | One sample for a poll whose processing and offset-commit path returns nil. A poll that drains during graceful shutdown can still emit a sample; an error or cancellation that aborts this path suppresses it.                                                                                                 |
+| `kafka.consumer.poll.duration`     | Histogram                                                        | milliseconds                                                   | `client.type` = `consumer`; `client.name` (configured consumer name); `topic.name` (resolved full topic)                                                      | Duration of the `poll()` request, recorded when the following processing and offset-commit path returns nil. A graceful drain can still emit a sample; an error or cancellation that aborts the path suppresses it.                                                                                           |
+| `kafka.consumer.process.duration`  | Histogram                                                        | milliseconds                                                   | `client.type` = `consumer`; `client.name` (configured consumer name); `topic.name` (resolved full topic)                                                      | One observation for a poll's processing cycle, including configured `consume_delay` waits, callback processing, and offset-commit work.                                                                                                                                                                       |
+| `kafka.consumer.commit.duration`   | Histogram                                                        | milliseconds                                                   | `client.type` = `consumer`; `client.name` (configured consumer name); `topic.name` (resolved full topic)                                                      | Duration of a successfully completed offset commit. Failed commits return before the metric is written, so they have no duration sample.                                                                                                                                                                      |
+| `kafka.consumer.sleep.duration`    | Histogram                                                        | milliseconds                                                   | `client.type` = `consumer`; `client.name` (configured consumer name); `topic.name` (resolved full topic)                                                      | Completed per-record `consume_delay` waits before processing; canceled waits produce no observation.                                                                                                                                                                                                          |
+| `kafka.consumer.rebalances`        | Counter                                                          | count                                                          | `client.type` = `consumer`; `client.name` (configured consumer name); `topic.name` (resolved full topic)                                                      | One increment for each topic entry in the consumer's partition-loss or revocation callback; it indicates partition ownership changes, not a count of every partition.                                                                                                                                         |
 
 #### Producer metrics (`kafka.producer`)[​](#producer-metrics-kafkaproducer "Direct link to producer-metrics-kafkaproducer")
 
-| Authored metric                   | Instrument; authored unit (OTel unit) | Attributes                                               | Meaning                                                                                                                                                                                                                                       |
-| --------------------------------- | ------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kafka.producer.sent.messages`    | Counter; count (OTel `{message}`)     | `client.type`, `client.name`, `topic.name`, `error.type` | Records returned by the synchronous producer call split into successful (`error.type="{{default}}"`) and failed (`error.type="send_failed"`) outcomes. The buckets are disjoint; for a partial failure their sum is the records in that call. |
-| `kafka.producer.batch.records`    | Histogram; count (OTel `{record}`)    | `client.type`, `client.name`, `topic.name`               | Number of records passed to one synchronous producer call; this is not a franz-go wire-batch count.                                                                                                                                           |
-| `kafka.producer.produce.duration` | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `topic.name`               | Duration of one synchronous producer call.                                                                                                                                                                                                    |
+| Metric                            | Instrument | Authored unit | Dimensions                                                                                                                                              | Description                                                                                                                                                                                                         |
+| --------------------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kafka.producer.sent.messages`    | Counter    | count         | `client.type` = `producer`; `client.name` (configured producer name); `topic.name` (resolved full topic); `error.type` = `{{default}}` or `send_failed` | Records returned by the synchronous producer call split into successful (`{{default}}`) and failed (`send_failed`) outcomes. The buckets are disjoint; for a partial failure their sum is the records in that call. |
+| `kafka.producer.batch.records`    | Histogram  | count         | `client.type` = `producer`; `client.name` (configured producer name); `topic.name` (resolved full topic)                                                | Number of records passed to one synchronous producer call; this is not a franz-go wire-batch count.                                                                                                                 |
+| `kafka.producer.produce.duration` | Histogram  | milliseconds  | `client.type` = `producer`; `client.name` (configured producer name); `topic.name` (resolved full topic)                                                | Duration of one synchronous producer call.                                                                                                                                                                          |
 
 #### Broker connectivity and throttling metrics (`kafka`)[​](#broker-connectivity-and-throttling-metrics-kafka "Direct link to broker-connectivity-and-throttling-metrics-kafka")
 
-| Authored metric           | Instrument; authored unit (OTel unit) | Attributes                                                   | Meaning                                                                                                                                    |
-| ------------------------- | ------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `kafka.connects`          | Counter; count (OTel `{connect}`)     | `client.type`, `client.name`, `broker.address`, `error.type` | Broker connection attempts; successful (`error.type="{{default}}"`) and failed (`error.type="connect_failed"`) attempts are distinguished. |
-| `kafka.throttles`         | Counter; count (OTel `{throttle}`)    | `client.type`, `client.name`, `broker.address`               | Broker-throttled requests.                                                                                                                 |
-| `kafka.throttle.duration` | Histogram; milliseconds (OTel `s`)    | `client.type`, `client.name`, `broker.address`               | Time a broker throttled a Kafka client.                                                                                                    |
+| Metric                    | Instrument | Authored unit | Dimensions                                                                                                                                                                                               | Description                                                                                                        |
+| ------------------------- | ---------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `kafka.connects`          | Counter    | count         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `broker.address` (host<!-- -->:port<!-- -->); `error.type` = `{{default}}` for success or `connect_failed` for failure | One broker connection attempt. The `error.type` dimension distinguishes successful and failed connection attempts. |
+| `kafka.throttles`         | Counter    | count         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `broker.address` (host<!-- -->:port<!-- -->)                                                                           | Broker-throttled requests.                                                                                         |
+| `kafka.throttle.duration` | Histogram  | milliseconds  | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `broker.address` (host<!-- -->:port<!-- -->)                                                                           | Time a broker throttled a Kafka client.                                                                            |
 
 #### Wire-batch metrics (`kafka`)[​](#wire-batch-metrics-kafka "Direct link to wire-batch-metrics-kafka")
 
-| Authored metric                       | Instrument; authored unit (OTel unit) | Attributes                                                 | Meaning                                       |
-| ------------------------------------- | ------------------------------------- | ---------------------------------------------------------- | --------------------------------------------- |
-| `kafka.produce.batch.records`         | Histogram; count (OTel `{record}`)    | `client.type`, `client.name`, `topic.name`, `partition.id` | Records in one franz-go produce wire batch.   |
-| `kafka.produce.batch.size`            | Histogram; bytes (OTel `By`)          | `client.type`, `client.name`, `topic.name`, `partition.id` | Uncompressed bytes in one produce wire batch. |
-| `kafka.produce.batch.compressed.size` | Histogram; bytes (OTel `By`)          | `client.type`, `client.name`, `topic.name`, `partition.id` | Compressed bytes in one produce wire batch.   |
-| `kafka.fetch.batch.records`           | Histogram; count (OTel `{record}`)    | `client.type`, `client.name`, `topic.name`, `partition.id` | Records in one franz-go fetch wire batch.     |
-| `kafka.fetch.batch.size`              | Histogram; bytes (OTel `By`)          | `client.type`, `client.name`, `topic.name`, `partition.id` | Uncompressed bytes in one fetch wire batch.   |
-| `kafka.fetch.batch.compressed.size`   | Histogram; bytes (OTel `By`)          | `client.type`, `client.name`, `topic.name`, `partition.id` | Compressed bytes in one fetch wire batch.     |
+| Metric                                | Instrument | Authored unit | Dimensions                                                                                                                                                 | Description                                   |
+| ------------------------------------- | ---------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `kafka.produce.batch.records`         | Histogram  | count         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition) | Records in one franz-go produce wire batch.   |
+| `kafka.produce.batch.size`            | Histogram  | bytes         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition) | Uncompressed bytes in one produce wire batch. |
+| `kafka.produce.batch.compressed.size` | Histogram  | bytes         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition) | Compressed bytes in one produce wire batch.   |
+| `kafka.fetch.batch.records`           | Histogram  | count         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition) | Records in one franz-go fetch wire batch.     |
+| `kafka.fetch.batch.size`              | Histogram  | bytes         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition) | Uncompressed bytes in one fetch wire batch.   |
+| `kafka.fetch.batch.compressed.size`   | Histogram  | bytes         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition) | Compressed bytes in one fetch wire batch.     |
 
-Consumer and producer client metrics are aggregated at client/topic granularity and do not carry `partition.id`. Only the broker connectivity/throttling metrics carry `broker.address`; wire-batch hooks carry `topic.name` and `partition.id`, not `broker.address`. Client metrics describe transport activity, not business success or durable effects; correlate callback/output errors, retry activity, commits, and application outcomes.
+Consumer and producer client metrics are aggregated at client/topic granularity and do not carry `partition.id`. Only broker connectivity/throttling metrics carry `broker.address`; wire-batch hooks carry `topic.name` and `partition.id`, not `broker.address`. Client metrics describe transport activity, not business success or durable effects; correlate callback/output errors, retry activity, commits, and application outcomes.
 
 ### Topic creation and metadata[​](#topic-creation-and-metadata "Direct link to Topic creation and metadata")
 
@@ -13751,7 +13784,7 @@ sampling:
 
 info
 
-When sampling is enabled and a new decision is made, Gosoline records the canonical metric `smpl.decisions` as a counter with authored unit `count` and the `sampled` attribute set to `true` or `false`. OpenTelemetry exports it as `gosoline.smpl.decisions` with unit `{decision}`; other metric backends may render Gosoline metric names using their own conventions.
+When sampling is enabled, a newly calculated decision can emit `smpl.decisions`; see [Metrics](#metrics) for its dimensions, emission conditions, and backend rendering.
 
 ### Built-in strategies[​](#built-in-strategies "Direct link to Built-in strategies")
 
@@ -14009,6 +14042,14 @@ smpl.AddStrategy("my-strategy", func(ctx context.Context, config cfg.Config) (sm
 * **"My strategy does nothing"**: some strategies only apply if required data exists on the context (e.g. `tracing` needs a trace in the context).
 * **"I called Decide but later code doesn't see it"**: ensure you propagate the returned context (`ctx = newCtx`).
 
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table uses canonical Gosoline-authored names and units. OpenTelemetry prefixes this namespaced metric with `gosoline.` and exports its count unit as `{decision}`; duration metrics authored in milliseconds are scaled to seconds for OpenTelemetry and Prometheus. Other writers render names and units per backend. See the [metric schema](/docs/pr-5/reference/metric-schema/.md) for the complete contract.
+
+| Metric           | Instrument | Authored unit | Dimensions                   | Description                                                                                                                                                                                                                                                                                                     |
+| ---------------- | ---------- | ------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `smpl.decisions` | Counter    | `count`       | `sampled`: `true` or `false` | One count for each new decision successfully computed while sampling is enabled. The attribute value is the boolean rendered as a string; when no strategy applies, the decision defaults to `true`. No metric is emitted for disabled sampling, a decision already stored on the context, or a strategy error. |
+
 
 ---
 
@@ -14249,15 +14290,15 @@ Kafka and Kinesis ordered mode still allows concurrency across partitions or sha
 
 Callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
 
-## Consumer metrics[​](#consumer-metrics "Direct link to Consumer metrics")
+## Metrics[​](#metrics "Direct link to Metrics")
 
 The names below are canonical Gosoline metric names as authored. They are not backend-exported names: OpenTelemetry prefixes the namespace with `gosoline.` and converts duration values from authored milliseconds to seconds; CloudWatch and Prometheus apply their own name and unit conventions. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
 
-| Authored metric                                                  | Instrument and authored unit (OpenTelemetry unit) | Attributes                    | Meaning                                                                                                                                                                                          |
-| ---------------------------------------------------------------- | ------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `stream.process.duration` (`gosoline.stream.process.duration`)   | Histogram; milliseconds (OTel `s`)                | `consumer.name`               | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one duration for the whole batch callback, not one per message. |
-| `stream.consumed.messages` (`gosoline.stream.consumed.messages`) | Counter; count (OTel `{message}`)                 | `consumer.name`, `error.type` | Number of messages processed. The `error.type="{{default}}"` series is the all-processed total; `error.type="processing_failed"` counts failed messages.                                         |
-| `stream.retry.operations` (`gosoline.stream.retry.operations`)   | Counter; count (OTel `{operation}`)               | `consumer.name`, `operation`  | Retry-queue `get`/`put` attempts; not a retried-record count or evidence that a queue operation succeeded.                                                                                       |
+| Metric                     | Instrument | Authored unit | Dimensions                                                                                      | Description                                                                                                                                                                                      |
+| -------------------------- | ---------- | ------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stream.process.duration`  | Histogram  | milliseconds  | `consumer.name` (configured consumer name)                                                      | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one duration for the whole batch callback, not one per message. |
+| `stream.consumed.messages` | Counter    | count         | `consumer.name` (configured consumer name); `error.type` = `{{default}}` or `processing_failed` | Number of messages processed. The `{{default}}` series is the all-processed total; `processing_failed` counts failed messages.                                                                   |
+| `stream.retry.operations`  | Counter    | count         | `consumer.name` (configured consumer name); `operation` = `get` or `put`                        | Retry-queue get/put attempts; not a retried-record count or evidence that a queue operation succeeded.                                                                                           |
 
 For `stream.consumed.messages`, the `processing_failed` series is an overlapping per-message subset of the `{{default}}` total, not a disjoint outcome: callback failures are already included in the total. In a batch, the total and any failure count increase by the number of records, while `process.duration` adds one observation for the full batch callback. Do not add the failure series to the total or subtract it to infer successes. Ignored model errors and canceled processing do not emit the failure series. These current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle migration](/docs/pr-5/migrations/stream-consumer-lifecycle/.md).
 
@@ -14753,7 +14794,9 @@ stream:
       group_id: audit-worker
 ```
 
-For Kafka-specific behavior and schema registry configuration, see the [Kafka guides](/docs/pr-5/how-to/kafka/general/.md).
+For Redis list component behavior and metrics, see the separate [Redis list input](/docs/pr-5/reference/package-stream-redis-list-input/.md) and [Redis list output](/docs/pr-5/reference/package-stream-redis-list-output/.md) references.
+
+For Kafka-specific behavior and schema registry configuration, see the [Kafka guides](/docs/pr-5/how-to/kafka/general/.md); its Metrics section links the separate [Kafka client-hook](/docs/pr-5/reference/package-kafka/.md), [consumer](/docs/pr-5/reference/package-kafka-consumer/.md), and [producer](/docs/pr-5/reference/package-kafka-producer/.md) references.
 
 ## What's next?[​](#whats-next "Direct link to What's next?")
 
@@ -14991,14 +15034,16 @@ When all background runners are busy and the output channel reaches `buffer_size
 
 Remote output errors happen in a background runner after the producer call has returned. The daemon logs these errors; callers cannot receive asynchronous output failures.
 
+## Metrics[​](#metrics "Direct link to Metrics")
+
 The following are the daemon's canonical authored metrics in the `stream` namespace; each series carries `producer.name`, the configured name under `stream.producer.<name>`. OpenTelemetry prefixes names with `gosoline.` and converts the authored millisecond duration to seconds; CloudWatch and Prometheus apply their own naming and unit conventions. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
 
-| Authored metric             | Instrument and authored unit (OpenTelemetry unit) | Attributes      | Meaning                                                                                                                                                                                                      |
-| --------------------------- | ------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `stream.produced.messages`  | Counter; count (OTel `{message}`)                 | `producer.name` | Input messages in calls to a running daemon's `Write`, counted before aggregation and batching. This does not establish that those stages or remote delivery succeeded.                                      |
-| `stream.batch.messages`     | Histogram; count (OTel `{message}`)               | `producer.name` | Number of messages in each output batch passed to the configured output after aggregation and batching. The observation is written after the output call returns, including when that call reports an error. |
-| `stream.aggregate.messages` | Histogram; count (OTel `{message}`)               | `producer.name` | Number of original stream messages combined in each aggregate when aggregation is enabled; this is a message count, not a byte size.                                                                         |
-| `stream.idle.duration`      | Histogram; milliseconds (OTel `s`)                | `producer.name` | Time an output worker waits for the next batch on the daemon's output channel, capped at the configured `interval`. It is not output or broker-request latency.                                              |
+| Metric                      | Instrument | Authored unit | Dimensions                                 | Description                                                                                                                                                                                                  |
+| --------------------------- | ---------- | ------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stream.produced.messages`  | Counter    | count         | `producer.name` (configured producer name) | Input messages in calls to a running daemon's `Write`, counted before aggregation and batching. This does not establish that those stages or remote delivery succeeded.                                      |
+| `stream.batch.messages`     | Histogram  | count         | `producer.name` (configured producer name) | Number of messages in each output batch passed to the configured output after aggregation and batching. The observation is written after the output call returns, including when that call reports an error. |
+| `stream.aggregate.messages` | Histogram  | count         | `producer.name` (configured producer name) | Number of original stream messages combined in each aggregate when aggregation is enabled; this is a message count, not a byte size.                                                                         |
+| `stream.idle.duration`      | Histogram  | milliseconds  | `producer.name` (configured producer name) | Time an output worker waits for the next batch on the daemon's output channel, capped at the configured `interval`. It is not output or broker-request latency.                                              |
 
 These metrics have no output-success/error attribute. Use daemon error logs to identify failed asynchronous output calls; do not interpret the batch histogram as a success counter.
 
@@ -19219,6 +19264,43 @@ Prometheus appends `_seconds` to duration histograms and `_bytes` to byte histog
 
 Every framework metric has a registered description. Prometheus and OTEL use that help text; a per-datum `Kind.WithHelp` value overrides the registered description. If no help has been registered for an application-authored metric, the writer falls back to `unit: <unit>`.
 
+## Component directory[​](#component-directory "Direct link to Component directory")
+
+Metric namespaces are naming prefixes, not one-to-one component identifiers. The same namespace can be emitted by distinct packages or implementations, so these pages are organized by emitter rather than by namespace alone.
+
+| Namespace              | Component / emitter                                                         | Dedicated page                                                                          |
+| ---------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `stream`               | `sdk.stream` consumer                                                       | [Stream consumer](/docs/pr-5/how-to/streaming-applications/create-a-consumer/.md)       |
+| `stream`               | `sdk.stream` producer daemon                                                | [Producer daemon](/docs/pr-5/how-to/streaming-applications/use-the-producer-daemon/.md) |
+| `stream`               | `sdk.stream` Redis-list input                                               | [Redis-list input](/docs/pr-5/reference/package-stream-redis-list-input/.md)            |
+| `stream`               | `sdk.stream` Redis-list output                                              | [Redis-list output](/docs/pr-5/reference/package-stream-redis-list-output/.md)          |
+| `kafka`                | `sdk.kafka.client-hook`                                                     | [Kafka client hooks](/docs/pr-5/reference/package-kafka/.md)                            |
+| `kafka.consumer`       | `sdk.kafka.consumer`                                                        | [Kafka consumer](/docs/pr-5/reference/package-kafka-consumer/.md)                       |
+| `kafka.producer`       | `sdk.kafka.producer`                                                        | [Kafka producer](/docs/pr-5/reference/package-kafka-producer/.md)                       |
+| `cloud.aws.kinesis`    | `sdk.cloud.aws.kinesis` ShardReader                                         | [Kinesis shard reader](/docs/pr-5/reference/package-cloud_aws_kinesis-reader/.md)       |
+| `cloud.aws.kinesis`    | `sdk.cloud.aws.kinesis` RecordWriter                                        | [Kinesis record writer](/docs/pr-5/reference/package-cloud_aws_kinesis-writer/.md)      |
+| `cloud.aws.kinesis`    | `sdk.cloud.aws.kinesis` Kinsumer                                            | [Kinsumer](/docs/pr-5/reference/package-kinsumer/.md)                                   |
+| `blob`                 | `sdk.blob` batch runner                                                     | [Blob package](/docs/pr-5/reference/package-blob/.md)                                   |
+| `conc.scheduler`       | `sdk.conc.scheduler`                                                        | [Concurrency scheduler](/docs/pr-5/reference/package-conc_scheduler/.md)                |
+| `db.client`            | `sdk.db` SQL database client                                                | [Database package](/docs/pr-5/reference/package-db/.md)                                 |
+| `db.repo`              | `sdk.db-repo` SQL repository wrapper                                        | [Database repository](/docs/pr-5/reference/package-db-repo/.md)                         |
+| `ddb`                  | `sdk.ddb` DynamoDB repository                                               | [DynamoDB package](/docs/pr-5/reference/package-ddb/.md)                                |
+| `http.client`          | `sdk.http-client`                                                           | [HTTP client](/docs/pr-5/reference/package-http/.md)                                    |
+| `http.server`          | `sdk.httpserver` Gosoline SDK implementation                                | [Gosoline HTTP server](/docs/pr-5/reference/package-gosoline-httpserver/.md)            |
+| `http.server`          | `library.httpserver` published HTTPServer implementation                    | [HTTPServer library](/docs/pr-5/reference/package-httpserver/.md)                       |
+| `kvstore`              | `sdk.kvstore`                                                               | [Key-value store](/docs/pr-5/reference/package-kvstore/.md)                             |
+| `limit`                | `sdk.limit` rate limiter                                                    | [Rate limiter](/docs/pr-5/reference/package-limit/.md)                                  |
+| `mdlsub`               | `sdk.mdlsub` model subscription callback                                    | [Model subscription](/docs/pr-5/reference/package-mdlsub/.md)                           |
+| `metric`               | `sdk.metric` metric subsystem                                               | [Metric package and Prometheus endpoint](/docs/pr-5/reference/package-metric/.md)       |
+| `metric`               | `pkg/metric.LoggerHandler` integration (the same `metric.log.records` name) | [Logger package integration](/docs/pr-5/reference/package-log/.md)                      |
+| `rpc.server`           | `sdk.grpcserver`                                                            | [gRPC server](/docs/pr-5/reference/package-grpcserver/.md)                              |
+| `smpl`                 | `sdk.smpl` sampling                                                         | [Sampling](/docs/pr-5/how-to/sampling/use-sampling/.md)                                 |
+| namespace-less, legacy | `library.sqlc` (`DbConnectionCount`; outside the 62-name inventory)         | [SQLC](/docs/pr-5/how-to/databases-sql/sqlc/.md)                                        |
+
+The SQLC page documents a legacy namespace-less metric and is not part of the current framework inventory. For broader workflow context, see the [streaming inputs and outputs guide](/docs/pr-5/how-to/streaming-applications/understand-inputs-and-outputs/.md), the [Kafka guide](/docs/pr-5/how-to/kafka/general/.md), the [AWS package reference](/docs/pr-5/reference/package-cloud_aws/.md), and the [SQL database overview](/docs/pr-5/how-to/databases-sql/.md). Those overview pages supplement, rather than replace, the component pages above.
+
+The 62-name inventory below contains Gosoline-authored metrics only. `metric.schema_version` is metadata, not a metric; the upstream Prometheus handler metrics and Go/process collectors described on the [metric package page](/docs/pr-5/reference/package-metric/.md) are separate from these 62 names.
+
 ## Current framework inventory[​](#current-framework-inventory "Direct link to Current framework inventory")
 
 The V2 inventory contains **62 metrics across 18 namespaces**.
@@ -19676,6 +19758,30 @@ If you need to adjust the delimiter, configure the leader election settings (e.g
 
 ---
 
+# blob package
+
+`pkg/blob` provides batched object-storage access through named stores and a worker-backed `BatchRunner`. The runner uses the configured S3 client and processes each object in a batch through separate read, write, copy, and delete workers.
+
+## API and activation[​](#api-and-activation "Direct link to API and activation")
+
+Register `blob.ProvideBatchRunner(name)` as a kernel module and provide the matching `blob.ProvideStore` with the same name. The store queues object operations for that named runner; the runner loads its settings from `blob.<name>`. See the pinned [runner registration](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/blob/runner.go#L45-L50) and [store provider](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/blob/store.go#L118-L145).
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists names and units authored by Gosoline. The OpenTelemetry writer exports names with a `gosoline.` prefix and converts authored `ms` durations to the OpenTelemetry duration unit. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the writer contract and dimension conventions.
+
+| Metric                  | Instrument | Authored unit | Dimensions                                     | Description                                                                                                                                                                                                                            |
+| ----------------------- | ---------- | ------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `blob.batch.operations` | Counter    | `count`       | `operation`: `Read`, `Write`, `Copy`, `Delete` | Adds one after each object-level S3 runner operation returns, including calls that return an error. This is not one count per batch API call or per network/retry attempt; queued work cancelled before a worker runs is not recorded. |
+
+## Related references[​](#related-references "Direct link to Related references")
+
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)
+* [Batch operation implementation](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/blob/runner.go#L139-L253)
+
+
+---
+
 # cfg package
 
 With the cfg package, you can configure and use configurations in your gosoline project.
@@ -19835,6 +19941,75 @@ options := []cfg.Option{
 #### Description[​](#description-2 "Direct link to Description")
 
 Replaces "." and "-" with "\_" for env key loading.
+
+
+---
+
+# Kinesis shard reader
+
+`ShardReader` is the per-shard worker in `github.com/justtrackio/gosoline/pkg/cloud/aws/kinesis`. It polls a Kinesis shard with `GetRecords`, passes record payloads to a `RecordHandler`, and advances the shard checkpoint. It runs until the shard is finished or its context is canceled.
+
+In normal application use, `NewKinsumer(ctx, config, logger, settings)` owns shard assignment and creates readers for its assigned shards; call `Kinsumer.Run` with a `RecordHandler` to activate consumption. Configure the reader through the package's `Settings` passed to `NewKinsumer`, including `MaxBatchSize`, `WaitTime`, `ConsumeDelay`, and `ProcessingMode`. See [Kinsumer](/docs/pr-5/reference/package-kinsumer/.md) for the active public API.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+Names below are Gosoline-authored canonical names. The OTEL writer exports them with a `gosoline.` prefix and converts millisecond-authored durations to seconds; `acquire.duration` is authored in seconds already. Units below are the emitter's authored units. See the [metric schema](/docs/pr-5/reference/metric-schema/.md) for writer conversion details.
+
+| Metric                                | Instrument | Authored unit | Dimensions                                                                                                                      | Description                                                                                                                                                                                                                                                                                 |
+| ------------------------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cloud.aws.kinesis.consumed.messages` | Counter    | count         | `stream.name` (full stream name), `partition.id` (Kinesis shard ID), `error.type={{default}}` or `error.type=processing_failed` | Records processed and checkpointed by the batch invocation. The `{{default}}` series is the batch total, including handler failures; `processing_failed` counts failed records as an overlapping per-record subset.                                                                         |
+| `cloud.aws.kinesis.process.duration`  | Histogram  | ms            | `stream.name` (full stream name), `partition.id` (Kinesis shard ID)                                                             | Elapsed `processRecords` work for one fetched batch, including handler execution, configured per-record `ConsumeDelay`, and checkpoint advancement; excludes the `GetRecords` request and the next-poll wait. Cancellation may leave this observation covering only partial batch progress. |
+| `cloud.aws.kinesis.reads`             | Counter    | count         | `stream.name` (full stream name), `partition.id` (Kinesis shard ID)                                                             | One successful `GetRecords` response. This counts read requests, not records; failed requests do not increment it.                                                                                                                                                                          |
+| `cloud.aws.kinesis.lag`               | Histogram  | ms            | `stream.name` (full stream name), `partition.id` (Kinesis shard ID)                                                             | AWS `GetRecordsOutput.MillisBehindLatest` for this shard, not wall-clock age of the last processed record. The reader reports the value on each successful response, begins with zero, and re-emits the latest value every 15 seconds while the shard reader runs.                          |
+| `cloud.aws.kinesis.acquire.duration`  | Histogram  | s             | `stream.name` (full stream name), `partition.id` (Kinesis shard ID)                                                             | Elapsed time since this reader began trying to acquire the shard, observed after an acquire attempt finds no checkpoint and before the retry wait. Values accumulate across retries; successful acquisition adds no final observation.                                                      |
+| `cloud.aws.kinesis.sleep.duration`    | Histogram  | ms            | `stream.name` (full stream name), `partition.id` (Kinesis shard ID)                                                             | Remaining per-record `ConsumeDelay` after subtracting the record's age. An observation is written only when that delay timer completes; a canceled wait emits none.                                                                                                                         |
+| `cloud.aws.kinesis.wait.duration`     | Histogram  | ms            | `stream.name` (full stream name), `partition.id` (Kinesis shard ID)                                                             | Computed delay scheduled before the next poll: normally `max(0, WaitTime - elapsed since the preceding GetRecords call began)`, or zero when AWS-reported lag exceeds `WaitTime + ConsumeDelay`. This is the scheduled value, not elapsed time actually spent waiting.                      |
+
+### Measurement notes[​](#measurement-notes "Direct link to Measurement notes")
+
+* For `consumed.messages`, `error.type={{default}}` includes the records whose handlers failed; `error.type=processing_failed` is an overlapping subset. Do not add or subtract the series to infer successful records. If cancellation interrupts a batch, the default value can represent only the records processed before cancellation.
+* `acquire.duration` describes repeated shard-ownership acquisition attempts, not the `Kinsumer` record-runner semaphore. Each observation is the cumulative elapsed time at an unsuccessful acquire check; there is no final sample on successful acquisition or while cancellation is waiting for the next check.
+* `wait.duration` is emitted when the next delay is chosen, before the reader waits. A later cancellation does not change that scheduled-value observation. By contrast, `sleep.duration` is emitted only after a per-record delay completes; it is absent when the record is already old enough, the configured delay is zero, or cancellation wins before the timer completes.
+* `lag` uses Kinesis' reported `MillisBehindLatest`; it is not a timestamp-derived age of the last record processed.
+
+## Related pages[​](#related-pages "Direct link to Related pages")
+
+* [Kinsumer](/docs/pr-5/reference/package-kinsumer/.md)
+* [RecordWriter](/docs/pr-5/reference/package-cloud_aws_kinesis-writer/.md)
+* [AWS package configuration](/docs/pr-5/reference/package-cloud_aws/.md)
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)
+* [Creating a consumer](/docs/pr-5/how-to/streaming-applications/create-a-consumer/.md)
+
+
+---
+
+# Kinesis RecordWriter
+
+`RecordWriter` in `github.com/justtrackio/gosoline/pkg/cloud/aws/kinesis` writes records to one configured Kinesis stream using `PutRecords`. Construct it with `NewRecordWriter(ctx, config, logger, settings)` and a `*RecordWriterSettings`; use `PutRecord` for one record or `PutRecords` for a batch. The writer resolves the full stream name and Kinesis client from configuration, splits requests at the Kinesis batch limit, and retries records rejected in a response.
+
+See [AWS package configuration](/docs/pr-5/reference/package-cloud_aws/.md) for shared AWS client settings.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+Names below are Gosoline-authored canonical names. The OTEL writer exports them with a `gosoline.` prefix; the table shows the units authored by the emitter. See the [metric schema](/docs/pr-5/reference/metric-schema/.md) for writer conversion details.
+
+| Metric                            | Instrument | Authored unit | Dimensions                                                                                                                                                                                                                                      | Description                                                                                                                                                                                                                     |
+| --------------------------------- | ---------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cloud.aws.kinesis.sent.messages` | Counter    | count         | `stream.name` (full stream name), `error.type={{default}}` for records accepted by Kinesis, and conditionally `error.type=<count> <ErrorCode> errors` for record-level failures (comma-separated reason groups when multiple error codes occur) | Accepted and rejected records reported by one successful `PutRecords` response attempt. The default series counts accepted records; each conditional error value counts rejected records for its reported Kinesis error reason. |
+| `cloud.aws.kinesis.batch.records` | Histogram  | count         | `stream.name` (full stream name)                                                                                                                                                                                                                | Number of records in each `PutRecords` request attempt. Retries are separate observations and contain only records still rejected by the previous attempt.                                                                      |
+
+### Measurement notes[​](#measurement-notes "Direct link to Measurement notes")
+
+For each successful `PutRecords` response, `sent.messages` records the accepted records under `error.type={{default}}` and rejected records under the response's error-reason value. A record rejected on one attempt and accepted on a later retry is counted in both attempts, so series aggregated across retries are not counts of unique input records. `batch.records` likewise measures each request attempt, including retry subsets, rather than only the original batch size.
+
+A top-level `PutRecords` API error returns before metric emission, so that failed API call produces neither a `sent.messages` nor a `batch.records` observation. `PutRecord` delegates to `PutRecords` as a one-record request.
+
+## Related pages[​](#related-pages "Direct link to Related pages")
+
+* [Kinesis shard reader](/docs/pr-5/reference/package-cloud_aws_kinesis-reader/.md)
+* [Kinsumer](/docs/pr-5/reference/package-kinsumer/.md)
+* [AWS package configuration](/docs/pr-5/reference/package-cloud_aws/.md)
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)
 
 
 ---
@@ -20219,6 +20394,104 @@ cloud:
 
             queue_pattern: "{app.namespace}-{queueId}"
 ```
+
+## Kinesis components[​](#kinesis-components "Direct link to Kinesis components")
+
+The Kinesis package's reader, writer, and active consumer API have separate metric references:
+
+* [Kinesis shard reader](/docs/pr-5/reference/package-cloud_aws_kinesis-reader/.md)
+* [Kinesis RecordWriter](/docs/pr-5/reference/package-cloud_aws_kinesis-writer/.md)
+* [Kinsumer](/docs/pr-5/reference/package-kinsumer/.md)
+
+
+---
+
+# conc/scheduler package
+
+The `pkg/conc/scheduler` package groups keyed jobs into batches and sends each batch to a caller-provided runner. Each `ScheduleJob` call receives the result associated with its key.
+
+## API and activation[​](#api-and-activation "Direct link to API and activation")
+
+Create a named scheduler with `NewScheduler[T](config, batchRunner, name)`. Its configuration is read from `scheduler.<name>`, where `name` is the constructor argument. The `BatchRunner[T]` receives the batch's keys and provider functions and returns a result map keyed by those keys, or an error.
+
+Start `Run(ctx)` to consume batches. Calling `ScheduleJob(ctx, key, provider)` queues the job and waits for its result.
+
+| Setting          | Default | Effect                                                          |
+| ---------------- | ------- | --------------------------------------------------------------- |
+| `batch_timeout`  | `10ms`  | Flushes a partial batch after this interval from its first job. |
+| `runner_count`   | `25`    | Number of concurrent batch runners.                             |
+| `max_batch_size` | `25`    | Flushes a batch when it reaches this many jobs.                 |
+
+Batches also flush when the `Run` context is cancelled, so pending jobs can be passed to the runner before shutdown.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists canonical Gosoline-authored names and units. The metric writer renders them per backend: OpenTelemetry prefixes namespaced metrics with `gosoline.` and OpenTelemetry/Prometheus scale authored millisecond durations to seconds. See the [metric schema](/docs/pr-5/reference/metric-schema/.md) for backend rendering and the complete contract.
+
+| Metric                               | Instrument | Authored unit | Dimensions             | Description                                                                                                                                                                                                           |
+| ------------------------------------ | ---------- | ------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `conc.scheduler.batch.tasks`         | Histogram  | `count`       | `name`: scheduler name | One observation per batch, written before the batch runner is called; the value is the number of jobs in the batch, including batches whose runner returns an error.                                                  |
+| `conc.scheduler.task.queue.duration` | Histogram  | `ms`          | `name`: scheduler name | One observation per job when its result arrives. It spans from entry to `ScheduleJob` through queueing, batch dispatch, and the entire batch-runner call; it is recorded before the success/error result is returned. |
+
+The standard `NewScheduler` writer is initialized with zero-valued defaults for both metrics, tagged with the scheduler `name`. The direct `NewSchedulerWithSettings` constructor accepts a writer supplied by the caller.
+
+## Related[​](#related "Direct link to Related")
+
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)
+
+
+---
+
+# db-repo package
+
+`pkg/db-repo` provides a model-oriented SQL repository interface with create, read, update, delete, and query operations. It also contains the model-event publisher notifier used to send repository notifications.
+
+## API and activation[​](#api-and-activation "Direct link to API and activation")
+
+Repository-operation timing is an explicit opt-in: wrap a repository with `db_repo.NewMetricRepository(config, logger, repo)`. The wrapper records `Create`, `Read`, `Update`, `Delete`, and `Query`; it does not override `Count`, and the package does not automatically wrap every repository. Model-event notification counts are emitted by the separate `db_repo.NewPublisherNotifier` path after each publisher result. See [`NewMetricRepository`](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db-repo/metric_repo.go#L27-L36) and [`NewPublisherNotifier`](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db-repo/notification_publisher.go#L19-L22).
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists names and units authored by Gosoline. The OpenTelemetry writer exports names with a `gosoline.` prefix and converts authored `ms` durations to the OpenTelemetry duration unit. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the writer contract and `{{default}}` dimension behavior.
+
+| Metric                              | Instrument | Authored unit | Dimensions                                                                                                                                                            | Description                                                                                                                                                                                                                       |
+| ----------------------------------- | ---------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db.repo.operation.duration`        | Histogram  | `ms`          | `operation.name`: `create`, `read`, `update`, `delete`, `query`; `model.id`: repository model ID; `error.type`: `{{default}}` on success, `operation_failed` on error | Records one observation after each wrapped repository operation. The observation count is the operation count; failures remain observations and are identified by `error.type`. `Count` is not wrapped by this metric repository. |
+| `db.repo.model_event.notifications` | Counter    | `count`       | `model.id`: configured model ID; `error.type`: `{{default}}` when publish succeeds, `notify_failed` when it returns an error, including cancellation                  | Adds one after each model-event `Publisher.Publish` result. Notification type is not a dimension; the counter records publish outcomes rather than the underlying database operation.                                             |
+
+## Related references[​](#related-references "Direct link to Related references")
+
+* [SQL database client package](/docs/pr-5/reference/package-db/.md)
+* [Working with relational databases](/docs/pr-5/how-to/databases-sql/.md)
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)
+* [Repository metric implementation](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db-repo/metric_repo.go#L38-L128)
+
+
+---
+
+# db package
+
+`pkg/db` creates managed SQL connections as `*sqlx.DB` values from named database settings. It installs a driver wrapper for connection-attempt metrics and reads live pool state from `database/sql` statistics.
+
+## API and activation[​](#api-and-activation "Direct link to API and activation")
+
+Use `db.ProvideConnection(ctx, config, logger, name)` to provide a named connection; it resolves the corresponding settings and creates the managed connection. The open-attempt counter is part of this connection setup, while the pool-state sampler starts after connection setup, lifecycle registration, and migrations succeed. There is no separate database-metrics switch: export still depends on the application's configured Gosoline metric writer. See [`ProvideConnection`](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db/connection.go#L18-L47) and the [metric wrapper](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db/metrics.go#L39-L107).
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists names and units authored by Gosoline. The OpenTelemetry writer exports names with a `gosoline.` prefix and converts authored `ms` durations to the OpenTelemetry duration unit. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the writer contract and dimension conventions.
+
+| Metric                       | Instrument | Authored unit | Dimensions                         | Description                                                                                                                                                                                      |
+| ---------------------------- | ---------- | ------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `db.client.connection.count` | Gauge      | `count`       | `connection.state`: `used`, `idle` | Samples `sql.DB.Stats().InUse` and `.Idle` immediately, then once per minute. Both state series are written, including zero values; there is no separate `open` or total-state series.           |
+| `db.client.connections`      | Counter    | `count`       | None                               | Adds one before each underlying driver `Open` call, including failed opens. It accumulates open attempts since process start; it is not a live connection count and is not decremented on close. |
+
+## Related references[​](#related-references "Direct link to Related references")
+
+* [Working with relational databases](/docs/pr-5/how-to/databases-sql/.md)
+* [SQL client and legacy SQLC metrics](/docs/pr-5/how-to/databases-sql/sqlc/.md)
+* [SQL repository package](/docs/pr-5/reference/package-db-repo/.md)
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)
 
 
 ---
@@ -20760,6 +21033,31 @@ The `Question` format uses `?` as a placeholder.
 ### [Dollar](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/dbx/placeholder.go)[​](#dollar "Direct link to dollar")
 
 The `Dollar` format uses `$` as a placeholder.
+
+
+---
+
+# ddb package
+
+`pkg/ddb` provides a DynamoDB repository interface for model persistence. Gosoline's `mdlsub.NewOutputDdb` wraps its repository with `ddb.NewMetricRepository`; the wrapper instruments `PutItem`, while delete operations use `DeleteItem` and do not pass through this metric hook.
+
+## API and activation[​](#api-and-activation "Direct link to API and activation")
+
+`ddb.NewMetricRepository(config, logger, repo)` creates the metric-wrapped repository. In the standard DDB model output, both `Create` and `Update` persistence route through `PutItem` and are recorded with `operation.name=save`; deletes are not recorded by this wrapper. See [`NewMetricRepository`](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/ddb/metric_repo.go#L26-L42) and the [model output wiring](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/mdlsub/output_ddb.go#L51-L90).
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists names and units authored by Gosoline. The OpenTelemetry writer exports names with a `gosoline.` prefix and converts authored `ms` durations to the OpenTelemetry duration unit. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the writer contract and `{{default}}` dimension behavior.
+
+| Metric                   | Instrument | Authored unit | Dimensions                                                                                                                     | Description                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ddb.operation.duration` | Histogram  | `ms`          | `operation.name`: `save`; `model.id`: repository model ID; `error.type`: `{{default}}` on success, `operation_failed` on error | Records after each wrapped `PutItem` result, including errors. **Source caveat:** the current implementation initializes the start time to `time.Time{}` and computes `time.Since(start)` after `PutItem`; the value is therefore measured from Go's zero time, not the call's elapsed duration. Do not interpret it as a normal per-operation latency. |
+
+## Related references[​](#related-references "Direct link to Related references")
+
+* [Key-value store package](/docs/pr-5/reference/package-kvstore/.md)
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)
+* [DynamoDB metric implementation](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/ddb/metric_repo.go#L36-L90)
 
 
 ---
@@ -21315,6 +21613,79 @@ func main() {
 
 ---
 
+# Gosoline SDK HTTP server package
+
+The Gosoline SDK's `pkg/httpserver` package integrates an HTTP server with the application kernel. Import it as `github.com/justtrackio/gosoline/pkg/httpserver`; `httpserver.New(name, definer)` returns a kernel module factory and reads server configuration from `httpserver.<name>`. The SDK installs its request-metric middleware and server metric recorder as part of constructing the server.
+
+This is distinct from the published `github.com/gosoline-project/httpserver` module documented in the [published HTTP server reference](/docs/pr-5/reference/package-httpserver/.md). The modules are separate implementations, though they currently author the same four canonical metric names and dimensions.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The request-duration histogram records matched routes; its observation count is the request count for each dimension set, not a separate status metric. Rejected-request observations are emitted when the concurrency middleware marks a request rejected; an ordinary 4xx or 5xx response is not by itself a rejection. The rejection counter is initialized with zero-valued defaults for registered routes and does not include a response-status dimension.
+
+| Metric                             | Instrument | Authored unit | Dimensions                                                                                                                                                 | Description                                                                                                                                                                                                          |
+| ---------------------------------- | ---------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http.server.request.duration`     | histogram  | ms            | `name` — configured server name; `route` — normalized Gin route template; `request.method` — HTTP method; `response.status_code` — decimal response status | Duration of a matched HTTP request. The route, method, and response status distinguish observations.                                                                                                                 |
+| `http.server.rejected.requests`    | counter    | count         | `name` — configured server name; `route` — normalized Gin route template; `request.method` — HTTP method                                                   | Requests explicitly rejected by the concurrency middleware. Ordinary 4xx/5xx responses are not necessarily rejections; this metric has no response-status dimension. Registered routes receive zero-valued defaults. |
+| `http.server.active_request.count` | gauge      | count         | `name` — configured server name                                                                                                                            | Current number of requests tracked as active for the named server. Updated on request start/completion and sampled at startup, every 10 seconds, and during shutdown.                                                |
+| `http.server.connection.count`     | gauge      | count         | `name` — configured server name                                                                                                                            | Current number of tracked open connections for the named server. Updated on connection state changes and sampled at startup, every 10 seconds, and during shutdown.                                                  |
+
+The SDK installs the metric middleware by default; exporting the observations still requires the application metric daemon. Wire `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`. The table shows canonical Gosoline names and authored units; see [Metric schema](/docs/pr-5/reference/metric-schema/.md) for writer-specific names and duration conversion.
+
+If this SDK server and the published HTTP server both write to the same backend with identical dimension values, the metrics do not carry a source-module dimension that separates the implementations.
+
+## Related guides[​](#related-guides "Direct link to Related guides")
+
+* [Add HTTP server middleware](/docs/pr-5/how-to/http-server/add-middleware/.md)
+* [Concurrency and connection pressure](/docs/pr-5/how-to/http-server/concurrency-and-connection-pressure/.md)
+* [Published HTTP server package](/docs/pr-5/reference/package-httpserver/.md)
+
+
+---
+
+# grpcserver package
+
+The Gosoline SDK's `pkg/grpcserver` package (import path `github.com/justtrackio/gosoline/pkg/grpcserver`) wraps a gRPC server as a kernel module. `grpcserver.New(name, definer, middlewares...)` returns a module factory, reads server settings from `grpc_server.<name>`, and registers the defined services. Register the factory with the application using `application.WithModuleFactory`.
+
+The server's statistics handler is enabled by default through `grpc_server.<name>.stats.enabled`. Disabling it disables both statistics logging and the handler's metric observations. Metric export also requires the application metric daemon: wire `application.WithMetrics`, set `metric.enabled: true`, and configure a writer under `metric.writers`.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+At each gRPC stats end event, the handler records one duration observation for the RPC. The full method name is split into `service` and `method`; for a name without a slash separating a method, `method` is `{{default}}`. Errors do not create a separate status or error dimension, and the histogram observation count provides the RPC count.
+
+| Metric                        | Instrument | Authored unit | Dimensions                                                                                                                                        | Description                                                                                                                                                     |
+| ----------------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rpc.server.request.duration` | histogram  | ms            | `service` — service component of the full method name; `method` — method component, or `{{default}}` when the full method has no method separator | Duration of a completed gRPC server call. One observation is recorded for each stats end event; there is no separate request counter or status/error dimension. |
+
+The table lists Gosoline-authored names and units. Configured writers may transform exported names and duration units; see [Metric schema](/docs/pr-5/reference/metric-schema/.md).
+
+
+---
+
+# http package
+
+The Gosoline SDK's `pkg/http` package (import path `github.com/justtrackio/gosoline/pkg/http`) provides a configured, reusable client for outbound HTTP requests. Its `Client` interface builds requests through `NewRequest()` and exposes `Get`, `Post`, `Put`, `Patch`, and `Delete` operations.
+
+`ProvideHttpClient(ctx, config, logger, name)` obtains the named client from the application context. The client writes its request-duration observations to the `http.client` Gosoline metric namespace.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+Each client operation that reaches `req.Execute` records one `http.client.request.duration` histogram observation. A valid HTTP response is recorded regardless of status (including non-2xx responses). An Execute-level failure is also recorded; request construction and URL-validation errors return before execution and produce no observation. The histogram's observation count represents requests for each dimension set; there is no separate request or status-code metric.
+
+| Metric                         | Instrument | Authored unit | Dimensions                                                                                                                                                                                                                                                                        | Description                                                                                                                                                                                           |
+| ------------------------------ | ---------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http.client.request.duration` | histogram  | ms            | `request.method` — requested HTTP method; `response.status_code` — decimal response status, or `{{default}}` when Execute returns an error; `error.type` — `{{default}}` for a response, `request_canceled` for a canceled request, or `request_failed` for another Execute error | Duration of a client request. Successful HTTP responses, including non-2xx responses, carry the response status and default error type. Execute errors carry the default status and their error type. |
+
+Metric export is an application-level concern: wire `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`. The client does not have a separate metric-emission switch. See [Metric schema](/docs/pr-5/reference/metric-schema/.md) for canonical-name and writer conversion details.
+
+## Related references[​](#related-references "Direct link to Related references")
+
+* [Gosoline SDK HTTP server package](/docs/pr-5/reference/package-gosoline-httpserver/.md)
+* [Published HTTP server package](/docs/pr-5/reference/package-httpserver/.md)
+
+
+---
+
 # httpserver package
 
 Package `httpserver` provides a modular HTTP server built on [Gin](https://gin-gonic.com/) and the gosoline kernel. It offers structured request binding, typed responses, middleware, SSE streaming, and dependency-injected handler registration.
@@ -21628,16 +21999,20 @@ The following middleware is automatically applied to every server:
 | Recovery             | Panic recovery                                                                  |
 | Connection lifecycle | Manage connection age                                                           |
 
-The following are canonical Gosoline metric names. The duration histogram's observation count is the request count for each attribute set; `response.status_code` is an attribute, not a separate status metric. Rejection counts do not carry a response-status attribute. The gauges are server-level and carry only `name`.
+## Metrics[​](#metrics "Direct link to Metrics")
 
-| Canonical metric                   | Kind      | Attributes                                                | Description                                                                    |
-| ---------------------------------- | --------- | --------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `http.server.request.duration`     | Histogram | `name`, `route`, `request.method`, `response.status_code` | Duration of each matched HTTP request; observation count is the request count. |
-| `http.server.rejected.requests`    | Counter   | `name`, `route`, `request.method`                         | Requests rejected before handling.                                             |
-| `http.server.active_request.count` | Gauge     | `name`                                                    | Requests currently handled by the server.                                      |
-| `http.server.connection.count`     | Gauge     | `name`                                                    | Connections currently held open by the server.                                 |
+The published `github.com/gosoline-project/httpserver` module installs its metric middleware and recorder when it constructs a server. The duration histogram records matched routes, and its observation count is the request count for each dimension set; `response.status_code` is an attribute, not a separate status metric. A rejection is recorded only when the concurrency middleware marks the request rejected, not for every non-2xx response. Registered routes receive zero-valued rejection defaults. The two gauges are server-level and carry only `name`.
 
-These are authored canonical names, not backend-rendered names. OTEL prefixes the namespace with `gosoline.` and exports durations in seconds; CloudWatch renders names in PascalCase and durations in milliseconds; Prometheus uses the fixed `gosoline` prefix, normalized metric names, and base-unit/counter suffixes. Application identity belongs on scrape-target labels, not in the metric name.
+| Metric                             | Instrument | Authored unit | Dimensions                                                                                                                                                 | Description                                                                                                                                                                                                          |
+| ---------------------------------- | ---------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http.server.request.duration`     | histogram  | ms            | `name` — configured server name; `route` — normalized Gin route template; `request.method` — HTTP method; `response.status_code` — decimal response status | Duration of a matched HTTP request. The histogram observation count represents requests for each dimension set.                                                                                                      |
+| `http.server.rejected.requests`    | counter    | count         | `name` — configured server name; `route` — registered Gin route; `request.method` — HTTP method                                                            | Requests explicitly rejected by the concurrency middleware. Ordinary 4xx/5xx responses are not necessarily rejections; this metric has no response-status dimension. Registered routes receive zero-valued defaults. |
+| `http.server.active_request.count` | gauge      | count         | `name` — configured server name                                                                                                                            | Current number of tracked active requests for the named server. Updated on request start/completion and sampled at startup, every 10 seconds, and during shutdown.                                                   |
+| `http.server.connection.count`     | gauge      | count         | `name` — configured server name                                                                                                                            | Current number of tracked open connections for the named server. Updated on connection state changes and sampled at startup, every 10 seconds, and during shutdown.                                                  |
+
+Metric export requires the application metric daemon: wire `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`. These are authored Gosoline names and units; see [Metric schema](/docs/pr-5/reference/metric-schema/.md) for writer-specific names and duration conversion.
+
+The published library and the Gosoline SDK's separately implemented [HTTP server package](/docs/pr-5/reference/package-gosoline-httpserver/.md) use the same four canonical names and dimension keys. If both implementations send identical dimension values to the same backend, the series have no source-module dimension that distinguishes them. For operational details, see [Add middleware](/docs/pr-5/how-to/http-server/add-middleware/.md) and [Concurrency and connection pressure](/docs/pr-5/how-to/http-server/concurrency-and-connection-pressure/.md).
 
 ## Validation[​](#validation "Direct link to Validation")
 
@@ -21805,6 +22180,201 @@ See [Concurrency and connection pressure](/docs/pr-5/how-to/http-server/concurre
 | `max_bytes` | int  | `512`   | Maximum body bytes before dropping. |
 
 See the [Chaos middleware how-to](/docs/pr-5/how-to/http-server/chaos-middleware/.md) for usage examples and safety notes.
+
+
+---
+
+# Kafka consumer metrics
+
+The `pkg/kafka/consumer` component polls Kafka records, coordinates callback processing, and commits offsets. A stream input configured with `type: kafka` uses this consumer path; the public `consumer.NewConsumer` constructor also creates a consumer directly. These measurements describe the Kafka client processing cycle, not an application's business outcomes.
+
+## Activation[​](#activation "Direct link to Activation")
+
+Configure a Kafka input under `stream.input.<name>`; Gosoline creates the consumer and its `kafka.consumer` metric writer. Enable Gosoline metric collection and configure a writer/exporter to observe the measurements. See [Kafka consumer configuration](/docs/pr-5/how-to/kafka/general/.md#consumer-configuration) for input settings and shutdown behavior.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+These are canonical Gosoline names as authored in the `kafka.consumer` namespace. OpenTelemetry prefixes the namespace with `gosoline.` and converts durations authored in milliseconds to seconds; that does not change the authored units shown here. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
+
+| Metric                             | Instrument                                                       | Authored unit                                                  | Dimensions                                                                                                                                                          | Description                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `kafka.consumer.consumed.messages` | Not authored in the legacy `metric.Datum` (V2 contract: Counter) | Not authored in the legacy `metric.Datum` (V2 contract: count) | `client.type` = `consumer`; `client.name` (configured consumer/input name); `topic.name` (resolved full topic); `error.type` = `{{default}}` or `processing_failed` | Records in the poll work set split into disjoint non-failed (`{{default}}`) and callback-failed (`processing_failed`) counts; the outcomes sum to the work-set size. During shutdown, records skipped before callback admission can be in the default bucket, so it does not prove successful business processing. |
+| `kafka.consumer.polls`             | Counter                                                          | count                                                          | `client.type` = `consumer`; `client.name` (configured consumer/input name); `topic.name` (resolved full topic)                                                      | One sample for a poll whose processing and offset-commit path returns nil. A poll that drains during graceful shutdown can still emit a sample; an error or cancellation that aborts this path suppresses it.                                                                                                      |
+| `kafka.consumer.poll.duration`     | Histogram                                                        | milliseconds                                                   | `client.type` = `consumer`; `client.name` (configured consumer/input name); `topic.name` (resolved full topic)                                                      | Duration of the `poll()` request, recorded when the following processing and offset-commit path returns nil. A graceful drain can still emit a sample; an error or cancellation that aborts the path suppresses it.                                                                                                |
+| `kafka.consumer.process.duration`  | Histogram                                                        | milliseconds                                                   | `client.type` = `consumer`; `client.name` (configured consumer/input name); `topic.name` (resolved full topic)                                                      | One observation for a poll's processing cycle, including configured `consume_delay` waits, callback processing, and offset-commit work.                                                                                                                                                                            |
+| `kafka.consumer.commit.duration`   | Histogram                                                        | milliseconds                                                   | `client.type` = `consumer`; `client.name` (configured consumer/input name); `topic.name` (resolved full topic)                                                      | Duration of a successfully completed offset commit. Failed commits return before the metric is written, so they have no duration sample.                                                                                                                                                                           |
+| `kafka.consumer.sleep.duration`    | Histogram                                                        | milliseconds                                                   | `client.type` = `consumer`; `client.name` (configured consumer/input name); `topic.name` (resolved full topic)                                                      | Completed per-record `consume_delay` waits before processing; canceled waits produce no observation.                                                                                                                                                                                                               |
+| `kafka.consumer.rebalances`        | Counter                                                          | count                                                          | `client.type` = `consumer`; `client.name` (configured consumer/input name); `topic.name` (resolved topic)                                                           | One increment for each topic entry in the consumer's partition-loss or revocation callback; it indicates partition ownership changes, not a count of every partition.                                                                                                                                              |
+
+## Interpretation notes[​](#interpretation-notes "Direct link to Interpretation notes")
+
+The `consumed.messages` legacy `metric.Datum` omits both `Kind` and `Unit` for emitted outcomes and the default metric; Counter/count are its V2 contract mapping, not explicitly authored fields. The default bucket is a non-failed work-set count, not a general proof that application side effects succeeded. Poll count and poll duration are emitted only after the processing and offset-commit path returns nil; successful graceful draining can therefore still be recorded. The per-record delay histogram observes completed waits only, not canceled waits.
+
+## Related[​](#related "Direct link to Related")
+
+* [General Kafka usage](/docs/pr-5/how-to/kafka/general/.md)
+* [Kafka client-hook metrics](/docs/pr-5/reference/package-kafka/.md)
+* [Kafka producer metrics](/docs/pr-5/reference/package-kafka-producer/.md)
+* [Create a consumer](/docs/pr-5/how-to/streaming-applications/create-a-consumer/.md)
+* [Metric schema reference](/docs/pr-5/reference/metric-schema/.md)
+
+
+---
+
+# Kafka producer metrics
+
+The `pkg/kafka/producer` component sends records synchronously and reports per-call results. A stream output configured with `type: kafka` uses this producer path; the public `producer.NewProducer` constructor also creates one directly. These metrics describe producer-call outcomes and timing, distinct from Kafka broker and wire-batch hook measurements.
+
+## Activation[​](#activation "Direct link to Activation")
+
+Configure a Kafka output under `stream.output.<name>`; Gosoline creates the producer and its `kafka.producer` metric writer. Enable Gosoline metric collection and configure a writer/exporter to observe the measurements. See [Kafka producer configuration](/docs/pr-5/how-to/kafka/general/.md#producer-configuration).
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+These are canonical Gosoline names as authored in the `kafka.producer` namespace. OpenTelemetry prefixes the namespace with `gosoline.` and converts durations authored in milliseconds to seconds; that does not change the authored units shown here. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
+
+| Metric                            | Instrument | Authored unit | Dimensions                                                                                                                                                     | Description                                                                                                                                                                                                       |
+| --------------------------------- | ---------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kafka.producer.sent.messages`    | Counter    | count         | `client.type` = `producer`; `client.name` (configured producer/output name); `topic.name` (resolved full topic); `error.type` = `{{default}}` or `send_failed` | Records returned by a synchronous producer call split into successful (`{{default}}`) and failed (`send_failed`) outcomes. The buckets are disjoint; for a partial failure their sum is the records in that call. |
+| `kafka.producer.batch.records`    | Histogram  | count         | `client.type` = `producer`; `client.name` (configured producer/output name); `topic.name` (resolved full topic)                                                | Number of records passed to one synchronous producer call; this is not a franz-go wire-batch count.                                                                                                               |
+| `kafka.producer.produce.duration` | Histogram  | milliseconds  | `client.type` = `producer`; `client.name` (configured producer/output name); `topic.name` (resolved full topic)                                                | Duration of one synchronous producer call.                                                                                                                                                                        |
+
+## Interpretation notes[​](#interpretation-notes "Direct link to Interpretation notes")
+
+`kafka.producer.batch.records` measures records passed to one synchronous producer call, not broker wire batches; the separate [Kafka client-hook metrics](/docs/pr-5/reference/package-kafka/.md) describe wire batches and broker activity. With the [producer daemon](/docs/pr-5/how-to/streaming-applications/use-the-producer-daemon/.md), the stream daemon's asynchronous output metrics are a separate set and do not turn a daemon write into a synchronous delivery confirmation. Producer result metrics are not evidence of durable application effects.
+
+## Related[​](#related "Direct link to Related")
+
+* [General Kafka usage](/docs/pr-5/how-to/kafka/general/.md)
+* [Kafka client-hook metrics](/docs/pr-5/reference/package-kafka/.md)
+* [Kafka consumer metrics](/docs/pr-5/reference/package-kafka-consumer/.md)
+* [Use the producer daemon](/docs/pr-5/how-to/streaming-applications/use-the-producer-daemon/.md)
+* [Metric schema reference](/docs/pr-5/reference/metric-schema/.md)
+
+
+---
+
+# Kafka client hook metrics
+
+The `pkg/kafka` package's `MetricsHook` records broker connection and throttle events plus franz-go produce/fetch wire batches. These are transport-level hook measurements; the Kafka consumer and producer packages emit separate client-operation metrics.
+
+## Activation[​](#activation "Direct link to Activation")
+
+Gosoline's Kafka consumer reader and producer writer install this hook when they create their franz-go clients. No separate stream setting is required. Configure Gosoline metric collection and a writer/exporter to make the emitted measurements visible.
+
+The `client.type` dimension is `consumer` or `producer`; `client.name` is the configured client name. Broker callbacks add `broker.address` as `host:port`. Wire-batch callbacks instead add the resolved `topic.name` and decimal-string `partition.id`; they do not include `broker.address`.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+These are canonical Gosoline names as authored. The hook writes them in the `kafka` namespace. OpenTelemetry prefixes the namespace with `gosoline.` and converts durations authored in milliseconds to seconds; that does not change the authored units shown here. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
+
+| Metric                                | Instrument | Authored unit | Dimensions                                                                                                                                                                                               | Description                                                                                   |
+| ------------------------------------- | ---------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `kafka.connects`                      | Counter    | count         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `broker.address` (host<!-- -->:port<!-- -->); `error.type` = `{{default}}` for success or `connect_failed` for failure | Broker connection attempts. The error dimension distinguishes successful and failed attempts. |
+| `kafka.throttles`                     | Counter    | count         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `broker.address` (host<!-- -->:port<!-- -->)                                                                           | Broker-throttled requests.                                                                    |
+| `kafka.throttle.duration`             | Histogram  | milliseconds  | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `broker.address` (host<!-- -->:port<!-- -->)                                                                           | Time a broker throttled a Kafka client.                                                       |
+| `kafka.produce.batch.records`         | Histogram  | count         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition)                                               | Records in one franz-go produce wire batch.                                                   |
+| `kafka.produce.batch.size`            | Histogram  | bytes         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition)                                               | Uncompressed bytes in one produce wire batch.                                                 |
+| `kafka.produce.batch.compressed.size` | Histogram  | bytes         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition)                                               | Compressed bytes in one produce wire batch.                                                   |
+| `kafka.fetch.batch.records`           | Histogram  | count         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition)                                               | Records in one franz-go fetch wire batch.                                                     |
+| `kafka.fetch.batch.size`              | Histogram  | bytes         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition)                                               | Uncompressed bytes in one fetch wire batch.                                                   |
+| `kafka.fetch.batch.compressed.size`   | Histogram  | bytes         | `client.type` = `consumer` or `producer`; `client.name` (configured client name); `topic.name` (resolved topic); `partition.id` (decimal-string partition)                                               | Compressed bytes in one fetch wire batch.                                                     |
+
+Only `kafka.connects` carries `error.type`; successful connections use `{{default}}`, while failed connections use `connect_failed`. The throttle metrics have only the broker dimensions shown above. None of the hook metrics reports business success or durable delivery; correlate them with the [Kafka consumer metrics](/docs/pr-5/reference/package-kafka-consumer/.md), [Kafka producer metrics](/docs/pr-5/reference/package-kafka-producer/.md), and application outcomes.
+
+## Related[​](#related "Direct link to Related")
+
+* [General Kafka usage](/docs/pr-5/how-to/kafka/general/.md)
+* [Kafka consumer metrics](/docs/pr-5/reference/package-kafka-consumer/.md)
+* [Kafka producer metrics](/docs/pr-5/reference/package-kafka-producer/.md)
+* [Metric schema reference](/docs/pr-5/reference/metric-schema/.md)
+
+
+---
+
+# Kinsumer
+
+`Kinsumer` is the current exported Kinesis consumer API in `github.com/justtrackio/gosoline/pkg/cloud/aws/kinesis`. It coordinates shard ownership and checkpointing across clients, runs per-shard readers, and delivers record payloads to a `RecordHandler`. Construct it with `NewKinsumer(ctx, config, logger, settings)` and a `*Settings` (`Settings.StreamName` is required), then call `Run(ctx, handler)` to consume. The `Kinsumer` interface also exposes `Stop` and `IsHealthy` for lifecycle management.
+
+These gauges are emitted by the current exported `Kinsumer` API through `NewKinsumer` and `Run`. Shard readers emit their own metrics on the [Kinesis shard reader page](/docs/pr-5/reference/package-cloud_aws_kinesis-reader/.md).
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+Names below are Gosoline-authored canonical names. The OTEL writer exports them with a `gosoline.` prefix; the table shows the units authored by the emitter. See the [metric schema](/docs/pr-5/reference/metric-schema/.md) for writer conversion details.
+
+| Metric                           | Instrument | Authored unit | Dimensions                       | Description                                                                                                                                                |
+| -------------------------------- | ---------- | ------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cloud.aws.kinesis.shard.count`  | Gauge      | count         | `stream.name` (full stream name) | Number of shards in the current shard-distribution snapshot for this stream. Emitted when the consumer group starts and every minute while it runs.        |
+| `cloud.aws.kinesis.client.count` | Gauge      | count         | `stream.name` (full stream name) | Number of Kinsumer clients known for this stream in the same distribution snapshot. Emitted when the consumer group starts and every minute while it runs. |
+
+Both values are gauges, not cumulative counters. The only dimension is the full stream name; neither metric adds a shard ID, client ID, or error dimension. The two values can be compared per stream to understand shard-to-client distribution, but they do not identify individual shard assignments or clients.
+
+## Related pages[​](#related-pages "Direct link to Related pages")
+
+* [Kinesis shard reader](/docs/pr-5/reference/package-cloud_aws_kinesis-reader/.md)
+* [Kinesis RecordWriter](/docs/pr-5/reference/package-cloud_aws_kinesis-writer/.md)
+* [AWS package configuration](/docs/pr-5/reference/package-cloud_aws/.md)
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)
+* [Creating a consumer](/docs/pr-5/how-to/streaming-applications/create-a-consumer/.md)
+
+
+---
+
+# kvstore package
+
+`pkg/kvstore` provides generic model-keyed stores with in-memory, Redis, and DynamoDB backends. Its interface supports individual and batch reads, writes, and deletes.
+
+## API and activation[​](#api-and-activation "Direct link to API and activation")
+
+When `kvstore.Settings.MetricsEnabled` is true, `kvstore.NewMetricStoreWithInterfaces` wraps the configured backend and emits the `kvstore.*` series. These metrics describe successful wrapper calls; they do not count failed read/write/delete calls. For Redis, the wrapper counts items in the caller's batch while the backend may split that batch into Redis command chunks according to `BatchSize`—the counters are not command or chunk counts. The separate `kvstore.item.count` series samples an optional backend size estimate, not an operation batch size.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists names and units authored by Gosoline. The OpenTelemetry writer exports names with a `gosoline.` prefix and converts authored `ms` durations to the OpenTelemetry duration unit. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the writer contract and dimension conventions.
+
+| Metric               | Instrument | Authored unit | Dimensions                                                                                        | Description                                                                                                                                                                                                                                                                   |
+| -------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kvstore.reads`      | Counter    | `count`       | `model.id`: configured model ID; `store.type`: concrete backend Go type; `hit`: `true` or `false` | For each successful `Contains`, `Get`, or `GetBatch`, records item counts split into items found by this store (`true`) and not found (`false`). Both series are written, including a zero-valued side; errors and input-conversion failures emit no read points.             |
+| `kvstore.writes`     | Counter    | `count`       | `model.id`: configured model ID; `store.type`: concrete backend Go type                           | On success, `Put` adds one and `PutBatch` adds the number of input entries. The batch value is the caller's item count, not the number of Redis commands/chunks or newly created keys.                                                                                        |
+| `kvstore.deletes`    | Counter    | `count`       | `model.id`: configured model ID; `store.type`: concrete backend Go type                           | On success, `Delete` adds one and `DeleteBatch` adds the number of input keys. The batch value is the caller's item count, not the number of Redis commands/chunks; errors emit no delete points.                                                                             |
+| `kvstore.item.count` | Gauge      | `count`       | `model.id`: configured model ID; `store.type`: concrete backend Go type                           | Samples the optional `SizedStore.EstimateSize()` result once per minute after the sampler starts. A backend must implement `SizedStore`; a `nil` estimate emits no value and is not treated as zero. Redis uses `DBSIZE`; the in-memory backend reports its tracked estimate. |
+
+The `store.type` dimension is the concrete Go type string, not a normalized backend label. A DDB backend may also emit metrics owned by `pkg/ddb`; see the [DDB package reference](/docs/pr-5/reference/package-ddb/.md) for that separate contract.
+
+## Related references[​](#related-references "Direct link to Related references")
+
+* [DynamoDB package](/docs/pr-5/reference/package-ddb/.md)
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)
+* [Metric wrapper and size sampler](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/kvstore/metric.go#L47-L67)
+* [`SizedStore` interface](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/kvstore/kvstore.go#L65-L70)
+
+
+---
+
+# limit package
+
+The `pkg/limit` package provides rate limiters for operations that must wait until a limit permits them to proceed. The common `Limiter` interface exposes `Wait(ctx, prefix) error`; a fixed-window limiter can delay a caller after capacity is reached.
+
+## API and activation[​](#api-and-activation "Direct link to API and activation")
+
+The metric middleware is opt-in. Attach a `limit.NewMetricMiddleware()` instance through a middleware-capable limiter's `WithMiddleware` method, using a `MiddlewareFactory` that returns it. A call to `OnTake` alone does not emit a metric; the middleware records outcome callbacks.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists canonical Gosoline-authored names and units. The metric writer renders them per backend: OpenTelemetry prefixes namespaced metrics with `gosoline.` and OpenTelemetry/Prometheus scale authored millisecond durations to seconds. See the [metric schema](/docs/pr-5/reference/metric-schema/.md) for backend rendering and the complete contract.
+
+| Metric        | Instrument | Authored unit | Dimensions                                                                                                                                                                  | Description                                                                                     |
+| ------------- | ---------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `limit.takes` | Counter    | `count`       | `name`: limiter name; `prefix`: wait prefix; `outcome`: `allowed`, `throttled`, or `error`; `error.type`: `{{default}}` for allowed/throttled, `rate_limit_error` for error | `OnRelease` records `allowed`, `OnThrottle` records `throttled`, and `OnError` records `error`. |
+
+These are the emitted attribute keys and values: `outcome` and `error.type` carry the callback result; there are no `pass`, `reject`, or `wait` outcome values. In the fixed-window limiter, reaching capacity emits `throttled` while the call waits; a successful wait then also emits `allowed`, while cancellation during that wait emits `error`. Therefore a single `Wait` can emit a throttle event and then a terminal callback event. `error.type=rate_limit_error` is the middleware's generic operation-failure label, not a Go error type.
+
+The `prefix` value is passed to the fixed-window limiter through `Wait`; the leaky-bucket limiter instead reports the literal `take` prefix. The middleware does not seed zero-valued defaults, so these counts come from outcome callbacks.
+
+## Related[​](#related "Direct link to Related")
+
+* [Concurrency and connection pressure](/docs/pr-5/how-to/http-server/concurrency-and-connection-pressure/.md)
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)
 
 
 ---
@@ -22116,11 +22686,225 @@ log:
 
 ### Metric[​](#metric "Direct link to Metric")
 
-No configuration is needed. The canonical Gosoline metric `metric.log.records` is a counter with authored unit `count`: the metric handler increments it once for each warn- or error-level record, setting the `level` attribute to `warn` or `error`; other levels are not counted. OpenTelemetry exports it as `gosoline.metric.log.records` with unit `{record}`; other metric backends may render Gosoline metric names using their own conventions.
+The metric log handler is opt-in. Its factory is registered under handler type `metric`; to activate it, add a handler with `type: metric` under `log.handlers`:
+
+```
+log:
+
+  handlers:
+
+    metrics:
+
+      type: metric
+```
+
+The handler counts only warning- and error-priority records; the emitted `level` dimension is lowercase `warn` or `error`. See [Metrics](#metrics) for the canonical dimensions and emission behavior. It does not replace a normal log output handler, so configure an `iowriter` handler too if logs still need to be written to stdout or a file.
 
 ### Sentry[​](#sentry "Direct link to Sentry")
 
 No configuration needed. Publishes every logged error to Sentry.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists the canonical Gosoline-authored name, instrument, unit, and dimensions. OpenTelemetry prefixes this namespaced metric with `gosoline.` and renders its count unit as `{record}`; duration metrics authored in milliseconds are scaled to seconds for OpenTelemetry and Prometheus. Other writers have their own rendering. See the [metric schema](/docs/pr-5/reference/metric-schema/.md) for the complete contract.
+
+| Metric               | Instrument | Authored unit | Dimensions                 | Description                                                                                                                         |
+| -------------------- | ---------- | ------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `metric.log.records` | Counter    | `count`       | `level`: `warn` or `error` | One count for each warning- or error-priority log record while the optional metric handler is configured; other levels are ignored. |
+
+The metric writer seeds zero-valued defaults for both `warn` and `error`. Those initial values do not represent observed log records.
+
+
+---
+
+# mdlsub package
+
+The `pkg/mdlsub` package adapts model subscription messages to the stream consumer callback interface. It reads model and version details from message attributes, selects a transformer from the supplied model core, and persists transformed output.
+
+## API and activation[​](#api-and-activation "Direct link to API and activation")
+
+Use `NewSubscriberCallbackFactory(core, sourceModel, persistGraceTime)` to create a `stream.UntypedConsumerCallbackFactory` for a stream consumer. The `SubscriberCore` supplies known model IDs, transformers, and outputs; `persistGraceTime` controls the delayed-cancellation window while persistence is in progress.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists canonical Gosoline-authored names and units. The metric writer renders them per backend: OpenTelemetry prefixes namespaced metrics with `gosoline.` and OpenTelemetry/Prometheus scale authored millisecond durations to seconds. See the [metric schema](/docs/pr-5/reference/metric-schema/.md) for backend rendering and the complete contract.
+
+| Metric          | Instrument | Authored unit | Dimensions                                                                                                    | Description                                                                                                                                                                                                                                               |
+| --------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mdlsub.events` | Counter    | `count`       | `model.id`: parsed model ID; `outcome`: `applied` or `skipped`; `error.type`: `{{default}}` or `apply_failed` | Counts applied/skipped model events and errors after model-spec parsing. Successful persistence emits `applied` with the default error type; a nil transformed model emits `skipped`; a returned error after parsing emits `applied` with `apply_failed`. |
+
+The callback parses the model specification before installing its error-metric defer, so malformed or missing model attributes do not produce a metric. Delay errors and request cancellation that the callback handles as a retry also return without an error metric. Other returned errors after parsing—including transformer lookup, output lookup, or persistence errors—are counted as `outcome=applied,error.type=apply_failed`. Thus `applied` by itself does not imply success; read it with `error.type`.
+
+The writer seeds zero-valued defaults for `applied` and `skipped` with `error.type={{default}}` for each model ID known to the core. Those defaults are not consumed events; no zero-valued `apply_failed` series is seeded.
+
+## Related[​](#related "Direct link to Related")
+
+* [Create a consumer](/docs/pr-5/how-to/streaming-applications/create-a-consumer/.md)
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)
+
+
+---
+
+# metric package
+
+The Gosoline `metric` package provides the framework metric writer pipeline and an optional Prometheus scrape endpoint. It also supplies a logger handler that records warn- and error-level log records as a framework metric. The [Metric schema reference](/docs/pr-5/reference/metric-schema/.md) remains the source of truth for canonical Gosoline metric names, units, dimensions, writer transformations, and migration history; this page covers package activation and endpoint-specific exports.
+
+## Registering metrics and the Prometheus endpoint[​](#registering-metrics-and-the-prometheus-endpoint "Direct link to Registering metrics and the Prometheus endpoint")
+
+Register `application.WithMetrics` on the application to install the metric daemon and Prometheus metrics-server modules ([source](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/application/options.go#L373-L375)). The metric daemon is disabled by default, so set `metric.enabled: true` to export framework metric data. The scrape server starts only when the `prometheus` writer is selected and its API is enabled; API defaults are enabled, port `8092`, and path `/metrics` ([server source](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/metric/prometheus_metric_server.go#L59-L100)).
+
+```
+metric:
+
+  enabled: true
+
+  writers:
+
+    - prometheus
+
+  writer_settings:
+
+    prometheus:
+
+      api:
+
+        enabled: true
+
+        port: 8092
+
+        path: /metrics
+```
+
+The `api.enabled` switch controls the scrape listener separately from `metric.enabled`: disabling the API removes the endpoint, while `metric.enabled` controls the metric daemon. CloudWatch and OTEL writers do not add writer-owned operational metrics to the Gosoline contract. The Prometheus writer also adds no Gosoline-authored operational metric names; the endpoint and its upstream collectors expose the separate library-owned data described below.
+
+To count logger records, also register `application.WithLoggerMetricHandler` ([source](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/application/options.go#L340-L345)). This attaches the metric handler to the application logger; it is separate from enabling the metric daemon and selecting an exporter. See the [log package reference](/docs/pr-5/reference/package-log/.md) for logger and handler setup.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+### Gosoline-authored metric[​](#gosoline-authored-metric "Direct link to Gosoline-authored metric")
+
+This framework metric is included in the current 62-name inventory in the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md).
+
+| Metric               | Instrument | Authored unit | Dimensions                  | Description                                                                                                                              |
+| -------------------- | ---------- | ------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `metric.log.records` | counter    | count         | `level` = `warn` or `error` | Counts only warn- and error-level records delivered to the metric logger handler, separated by level. Other log levels are filtered out. |
+
+The handler declares count-counter defaults for both levels and writes one increment for each matching record it receives ([handler source](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/metric/logger_handler.go#L11-L87)).
+
+### Prometheus HTTP-handler metrics (upstream-owned)[​](#prometheus-http-handler-metrics-upstream-owned "Direct link to Prometheus HTTP-handler metrics (upstream-owned)")
+
+When the Prometheus API is enabled, Gosoline wraps the registry handler with `promhttp.InstrumentMetricHandler`. In the pinned Prometheus Go client `client_golang` v1.20.5, that instrumentation adds these two exports. They describe requests to the metrics handler, not application HTTP-server traffic, and are not Gosoline-authored metrics or part of the 62-name inventory.
+
+| Metric                                       | Instrument | Upstream unit | Dimensions                | Description                                                                |
+| -------------------------------------------- | ---------- | ------------- | ------------------------- | -------------------------------------------------------------------------- |
+| `promhttp_metric_handler_requests_total`     | counter    | count         | `code` (HTTP status code) | Requests handled by the metrics endpoint, grouped by response status code. |
+| `promhttp_metric_handler_requests_in_flight` | gauge      | count         | None                      | Requests currently being handled by the metrics endpoint.                  |
+
+The endpoint passes an empty `promhttp.HandlerOpts`; the optional `promhttp_metric_handler_errors_total` metric is therefore not registered by this path. See the pinned [`promhttp.InstrumentMetricHandler` contract](https://pkg.go.dev/github.com/prometheus/client_golang@v1.20.5/prometheus/promhttp#InstrumentMetricHandler).
+
+### Upstream Go and process collectors[​](#upstream-go-and-process-collectors "Direct link to Upstream Go and process collectors")
+
+The default Prometheus registry also registers the upstream Go runtime and process collectors. Their exported metric families depend on the pinned client version, Go runtime/toolchain, and process platform; they are external collector output, not Gosoline-authored metrics, and are intentionally not enumerated as a fixed Gosoline metric set. Consult the pinned [`NewGoCollector`](https://pkg.go.dev/github.com/prometheus/client_golang@v1.20.5/prometheus/collectors#NewGoCollector) and [`NewProcessCollector`](https://pkg.go.dev/github.com/prometheus/client_golang@v1.20.5/prometheus/collectors#NewProcessCollector) documentation for that upstream contract.
+
+`metric.schema_version` is emitted as schema metadata, not as a metric. Likewise, the two `promhttp` metrics and the Go/process collector exports above are outside the Gosoline-authored 62-name inventory. For canonical writer naming and unit conversion, see [Metric schema](/docs/pr-5/reference/metric-schema/.md); for logger integration, see [Package log](/docs/pr-5/reference/package-log/.md).
+
+
+---
+
+# Redis list input
+
+The `stream` package's Redis list input implements the stream `Input` interface. It blocks on a configured Redis list with `BLPOP`, decodes each payload as a `stream.Message`, and passes decoded messages into the consumer pipeline.
+
+## Activation[​](#activation "Direct link to Activation")
+
+Configure an input with `type: redis` and a Redis server name and list key:
+
+```
+stream:
+
+  input:
+
+    orders:
+
+      type: redis
+
+      server_name: default
+
+      key: orders
+
+      wait_time: 5s
+```
+
+The exported constructor is `stream.NewRedisListInput(ctx, config, logger, settings)`; it returns a `stream.Input`. The `RedisListInputSettings` includes the Redis server name, key, wait time, health-check timeout, and runner count. A zero wait time is rejected when the input runs. For the consumer wiring and transport behavior, see [Create a consumer](/docs/pr-5/how-to/streaming-applications/create-a-consumer/.md).
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists canonical Gosoline names as authored, not backend-exported names. The metric writer places these in the `stream` namespace. OpenTelemetry prefixes the namespace with `gosoline.` and converts durations authored in milliseconds to seconds; that conversion does not change the authored units shown here. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
+
+| Metric                 | Instrument | Authored unit | Dimensions                          | Description                                                                                                                                                                             |
+| ---------------------- | ---------- | ------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stream.message.count` | Gauge      | count         | `list.name` = `<server_name>-<key>` | Current Redis-list length, sampled immediately when the metric loop starts and then once per second. If Redis `LLEN` fails, the input logs the error and emits no sample for that read. |
+| `stream.reads`         | Counter    | count         | `list.name` = `<server_name>-<key>` | Increments after a message has been removed by `BLPOP`, decoded, and handed to the input's processing channel. It measures intake, not callback success.                                |
+
+## Operational notes[​](#operational-notes "Direct link to Operational notes")
+
+Redis removes a list item as part of `BLPOP`; it is not redelivered by the input if decoding or later processing fails. A malformed payload is logged and skipped before `stream.reads` is incremented. Use the stream consumer retry handler when application failures need a separate retry path; it does not restore the original Redis list entry.
+
+The `list.name` dimension is the configured server name and key joined with a hyphen. These metrics do not include a success/failure dimension for callback processing.
+
+## Related[​](#related "Direct link to Related")
+
+* [Understand inputs and outputs](/docs/pr-5/how-to/streaming-applications/understand-inputs-and-outputs/.md)
+* [Create a consumer](/docs/pr-5/how-to/streaming-applications/create-a-consumer/.md)
+* [Redis list output metrics](/docs/pr-5/reference/package-stream-redis-list-output/.md)
+* [Metric schema reference](/docs/pr-5/reference/metric-schema/.md)
+
+
+---
+
+# Redis list output
+
+The `stream` package's Redis list output implements the stream `Output` interface. It encodes the supplied writable messages into Redis list entries and appends them with `RPUSH` to the configured list. Use it when a producer should publish stream messages to a Redis list.
+
+## Activation[​](#activation "Direct link to Activation")
+
+Configure an output with `type: redis` and the Redis server name and list key:
+
+```
+stream:
+
+  output:
+
+    cache_updates:
+
+      type: redis
+
+      server_name: default
+
+      key: cache-updates
+```
+
+The exported constructor is `stream.NewRedisListOutput(ctx, config, logger, settings)`; it returns a `stream.Output` with `WriteOne` and batched `Write` methods. The `RedisListOutputSettings` includes the Redis server name, key, and batch size. For ordinary domain events, use the stream producer rather than constructing an output directly; see [Create a producer](/docs/pr-5/how-to/streaming-applications/create-a-producer/.md).
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists the canonical Gosoline name as authored, not the backend-exported name. The metric writer places it in the `stream` namespace. OpenTelemetry prefixes the namespace with `gosoline.` and converts durations authored in milliseconds to seconds; that conversion does not change the authored unit shown here. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
+
+| Metric          | Instrument | Authored unit | Dimensions                          | Description                                                                                                                                            |
+| --------------- | ---------- | ------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stream.writes` | Counter    | count         | `list.name` = `<server_name>-<key>` | Adds the number of messages in a `Write` batch after every Redis chunk has been pushed successfully. It counts messages, not Redis commands or chunks. |
+
+## Operational notes[​](#operational-notes "Direct link to Operational notes")
+
+The `list.name` dimension is the configured server name and key joined with a hyphen. The counter has no output-success/error dimension. If a chunk's `RPUSH` returns an error, `Write` returns that error without recording `stream.writes`; earlier chunks in the same call may already have been appended.
+
+## Related[​](#related "Direct link to Related")
+
+* [Understand inputs and outputs](/docs/pr-5/how-to/streaming-applications/understand-inputs-and-outputs/.md)
+* [Create a producer](/docs/pr-5/how-to/streaming-applications/create-a-producer/.md)
+* [Use the producer daemon](/docs/pr-5/how-to/streaming-applications/use-the-producer-daemon/.md)
+* [Redis list input metrics](/docs/pr-5/reference/package-stream-redis-list-input/.md)
+* [Metric schema reference](/docs/pr-5/reference/metric-schema/.md)
 
 
 ---

@@ -1,0 +1,23 @@
+# db package
+
+`pkg/db` creates managed SQL connections as `*sqlx.DB` values from named database settings. It installs a driver wrapper for connection-attempt metrics and reads live pool state from `database/sql` statistics.
+
+## API and activation[​](#api-and-activation "Direct link to API and activation")
+
+Use `db.ProvideConnection(ctx, config, logger, name)` to provide a named connection; it resolves the corresponding settings and creates the managed connection. The open-attempt counter is part of this connection setup, while the pool-state sampler starts after connection setup, lifecycle registration, and migrations succeed. There is no separate database-metrics switch: export still depends on the application's configured Gosoline metric writer. See [`ProvideConnection`](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db/connection.go#L18-L47) and the [metric wrapper](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db/metrics.go#L39-L107).
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists names and units authored by Gosoline. The OpenTelemetry writer exports names with a `gosoline.` prefix and converts authored `ms` durations to the OpenTelemetry duration unit. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the writer contract and dimension conventions.
+
+| Metric                       | Instrument | Authored unit | Dimensions                         | Description                                                                                                                                                                                      |
+| ---------------------------- | ---------- | ------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `db.client.connection.count` | Gauge      | `count`       | `connection.state`: `used`, `idle` | Samples `sql.DB.Stats().InUse` and `.Idle` immediately, then once per minute. Both state series are written, including zero values; there is no separate `open` or total-state series.           |
+| `db.client.connections`      | Counter    | `count`       | None                               | Adds one before each underlying driver `Open` call, including failed opens. It accumulates open attempts since process start; it is not a live connection count and is not decremented on close. |
+
+## Related references[​](#related-references "Direct link to Related references")
+
+* [Working with relational databases](/docs/pr-5/how-to/databases-sql/.md)
+* [SQL client and legacy SQLC metrics](/docs/pr-5/how-to/databases-sql/sqlc/.md)
+* [SQL repository package](/docs/pr-5/reference/package-db-repo/.md)
+* [Metric schema](/docs/pr-5/reference/metric-schema/.md)

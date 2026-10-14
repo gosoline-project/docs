@@ -1,0 +1,43 @@
+# Redis list output
+
+The `stream` package's Redis list output implements the stream `Output` interface. It encodes the supplied writable messages into Redis list entries and appends them with `RPUSH` to the configured list. Use it when a producer should publish stream messages to a Redis list.
+
+## Activation[​](#activation "Direct link to Activation")
+
+Configure an output with `type: redis` and the Redis server name and list key:
+
+```
+stream:
+
+  output:
+
+    cache_updates:
+
+      type: redis
+
+      server_name: default
+
+      key: cache-updates
+```
+
+The exported constructor is `stream.NewRedisListOutput(ctx, config, logger, settings)`; it returns a `stream.Output` with `WriteOne` and batched `Write` methods. The `RedisListOutputSettings` includes the Redis server name, key, and batch size. For ordinary domain events, use the stream producer rather than constructing an output directly; see [Create a producer](/docs/pr-5/how-to/streaming-applications/create-a-producer/.md).
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The table lists the canonical Gosoline name as authored, not the backend-exported name. The metric writer places it in the `stream` namespace. OpenTelemetry prefixes the namespace with `gosoline.` and converts durations authored in milliseconds to seconds; that conversion does not change the authored unit shown here. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
+
+| Metric          | Instrument | Authored unit | Dimensions                          | Description                                                                                                                                            |
+| --------------- | ---------- | ------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stream.writes` | Counter    | count         | `list.name` = `<server_name>-<key>` | Adds the number of messages in a `Write` batch after every Redis chunk has been pushed successfully. It counts messages, not Redis commands or chunks. |
+
+## Operational notes[​](#operational-notes "Direct link to Operational notes")
+
+The `list.name` dimension is the configured server name and key joined with a hyphen. The counter has no output-success/error dimension. If a chunk's `RPUSH` returns an error, `Write` returns that error without recording `stream.writes`; earlier chunks in the same call may already have been appended.
+
+## Related[​](#related "Direct link to Related")
+
+* [Understand inputs and outputs](/docs/pr-5/how-to/streaming-applications/understand-inputs-and-outputs/.md)
+* [Create a producer](/docs/pr-5/how-to/streaming-applications/create-a-producer/.md)
+* [Use the producer daemon](/docs/pr-5/how-to/streaming-applications/use-the-producer-daemon/.md)
+* [Redis list input metrics](/docs/pr-5/reference/package-stream-redis-list-input/.md)
+* [Metric schema reference](/docs/pr-5/reference/metric-schema/.md)

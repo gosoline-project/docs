@@ -49,6 +49,43 @@ Prometheus appends `_seconds` to duration histograms and `_bytes` to byte histog
 
 Every framework metric has a registered description. Prometheus and OTEL use that help text; a per-datum `Kind.WithHelp` value overrides the registered description. If no help has been registered for an application-authored metric, the writer falls back to `unit: <unit>`.
 
+## Component directory[​](#component-directory "Direct link to Component directory")
+
+Metric namespaces are naming prefixes, not one-to-one component identifiers. The same namespace can be emitted by distinct packages or implementations, so these pages are organized by emitter rather than by namespace alone.
+
+| Namespace              | Component / emitter                                                         | Dedicated page                                                                          |
+| ---------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `stream`               | `sdk.stream` consumer                                                       | [Stream consumer](/docs/pr-5/how-to/streaming-applications/create-a-consumer/.md)       |
+| `stream`               | `sdk.stream` producer daemon                                                | [Producer daemon](/docs/pr-5/how-to/streaming-applications/use-the-producer-daemon/.md) |
+| `stream`               | `sdk.stream` Redis-list input                                               | [Redis-list input](/docs/pr-5/reference/package-stream-redis-list-input/.md)            |
+| `stream`               | `sdk.stream` Redis-list output                                              | [Redis-list output](/docs/pr-5/reference/package-stream-redis-list-output/.md)          |
+| `kafka`                | `sdk.kafka.client-hook`                                                     | [Kafka client hooks](/docs/pr-5/reference/package-kafka/.md)                            |
+| `kafka.consumer`       | `sdk.kafka.consumer`                                                        | [Kafka consumer](/docs/pr-5/reference/package-kafka-consumer/.md)                       |
+| `kafka.producer`       | `sdk.kafka.producer`                                                        | [Kafka producer](/docs/pr-5/reference/package-kafka-producer/.md)                       |
+| `cloud.aws.kinesis`    | `sdk.cloud.aws.kinesis` ShardReader                                         | [Kinesis shard reader](/docs/pr-5/reference/package-cloud_aws_kinesis-reader/.md)       |
+| `cloud.aws.kinesis`    | `sdk.cloud.aws.kinesis` RecordWriter                                        | [Kinesis record writer](/docs/pr-5/reference/package-cloud_aws_kinesis-writer/.md)      |
+| `cloud.aws.kinesis`    | `sdk.cloud.aws.kinesis` Kinsumer                                            | [Kinsumer](/docs/pr-5/reference/package-kinsumer/.md)                                   |
+| `blob`                 | `sdk.blob` batch runner                                                     | [Blob package](/docs/pr-5/reference/package-blob/.md)                                   |
+| `conc.scheduler`       | `sdk.conc.scheduler`                                                        | [Concurrency scheduler](/docs/pr-5/reference/package-conc_scheduler/.md)                |
+| `db.client`            | `sdk.db` SQL database client                                                | [Database package](/docs/pr-5/reference/package-db/.md)                                 |
+| `db.repo`              | `sdk.db-repo` SQL repository wrapper                                        | [Database repository](/docs/pr-5/reference/package-db-repo/.md)                         |
+| `ddb`                  | `sdk.ddb` DynamoDB repository                                               | [DynamoDB package](/docs/pr-5/reference/package-ddb/.md)                                |
+| `http.client`          | `sdk.http-client`                                                           | [HTTP client](/docs/pr-5/reference/package-http/.md)                                    |
+| `http.server`          | `sdk.httpserver` Gosoline SDK implementation                                | [Gosoline HTTP server](/docs/pr-5/reference/package-gosoline-httpserver/.md)            |
+| `http.server`          | `library.httpserver` published HTTPServer implementation                    | [HTTPServer library](/docs/pr-5/reference/package-httpserver/.md)                       |
+| `kvstore`              | `sdk.kvstore`                                                               | [Key-value store](/docs/pr-5/reference/package-kvstore/.md)                             |
+| `limit`                | `sdk.limit` rate limiter                                                    | [Rate limiter](/docs/pr-5/reference/package-limit/.md)                                  |
+| `mdlsub`               | `sdk.mdlsub` model subscription callback                                    | [Model subscription](/docs/pr-5/reference/package-mdlsub/.md)                           |
+| `metric`               | `sdk.metric` metric subsystem                                               | [Metric package and Prometheus endpoint](/docs/pr-5/reference/package-metric/.md)       |
+| `metric`               | `pkg/metric.LoggerHandler` integration (the same `metric.log.records` name) | [Logger package integration](/docs/pr-5/reference/package-log/.md)                      |
+| `rpc.server`           | `sdk.grpcserver`                                                            | [gRPC server](/docs/pr-5/reference/package-grpcserver/.md)                              |
+| `smpl`                 | `sdk.smpl` sampling                                                         | [Sampling](/docs/pr-5/how-to/sampling/use-sampling/.md)                                 |
+| namespace-less, legacy | `library.sqlc` (`DbConnectionCount`; outside the 62-name inventory)         | [SQLC](/docs/pr-5/how-to/databases-sql/sqlc/.md)                                        |
+
+The SQLC page documents a legacy namespace-less metric and is not part of the current framework inventory. For broader workflow context, see the [streaming inputs and outputs guide](/docs/pr-5/how-to/streaming-applications/understand-inputs-and-outputs/.md), the [Kafka guide](/docs/pr-5/how-to/kafka/general/.md), the [AWS package reference](/docs/pr-5/reference/package-cloud_aws/.md), and the [SQL database overview](/docs/pr-5/how-to/databases-sql/.md). Those overview pages supplement, rather than replace, the component pages above.
+
+The 62-name inventory below contains Gosoline-authored metrics only. `metric.schema_version` is metadata, not a metric; the upstream Prometheus handler metrics and Go/process collectors described on the [metric package page](/docs/pr-5/reference/package-metric/.md) are separate from these 62 names.
+
 ## Current framework inventory[​](#current-framework-inventory "Direct link to Current framework inventory")
 
 The V2 inventory contains **62 metrics across 18 namespaces**.

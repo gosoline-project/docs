@@ -87,3 +87,11 @@ The `sqlh` package provides typed, transaction-aware CRUD handlers for SQLR enti
 | Custom business logic              | sqlr or sqlc      |
 
 You can use multiple layers together within the same application—using `sqlh` for standard CRUD endpoints while leveraging `sqlc` directly for complex reporting queries.
+
+## Package references and metrics[​](#package-references-and-metrics "Direct link to Package references and metrics")
+
+The SDK's SQL connection and repository emitters have separate component references with their own metric tables:
+
+* [SQL database client package (`pkg/db`)](/docs/pr-5/reference/package-db/.md)
+* [SQL repository package (`pkg/db-repo`)](/docs/pr-5/reference/package-db-repo/.md)
+* [SQLC legacy connection metric](/docs/pr-5/how-to/databases-sql/sqlc/.md)
