@@ -1,0 +1,24 @@
+---
+title: Package http
+---
+
+# http package
+
+The Gosoline SDK's `pkg/http` package (import path `github.com/justtrackio/gosoline/pkg/http`) provides a configured, reusable client for outbound HTTP requests. Its `Client` interface builds requests through `NewRequest()` and exposes `Get`, `Post`, `Put`, `Patch`, and `Delete` operations.
+
+`ProvideHttpClient(ctx, config, logger, name)` obtains the named client from the application context. The client writes its request-duration observations to the `http.client` Gosoline metric namespace.
+
+## Metrics
+
+Each client operation that reaches `req.Execute` records one `http.client.request.duration` histogram observation. A valid HTTP response is recorded regardless of status (including non-2xx responses). An Execute-level failure is also recorded; request construction and URL-validation errors return before execution and produce no observation. The histogram's observation count represents requests for each dimension set; there is no separate request or status-code metric.
+
+| Metric | Instrument | Authored unit | Dimensions | Description |
+|---|---|---|---|---|
+| `http.client.request.duration` | histogram | ms | `request.method` — requested HTTP method; `response.status_code` — decimal response status, or `{{default}}` when Execute returns an error; `error.type` — `{{default}}` for a response, `request_canceled` for a canceled request, or `request_failed` for another Execute error | Duration of a client request. Successful HTTP responses, including non-2xx responses, carry the response status and default error type. Execute errors carry the default status and their error type. |
+
+Metric export is an application-level concern: wire `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`. The client does not have a separate metric-emission switch. See [Metric schema](/reference/metric-schema) for canonical-name and writer conversion details.
+
+## Related references
+
+- [Gosoline SDK HTTP server package](/reference/package-gosoline-httpserver)
+- [Published HTTP server package](/reference/package-httpserver)

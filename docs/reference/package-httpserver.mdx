@@ -301,16 +301,20 @@ The following middleware is automatically applied to every server:
 | Recovery | Panic recovery |
 | Connection lifecycle | Manage connection age |
 
-The following are canonical Gosoline metric names. The duration histogram's observation count is the request count for each attribute set; `response.status_code` is an attribute, not a separate status metric. Rejection counts do not carry a response-status attribute. The gauges are server-level and carry only `name`.
+## Metrics
 
-| Canonical metric | Kind | Attributes | Description |
-|---|---|---|---|
-| `http.server.request.duration` | Histogram | `name`, `route`, `request.method`, `response.status_code` | Duration of each matched HTTP request; observation count is the request count. |
-| `http.server.rejected.requests` | Counter | `name`, `route`, `request.method` | Requests rejected before handling. |
-| `http.server.active_request.count` | Gauge | `name` | Requests currently handled by the server. |
-| `http.server.connection.count` | Gauge | `name` | Connections currently held open by the server. |
+The published `github.com/gosoline-project/httpserver` module installs its metric middleware and recorder when it constructs a server. The duration histogram records matched routes, and its observation count is the request count for each dimension set; `response.status_code` is an attribute, not a separate status metric. A rejection is recorded only when the concurrency middleware marks the request rejected, not for every non-2xx response. Registered routes receive zero-valued rejection defaults. The two gauges are server-level and carry only `name`.
 
-These are authored canonical names, not backend-rendered names. OTEL prefixes the namespace with `gosoline.` and exports durations in seconds; CloudWatch renders names in PascalCase and durations in milliseconds; Prometheus uses the fixed `gosoline` prefix, normalized metric names, and base-unit/counter suffixes. Application identity belongs on scrape-target labels, not in the metric name.
+| Metric | Instrument | Authored unit | Dimensions | Description |
+|---|---|---|---|---|
+| `http.server.request.duration` | histogram | ms | `name` — configured server name; `route` — normalized Gin route template; `request.method` — HTTP method; `response.status_code` — decimal response status | Duration of a matched HTTP request. The histogram observation count represents requests for each dimension set. |
+| `http.server.rejected.requests` | counter | count | `name` — configured server name; `route` — registered Gin route; `request.method` — HTTP method | Requests explicitly rejected by the concurrency middleware. Ordinary 4xx/5xx responses are not necessarily rejections; this metric has no response-status dimension. Registered routes receive zero-valued defaults. |
+| `http.server.active_request.count` | gauge | count | `name` — configured server name | Current number of tracked active requests for the named server. Updated on request start/completion and sampled at startup, every 10 seconds, and during shutdown. |
+| `http.server.connection.count` | gauge | count | `name` — configured server name | Current number of tracked open connections for the named server. Updated on connection state changes and sampled at startup, every 10 seconds, and during shutdown. |
+
+Metric export requires the application metric daemon: wire `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`. These are authored Gosoline names and units; see [Metric schema](/reference/metric-schema) for writer-specific names and duration conversion.
+
+The published library and the Gosoline SDK's separately implemented [HTTP server package](/reference/package-gosoline-httpserver) use the same four canonical names and dimension keys. If both implementations send identical dimension values to the same backend, the series have no source-module dimension that distinguishes them. For operational details, see [Add middleware](/how-to/http-server/add-middleware) and [Concurrency and connection pressure](/how-to/http-server/concurrency-and-connection-pressure).
 
 ## Validation
 

@@ -1,0 +1,38 @@
+---
+title: Kinesis shard reader
+---
+
+# Kinesis shard reader
+
+`ShardReader` is the per-shard worker in `github.com/justtrackio/gosoline/pkg/cloud/aws/kinesis`. It polls a Kinesis shard with `GetRecords`, passes record payloads to a `RecordHandler`, and advances the shard checkpoint. It runs until the shard is finished or its context is canceled.
+
+In normal application use, `NewKinsumer(ctx, config, logger, settings)` owns shard assignment and creates readers for its assigned shards; call `Kinsumer.Run` with a `RecordHandler` to activate consumption. Configure the reader through the package's `Settings` passed to `NewKinsumer`, including `MaxBatchSize`, `WaitTime`, `ConsumeDelay`, and `ProcessingMode`. See [Kinsumer](/reference/package-kinsumer) for the active public API.
+
+## Metrics
+
+Names below are Gosoline-authored canonical names. The OTEL writer exports them with a `gosoline.` prefix and converts millisecond-authored durations to seconds; `acquire.duration` is authored in seconds already. Units below are the emitter's authored units. See the [metric schema](/reference/metric-schema) for writer conversion details.
+
+| Metric | Instrument | Authored unit | Dimensions | Description |
+|---|---|---|---|---|
+| `cloud.aws.kinesis.consumed.messages` | Counter | count | `stream.name` (full stream name), `partition.id` (Kinesis shard ID), `error.type={{default}}` or `error.type=processing_failed` | Records processed and checkpointed by the batch invocation. The `{{default}}` series is the batch total, including handler failures; `processing_failed` counts failed records as an overlapping per-record subset. |
+| `cloud.aws.kinesis.process.duration` | Histogram | ms | `stream.name` (full stream name), `partition.id` (Kinesis shard ID) | Elapsed `processRecords` work for one fetched batch, including handler execution, configured per-record `ConsumeDelay`, and checkpoint advancement; excludes the `GetRecords` request and the next-poll wait. Cancellation may leave this observation covering only partial batch progress. |
+| `cloud.aws.kinesis.reads` | Counter | count | `stream.name` (full stream name), `partition.id` (Kinesis shard ID) | One successful `GetRecords` response. This counts read requests, not records; failed requests do not increment it. |
+| `cloud.aws.kinesis.lag` | Histogram | ms | `stream.name` (full stream name), `partition.id` (Kinesis shard ID) | AWS `GetRecordsOutput.MillisBehindLatest` for this shard, not wall-clock age of the last processed record. The reader reports the value on each successful response, begins with zero, and re-emits the latest value every 15 seconds while the shard reader runs. |
+| `cloud.aws.kinesis.acquire.duration` | Histogram | s | `stream.name` (full stream name), `partition.id` (Kinesis shard ID) | Elapsed time since this reader began trying to acquire the shard, observed after an acquire attempt finds no checkpoint and before the retry wait. Values accumulate across retries; successful acquisition adds no final observation. |
+| `cloud.aws.kinesis.sleep.duration` | Histogram | ms | `stream.name` (full stream name), `partition.id` (Kinesis shard ID) | Remaining per-record `ConsumeDelay` after subtracting the record's age. An observation is written only when that delay timer completes; a canceled wait emits none. |
+| `cloud.aws.kinesis.wait.duration` | Histogram | ms | `stream.name` (full stream name), `partition.id` (Kinesis shard ID) | Computed delay scheduled before the next poll: normally `max(0, WaitTime - elapsed since the preceding GetRecords call began)`, or zero when AWS-reported lag exceeds `WaitTime + ConsumeDelay`. This is the scheduled value, not elapsed time actually spent waiting. |
+
+### Measurement notes
+
+- For `consumed.messages`, `error.type={{default}}` includes the records whose handlers failed; `error.type=processing_failed` is an overlapping subset. Do not add or subtract the series to infer successful records. If cancellation interrupts a batch, the default value can represent only the records processed before cancellation.
+- `acquire.duration` describes repeated shard-ownership acquisition attempts, not the `Kinsumer` record-runner semaphore. Each observation is the cumulative elapsed time at an unsuccessful acquire check; there is no final sample on successful acquisition or while cancellation is waiting for the next check.
+- `wait.duration` is emitted when the next delay is chosen, before the reader waits. A later cancellation does not change that scheduled-value observation. By contrast, `sleep.duration` is emitted only after a per-record delay completes; it is absent when the record is already old enough, the configured delay is zero, or cancellation wins before the timer completes.
+- `lag` uses Kinesis' reported `MillisBehindLatest`; it is not a timestamp-derived age of the last record processed.
+
+## Related pages
+
+- [Kinsumer](/reference/package-kinsumer)
+- [RecordWriter](/reference/package-cloud_aws_kinesis-writer)
+- [AWS package configuration](/reference/package-cloud_aws)
+- [Metric schema](/reference/metric-schema)
+- [Creating a consumer](/how-to/streaming-applications/create-a-consumer)
