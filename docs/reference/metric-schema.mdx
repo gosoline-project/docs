@@ -92,6 +92,43 @@ Every framework metric has a registered description. Prometheus and OTEL use tha
 per-datum `Kind.WithHelp` value overrides the registered description. If no help has been registered
 for an application-authored metric, the writer falls back to `unit: <unit>`.
 
+## Component directory
+
+Metric namespaces are naming prefixes, not one-to-one component identifiers. The same namespace can be emitted by distinct packages or implementations, so these pages are organized by emitter rather than by namespace alone.
+
+| Namespace | Component / emitter | Dedicated page |
+|---|---|---|
+| `stream` | `sdk.stream` consumer | [Stream consumer](/how-to/streaming-applications/create-a-consumer) |
+| `stream` | `sdk.stream` producer daemon | [Producer daemon](/how-to/streaming-applications/use-the-producer-daemon) |
+| `stream` | `sdk.stream` Redis-list input | [Redis-list input](/reference/package-stream-redis-list-input) |
+| `stream` | `sdk.stream` Redis-list output | [Redis-list output](/reference/package-stream-redis-list-output) |
+| `kafka` | `sdk.kafka.client-hook` | [Kafka client hooks](/reference/package-kafka) |
+| `kafka.consumer` | `sdk.kafka.consumer` | [Kafka consumer](/reference/package-kafka-consumer) |
+| `kafka.producer` | `sdk.kafka.producer` | [Kafka producer](/reference/package-kafka-producer) |
+| `cloud.aws.kinesis` | `sdk.cloud.aws.kinesis` ShardReader | [Kinesis shard reader](/reference/package-cloud_aws_kinesis-reader) |
+| `cloud.aws.kinesis` | `sdk.cloud.aws.kinesis` RecordWriter | [Kinesis record writer](/reference/package-cloud_aws_kinesis-writer) |
+| `cloud.aws.kinesis` | `sdk.cloud.aws.kinesis` Kinsumer | [Kinsumer](/reference/package-kinsumer) |
+| `blob` | `sdk.blob` batch runner | [Blob package](/reference/package-blob) |
+| `conc.scheduler` | `sdk.conc.scheduler` | [Concurrency scheduler](/reference/package-conc_scheduler) |
+| `db.client` | `sdk.db` SQL database client | [Database package](/reference/package-db) |
+| `db.repo` | `sdk.db-repo` SQL repository wrapper | [Database repository](/reference/package-db-repo) |
+| `ddb` | `sdk.ddb` DynamoDB repository | [DynamoDB package](/reference/package-ddb) |
+| `http.client` | `sdk.http-client` | [HTTP client](/reference/package-http) |
+| `http.server` | `sdk.httpserver` Gosoline SDK implementation | [Gosoline HTTP server](/reference/package-gosoline-httpserver) |
+| `http.server` | `library.httpserver` published HTTPServer implementation | [HTTPServer library](/reference/package-httpserver) |
+| `kvstore` | `sdk.kvstore` | [Key-value store](/reference/package-kvstore) |
+| `limit` | `sdk.limit` rate limiter | [Rate limiter](/reference/package-limit) |
+| `mdlsub` | `sdk.mdlsub` model subscription callback | [Model subscription](/reference/package-mdlsub) |
+| `metric` | `sdk.metric` metric subsystem | [Metric package and Prometheus endpoint](/reference/package-metric) |
+| `metric` | `pkg/metric.LoggerHandler` integration (the same `metric.log.records` name) | [Logger package integration](/reference/package-log) |
+| `rpc.server` | `sdk.grpcserver` | [gRPC server](/reference/package-grpcserver) |
+| `smpl` | `sdk.smpl` sampling | [Sampling](/how-to/sampling/use-sampling) |
+| namespace-less, legacy | `library.sqlc` (`DbConnectionCount`; outside the 62-name inventory) | [SQLC](/how-to/databases-sql/sqlc) |
+
+The SQLC page documents a legacy namespace-less metric and is not part of the current framework inventory. For broader workflow context, see the [streaming inputs and outputs guide](/how-to/streaming-applications/understand-inputs-and-outputs), the [Kafka guide](/how-to/kafka/general), the [AWS package reference](/reference/package-cloud_aws), and the [SQL database overview](/how-to/databases-sql). Those overview pages supplement, rather than replace, the component pages above.
+
+The 62-name inventory below contains Gosoline-authored metrics only. `metric.schema_version` is metadata, not a metric; the upstream Prometheus handler metrics and Go/process collectors described on the [metric package page](/reference/package-metric) are separate from these 62 names.
+
 ## Current framework inventory
 
 The V2 inventory contains **62 metrics across 18 namespaces**.

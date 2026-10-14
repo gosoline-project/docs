@@ -303,8 +303,27 @@ log:
 
 ### Metric
 
-No configuration is needed. The canonical Gosoline metric `metric.log.records` is a counter with authored unit `count`: the metric handler increments it once for each warn- or error-level record, setting the `level` attribute to `warn` or `error`; other levels are not counted. OpenTelemetry exports it as `gosoline.metric.log.records` with unit `{record}`; other metric backends may render Gosoline metric names using their own conventions.
+The metric log handler is opt-in. Its factory is registered under handler type `metric`; to activate it, add a handler with `type: metric` under `log.handlers`:
+
+```yaml
+log:
+  handlers:
+    metrics:
+      type: metric
+```
+
+The handler counts only warning- and error-priority records; the emitted `level` dimension is lowercase `warn` or `error`. See [Metrics](#metrics) for the canonical dimensions and emission behavior. It does not replace a normal log output handler, so configure an `iowriter` handler too if logs still need to be written to stdout or a file.
 
 ### Sentry
 
 No configuration needed. Publishes every logged error to Sentry.
+
+## Metrics
+
+The table lists the canonical Gosoline-authored name, instrument, unit, and dimensions. OpenTelemetry prefixes this namespaced metric with `gosoline.` and renders its count unit as `{record}`; duration metrics authored in milliseconds are scaled to seconds for OpenTelemetry and Prometheus. Other writers have their own rendering. See the [metric schema](/reference/metric-schema) for the complete contract.
+
+| Metric | Instrument | Authored unit | Dimensions | Description |
+|---|---|---|---|---|
+| `metric.log.records` | Counter | `count` | `level`: `warn` or `error` | One count for each warning- or error-priority log record while the optional metric handler is configured; other levels are ignored. |
+
+The metric writer seeds zero-valued defaults for both `warn` and `error`. Those initial values do not represent observed log records.
