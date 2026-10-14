@@ -236,3 +236,10 @@ cloud:
           naming:
             queue_pattern: "{app.namespace}-{queueId}"
 ```
+## Kinesis components
+
+The Kinesis package's reader, writer, and active consumer API have separate metric references:
+
+- [Kinesis shard reader](/reference/package-cloud_aws_kinesis-reader)
+- [Kinesis RecordWriter](/reference/package-cloud_aws_kinesis-writer)
+- [Kinsumer](/reference/package-kinsumer)

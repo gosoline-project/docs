@@ -161,15 +161,15 @@ Batch consumers acknowledge primary messages when admitted to an **in-memory buf
 
 At input completion or shutdown, pending work is drained within the shared consumer grace deadline. See the [released runnable example](https://github.com/justtrackio/gosoline/tree/v0.68.3/examples/stream/batch-consumer), [callback API](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch_module_factory.go), and [batch implementation](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch.go) before choosing batching for an existing consumer.
 
-## Consumer metrics
+## Metrics
 
 The names below are canonical Gosoline metric names as authored. They are not backend-exported names: OpenTelemetry prefixes the namespace with `gosoline.` and converts duration values from authored milliseconds to seconds; CloudWatch and Prometheus apply their own name and unit conventions. See the [metric schema reference](/reference/metric-schema/) for exporter mappings.
 
-| Authored metric | Instrument and authored unit (OpenTelemetry unit) | Attributes | Meaning |
-|---|---|---|---|
-| `stream.process.duration` (`gosoline.stream.process.duration`) | Histogram; milliseconds (OTel `s`) | `consumer.name` | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one duration for the whole batch callback, not one per message. |
-| `stream.consumed.messages` (`gosoline.stream.consumed.messages`) | Counter; count (OTel `{message}`) | `consumer.name`, `error.type` | Number of messages processed. The `error.type="{{default}}"` series is the all-processed total; `error.type="processing_failed"` counts failed messages. |
-| `stream.retry.operations` (`gosoline.stream.retry.operations`) | Counter; count (OTel `{operation}`) | `consumer.name`, `operation` | Retry-queue `get`/`put` attempts; not a retried-record count or evidence that a queue operation succeeded. |
+| Metric | Instrument | Authored unit | Dimensions | Description |
+|---|---|---|---|---|
+| `stream.process.duration` | Histogram | milliseconds | `consumer.name` (configured consumer name) | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one duration for the whole batch callback, not one per message. |
+| `stream.consumed.messages` | Counter | count | `consumer.name` (configured consumer name); `error.type` = `{{default}}` or `processing_failed` | Number of messages processed. The `{{default}}` series is the all-processed total; `processing_failed` counts failed messages. |
+| `stream.retry.operations` | Counter | count | `consumer.name` (configured consumer name); `operation` = `get` or `put` | Retry-queue get/put attempts; not a retried-record count or evidence that a queue operation succeeded. |
 
 For `stream.consumed.messages`, the `processing_failed` series is an overlapping per-message subset of the `{{default}}` total, not a disjoint outcome: callback failures are already included in the total. In a batch, the total and any failure count increase by the number of records, while `process.duration` adds one observation for the full batch callback. Do not add the failure series to the total or subtract it to infer successes. Ignored model errors and canceled processing do not emit the failure series. These current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle migration](/migrations/stream-consumer-lifecycle/).
 
