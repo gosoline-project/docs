@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkgosoline_docs=self.webpackChunkgosoline_docs||[]).push([["6074"],{1937(e,s,n){n.d(s,{A:()=>l});var t=n(4848);n(6540);let l={...n(4737).A,table:function(e){return(0,t.jsx)("table",{...e,tabIndex:0})}}}}]);
