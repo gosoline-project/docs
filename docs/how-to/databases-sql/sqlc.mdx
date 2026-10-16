@@ -14,7 +14,7 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlc@v0.4.0
+go get github.com/gosoline-project/sqlc@v0.4.1
 ```
 
 Then import the package in your Go code:
@@ -212,6 +212,27 @@ query := sqlc.FromG[Experiment]("experiments").
 ```
 
 Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. SQLR v0.9.1 also applies a repository query's `ForUpdate()` setting to its preloads.
+
+## JSON Ordering
+
+SQLC v0.4.1 adds `JsonOrder` for ordering supplied as JSON:
+
+```json
+{"column":"users.created_at","direction":"desc"}
+```
+
+Convert it to an expression before passing it to a query builder:
+
+```go
+order := sqlc.JsonOrder{Column: "users.created_at", Direction: "desc"}
+expression, err := order.ToExpression()
+if err != nil {
+    return err
+}
+query := sqlc.From("users").OrderBy(expression)
+```
+
+Columns must be simple or dot-qualified identifiers. SQL expressions, wildcards, and quoted identifiers are rejected. Direction accepts `asc` or `desc` without regard to case and defaults to `asc` when omitted. These checks validate syntax; applications can additionally restrict which columns callers may sort. See the [released implementation](https://github.com/gosoline-project/sqlc/blob/v0.4.1/json_order.go).
 
 ## UPDATE Operations
 
