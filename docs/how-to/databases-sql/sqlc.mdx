@@ -14,8 +14,10 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlc@v0.4.0
+go get github.com/gosoline-project/sqlc@v0.4.1-0.20261013124322-f3bdb6518b42
 ```
+
+This documentation branch pins a migration prerelease snapshot, not a stable `v0.4.1` release.
 
 Then import the package in your Go code:
 
@@ -66,6 +68,18 @@ Each connection requires driver and connection details as shown below:
 | `timeouts.timeout` | MySQL driver connection timeout. For PostgreSQL, use `parameters.connect_timeout`. | `0` |
 
 Use `parameters` for driver-specific settings such as PostgreSQL `sslmode` or `connect_timeout`. PostgreSQL connections use `uri.*` and `parameters`; the MySQL-specific settings above are ignored by the PostgreSQL driver.
+
+## Metrics
+
+Settings-based SQLC database construction emits the legacy metric `DbConnectionCount` with an empty authored namespace. It is separate from the namespaced SDK metrics documented by the [`db` client reference](/reference/package-db) and the [`db-repo` reference](/reference/package-db-repo). The pinned SQLC source leaves `Kind` unset and uses `UnitCountAverage`; the pinned Gosoline metric package infers a counter from the count unit, including for sampled pool-state values.
+
+| Metric | Instrument | Authored unit | Dimensions | Description |
+|--------|------------|---------------|------------|-------------|
+| `DbConnectionCount` | Counter (kind inferred; source datum leaves `Kind` unset) | `count` (`UnitCountAverage`) | `Type`: `new`, `open`, `inUse`, `idle` | `new` adds one before each wrapped `driver.Open` attempt, including failed opens. `open`, `inUse`, and `idle` record `sql.DB.Stats()` values after setup and every minute thereafter. They are point-in-time pool counts but share the same legacy counter contract; do not label them as gauges. |
+
+The metric name is authored without a namespace; the OpenTelemetry writer applies Gosoline's `gosoline.` prefix. See the [metric schema reference](/reference/metric-schema) for the writer contract and count-unit handling. The pinned [SQLC metric source](https://github.com/gosoline-project/sqlc/blob/f3bdb6518b42/metrics.go#L13-L90) defines the name, unit, and exact `Type` values.
+
+These legacy observations reach an exporter only when the application wires `application.WithMetrics`, sets `metric.enabled: true`, and configures at least one writer under `metric.writers`; SQLC has no separate metric-enable setting. Framework metrics are different: `db.client.connections` is an undimensioned counter of driver `Open` attempts, `db.client.connection.count` is a gauge with `connection.state=used|idle`, and `db.repo.*` covers framework repository operations and notifications. Do not interpret those framework names as aliases for SQLC's `DbConnectionCount`.
 
 ## Migrations
 
@@ -211,7 +225,7 @@ query := sqlc.FromG[Experiment]("experiments").
     ForUpdate()
 ```
 
-Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. SQLR v0.9.1 also applies a repository query's `ForUpdate()` setting to its preloads.
+Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. The SQLR migration-prerelease snapshot pinned by this documentation branch also applies a repository query's `ForUpdate()` setting to its preloads.
 
 ## UPDATE Operations
 

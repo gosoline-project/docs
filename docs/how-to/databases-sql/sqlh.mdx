@@ -18,14 +18,13 @@ That transaction does not make external effects or non-transactional DDL atomic.
 
 ## Getting Started
 
-Install SQLH v0.8.0:
+Install the SQLH snapshot pinned by this documentation branch:
 
 ```bash
-go get github.com/gosoline-project/sqlh@v0.8.0
+go get github.com/gosoline-project/sqlh@v0.8.1-0.20261013125801-b3d114e8cae0
 ```
 
-SQLH v0.8.0 uses `httpserver` v0.6.4, `sqlc` v0.4.0, and `sqlr` v0.9.1. Use these versions for the examples.
-SQLH v0.8.0 requires Go 1.27.0 or newer.
+The examples use the docs module's migration prerelease pins: SQLH `v0.8.1-0.20261013125801-b3d114e8cae0`, `httpserver` `v0.6.5-0.20261013124439-0538a07a7c58`, `sqlc` `v0.4.1-0.20261013124322-f3bdb6518b42`, SQLR `v0.9.2-0.20261013125204-bbd729912067`, and Gosoline `v0.68.1-0.20261013123101-dd90ce372ff3`. These are branch snapshots, not stable releases. SQLH requires Go 1.27.0 or newer.
 
 Then import the package:
 

@@ -116,6 +116,18 @@ Kafka and Kinesis ordered mode still allows concurrency across partitions or sha
 
 Callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
 
+## Metrics
+
+The names below are canonical Gosoline metric names as authored. They are not backend-exported names: OpenTelemetry prefixes the namespace with `gosoline.` and converts duration values from authored milliseconds to seconds; CloudWatch and Prometheus apply their own name and unit conventions. See the [metric schema reference](/reference/metric-schema/) for exporter mappings.
+
+| Metric | Instrument | Authored unit | Dimensions | Description |
+|---|---|---|---|---|
+| `stream.process.duration` | Histogram | milliseconds | `consumer.name` (configured consumer name) | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one duration for the whole batch callback, not one per message. |
+| `stream.consumed.messages` | Counter | count | `consumer.name` (configured consumer name); `error.type` = `{{default}}` or `processing_failed` | Number of messages processed. The `{{default}}` series is the all-processed total; `processing_failed` counts failed messages. |
+| `stream.retry.operations` | Counter | count | `consumer.name` (configured consumer name); `operation` = `get` or `put` | Retry-queue get/put attempts; not a retried-record count or evidence that a queue operation succeeded. |
+
+For `stream.consumed.messages`, the `processing_failed` series is an overlapping per-message subset of the `{{default}}` total, not a disjoint outcome: callback failures are already included in the total. In a batch, the total and any failure count increase by the number of records, while `process.duration` adds one observation for the full batch callback. Do not add the failure series to the total or subtract it to infer successes. Ignored model errors and canceled processing do not emit the failure series. These current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle migration](/migrations/stream-consumer-lifecycle/).
+
 ## Graceful processing
 
 `stream.consumer.<name>.grace_time` defaults to `10s` and defines one shared processing deadline after shutdown begins, covering both the primary input and the retry input. Inputs stop fetching new messages; already fetched or admitted work may still reach the callback while draining. When the deadline expires, in-flight callback contexts are canceled.
