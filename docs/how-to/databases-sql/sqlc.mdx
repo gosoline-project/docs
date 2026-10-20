@@ -14,10 +14,10 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlc@v0.4.1-0.20261013124322-f3bdb6518b42
+go get github.com/gosoline-project/sqlc@v0.4.2-0.20261020052556-d6184229d284
 ```
 
-This documentation branch pins a migration prerelease snapshot, not a stable `v0.4.1` release.
+This published pseudo-version is for SQLC `v0.4.2`; it is not a stable release tag.
 
 Then import the package in your Go code:
 
@@ -77,7 +77,7 @@ Settings-based SQLC database construction emits the legacy metric `DbConnectionC
 |--------|------------|---------------|------------|-------------|
 | `DbConnectionCount` | Counter (kind inferred; source datum leaves `Kind` unset) | `count` (`UnitCountAverage`) | `Type`: `new`, `open`, `inUse`, `idle` | `new` adds one before each wrapped `driver.Open` attempt, including failed opens. `open`, `inUse`, and `idle` record `sql.DB.Stats()` values after setup and every minute thereafter. They are point-in-time pool counts but share the same legacy counter contract; do not label them as gauges. |
 
-The metric name is authored without a namespace; the OpenTelemetry writer applies Gosoline's `gosoline.` prefix. See the [metric schema reference](/reference/metric-schema) for the writer contract and count-unit handling. The pinned [SQLC metric source](https://github.com/gosoline-project/sqlc/blob/f3bdb6518b42/metrics.go#L13-L90) defines the name, unit, and exact `Type` values.
+The metric name is authored without a namespace; the OpenTelemetry writer applies Gosoline's `gosoline.` prefix. See the [metric schema reference](/reference/metric-schema) for the writer contract and count-unit handling. The docs module pins SQLC `v0.4.2-0.20261020052556-d6184229d284`; its [pinned metric source](https://github.com/gosoline-project/sqlc/blob/d6184229d284ae032caaa0db31c4b3394c3dc126/metrics.go#L13-L90) defines the name, unit, and exact `Type` values.
 
 These legacy observations reach an exporter only when the application wires `application.WithMetrics`, sets `metric.enabled: true`, and configures at least one writer under `metric.writers`; SQLC has no separate metric-enable setting. Framework metrics are different: `db.client.connections` is an undimensioned counter of driver `Open` attempts, `db.client.connection.count` is a gauge with `connection.state=used|idle`, and `db.repo.*` covers framework repository operations and notifications. Do not interpret those framework names as aliases for SQLC's `DbConnectionCount`.
 
