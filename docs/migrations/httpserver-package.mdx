@@ -8,7 +8,7 @@ import { CopyToClipboardButton } from '../components.jsx';
 
 # Migrating to the Standalone HTTP Server Package
 
-This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.6.4`.
+This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module pinned at `v0.6.5-0.20261019135301-fc5835be4dbd`.
 
 The new package keeps the Gin-based server lifecycle and middleware model, but it changes the application-facing API. Instead of building and returning a `*httpserver.Definitions` tree, you receive a `*httpserver.Router` and register routes on it directly. Instead of implementing handler interfaces and manually unpacking an `httpserver.Request`, handlers are plain functions or methods registered through `Bind`, `BindN`, `BindR`, or SSE binding helpers.
 
@@ -17,7 +17,7 @@ The new package keeps the Gin-based server lifecycle and middleware model, but i
 Add the standalone module:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.6.4
+go get github.com/gosoline-project/httpserver@v0.6.5-0.20261019135301-fc5835be4dbd
 ```
 
 Update imports:
@@ -456,7 +456,7 @@ Register handlers that need both typed input and the raw request with `BindR`. U
 
 ## 9. Migrate Responses
 
-Bound handlers in `v0.6.4` accept typed result values. Return ordinary results directly, and the server negotiates their response format. The default negotiator supports JSON only. Register other representations explicitly. A missing `Accept` header selects JSON, while an unsupported `Accept` value returns `406 Not Acceptable`.
+Bound handlers in the standalone package accept typed result values. Return ordinary results directly, and the server negotiates their response format. The default negotiator supports JSON only. Register other representations explicitly. A missing `Accept` header selects JSON, while an unsupported `Accept` value returns `406 Not Acceptable`.
 
 For example, a JSON handler returns the domain value:
 
@@ -554,7 +554,7 @@ httpserver.WithErrorHandler(func(statusCode int, err error) any {
 })
 ```
 
-In `v0.6.4`, error middleware falls back to JSON with the selected error status if it cannot negotiate or encode that body value. To always send a fixed format instead, return a `httpserver.Response`. It bypasses `Accept` negotiation and controls its own status and `Content-Type`. This example always sends JSON; `WithStatusCode(statusCode)` preserves the selected error status:
+The standalone package's error middleware falls back to JSON with the selected error status if it cannot negotiate or encode that body value. To always send a fixed format instead, return a `httpserver.Response`. It bypasses `Accept` negotiation and controls its own status and `Content-Type`. This example always sends JSON; `WithStatusCode(statusCode)` preserves the selected error status:
 
 ```go
 httpserver.WithErrorHandler(func(statusCode int, err error) any {
@@ -565,7 +565,7 @@ httpserver.WithErrorHandler(func(statusCode int, err error) any {
 })
 ```
 
-In `v0.6.4`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
+The standalone package's default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
 
 The 5xx behavior is controlled by `httpserver.<name>.errors.privacy`. The default is `private`, which hides internal error details. Set it to `public` only when clients should receive the original internal error message:
 
@@ -899,11 +899,13 @@ httpserver:
 ```
 
 Keep these points in mind while migrating:
+The V1→V2 migration replaced legacy aggregate and per-route latency measurements without a response-status dimension with one canonical histogram keyed by `name`, `route`, `request.method`, and `response.status_code`. V2 rejection reporting uses the `name`, `route`, and `request.method` dimensions of `http.server.rejected.requests`, with no server-only `KindTotal` aggregate. This request-counter follow-up adds only `http.server.requests` and `http.server.routed.requests`; the existing V2 histogram and rejection definitions are unchanged.
 
 | Area | Notes |
 |---|---|
 | Server name | `RunDefaultServer` reads `httpserver.default`. `NewServer("admin", ...)` reads `httpserver.admin`. |
 | Routes | `/health` is still registered by the server. Unhealthy modules are reported as `"unhealthy"`; underlying error strings are logged but not exposed in the response. |
+| HTTP metrics | The v2 contract emits high-priority monotonic `Count` counters `http.server.requests` (`name` only) and `http.server.routed.requests` (`name`, `route`, `request.method`) after the matched-route middleware chain unwinds. Both count matched requests aborted by middleware and exclude unmatched paths; `/health` counts when matched but has no pre-request zero default. Each configured server receives a zero-valued server-counter default, and registered application route/method pairs receive zero-valued routed-counter defaults. Those V2 histogram and rejection definitions are unchanged by this request-counter follow-up. No extra hook or alias is required. See [Metric schema](/reference/metric-schema) and the [HTTP server metrics reference](/reference/package-httpserver). |
 | Compression | Exclude SSE endpoints from compression. |
 | Request body limit | `max_body_bytes` defaults to `10485760` bytes (10 MiB). Set it to `0` to disable the limit or raise it for large upload endpoints. The limit is applied after request decompression. |
 | Binding errors | `Bind` and `BindSse` binding or validation failures return `400 Bad Request`. |
@@ -1058,8 +1060,8 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 - Replace `CreateRawHandler` and `CreateReaderHandler` with `BindR` or `BindNR` and explicit `req.Body` handling.
 - Replace `request.ClientIp` with `ResolveClientIP(req)` in `BindR` or `BindNR` handlers.
 - Return typed values directly from ordinary bound handlers. Keep explicit responses for fixed media types, raw bodies, and bodyless status responses. See [Customizing responses](/how-to/http-server/build-an-http-service#customizing-responses).
-- Review `max_body_bytes`; keep the v0.6.4 default 10 MiB limit, raise it, or set it to `0` intentionally.
-- Update tests for v0.6.4 behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
+- Review `max_body_bytes`; keep the 10 MiB default, raise it, or set it to `0` intentionally.
+- Update tests for the current package behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
 - Update test suites from definition setup to router factory setup.
 - Run your HTTP tests and exercise validation errors, client errors, and middleware behavior after migration.
 

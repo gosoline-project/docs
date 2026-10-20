@@ -31,7 +31,7 @@ To count logger records, also register `application.WithLoggerMetricHandler` ([s
 
 ### Gosoline-authored metric
 
-This framework metric is included in the current 62-name inventory in the [Metric schema reference](/reference/metric-schema).
+This framework metric is included in the current 64-name inventory in the [Metric schema reference](/reference/metric-schema).
 
 | Metric | Instrument | Authored unit | Dimensions | Description |
 |---|---|---|---|---|
@@ -41,7 +41,7 @@ The handler declares count-counter defaults for both levels and writes one incre
 
 ### Prometheus HTTP-handler metrics (upstream-owned)
 
-When the Prometheus API is enabled, Gosoline wraps the registry handler with `promhttp.InstrumentMetricHandler`. In the pinned Prometheus Go client `client_golang` v1.20.5, that instrumentation adds these two exports. They describe requests to the metrics handler, not application HTTP-server traffic, and are not Gosoline-authored metrics or part of the 62-name inventory.
+When the Prometheus API is enabled, Gosoline wraps the registry handler with `promhttp.InstrumentMetricHandler`. In the pinned Prometheus Go client `client_golang` v1.20.5, that instrumentation adds these two exports. They describe requests to the metrics handler, not application HTTP-server traffic, and are not Gosoline-authored metrics or part of the 64-name inventory.
 
 | Metric | Instrument | Upstream unit | Dimensions | Description |
 |---|---|---|---|---|
@@ -54,4 +54,4 @@ The endpoint passes an empty `promhttp.HandlerOpts`; the optional `promhttp_metr
 
 The default Prometheus registry also registers the upstream Go runtime and process collectors. Their exported metric families depend on the pinned client version, Go runtime/toolchain, and process platform; they are external collector output, not Gosoline-authored metrics, and are intentionally not enumerated as a fixed Gosoline metric set. Consult the pinned [`NewGoCollector`](https://pkg.go.dev/github.com/prometheus/client_golang@v1.20.5/prometheus/collectors#NewGoCollector) and [`NewProcessCollector`](https://pkg.go.dev/github.com/prometheus/client_golang@v1.20.5/prometheus/collectors#NewProcessCollector) documentation for that upstream contract.
 
-`metric.schema_version` is emitted as schema metadata, not as a metric. Likewise, the two `promhttp` metrics and the Go/process collector exports above are outside the Gosoline-authored 62-name inventory. For canonical writer naming and unit conversion, see [Metric schema](/reference/metric-schema); for logger integration, see [Package log](/reference/package-log).
+`metric.schema_version` is emitted as schema metadata, not as a metric. Likewise, the two `promhttp` metrics and the Go/process collector exports above are outside the Gosoline-authored 64-name inventory. For canonical writer naming and unit conversion, see [Metric schema](/reference/metric-schema); for logger integration, see [Package log](/reference/package-log).
