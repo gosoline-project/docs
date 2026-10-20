@@ -17,8 +17,8 @@ import (
 // snippet-start: entities
 type Author struct {
 	sqlr.Entity[int64]
-	Name  string `db:"name"`
-	Email string `db:"email"`
+	Name  string `db:"name" json:"name"`
+	Email string `db:"email" json:"email"`
 }
 
 // snippet-end: entities
@@ -92,6 +92,14 @@ func NewAuthorCrud() httpserver.RegisterFactoryFunc {
 		transformer.TransformPatchInputFromEntity,
 		transformer.TransformOutput,
 	)
+	// snippet-start: query fields
+	definition.QueryFields = map[string]string{
+		"id":        "Id",
+		"name":      "Name",
+		"email":     "Email",
+		"createdAt": "CreatedAt",
+	}
+	// snippet-end: query fields
 
 	return sqlh.WithCrudHandlers(1, "author", sqlh.SimpleCrudDefinition(definition))
 }
@@ -109,6 +117,12 @@ func NewAuthorHandler() httpserver.HandlerFactory[AuthorCrudHandler] {
 		transformer.TransformOutput,
 	)
 	definition.DeleteOutput = definition.Output
+	definition.QueryFields = map[string]string{
+		"id":        "Id",
+		"name":      "Name",
+		"email":     "Email",
+		"createdAt": "CreatedAt",
+	}
 
 	return sqlh.NewCrudHandler(sqlh.SimpleCrudDefinition(definition))
 }

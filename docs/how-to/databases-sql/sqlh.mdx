@@ -18,14 +18,14 @@ That transaction does not make external effects or non-transactional DDL atomic.
 
 ## Getting Started
 
-Install SQLH v0.8.1:
+Install SQLH:
 
 ```bash
-go get github.com/gosoline-project/sqlh@v0.8.1
+go get github.com/gosoline-project/sqlh
 ```
 
-SQLH v0.8.1 uses `httpserver` v0.6.4, `sqlc` v0.4.1, and `sqlr` v0.9.1. Use these versions for the examples.
-SQLH v0.8.1 requires Go 1.27.0 or newer.
+Use the dependency versions pinned in this documentation repository's `go.mod` for the executable examples.
+The examples require Go 1.27.0 or newer.
 
 Then import the package:
 
@@ -260,16 +260,16 @@ A custom `PatchOperation` receives `*sqlh.PatchInput[Id]`. Read the parsed `sqlh
 
 ## List Inputs, Filters, and Counts
 
-The standard list input contains a JSON SQLC filter, ordering, page limit, page offset, and server-owned force filters:
+The standard list input contains a public-field filter, ordering, page limit, page offset, and server-owned force filters:
 
 ```go
 input := sqlh.ListInput{
-    Filter: sqlc.JsonFilter{
-        Type:   "eq",
-        Column: "status",
-        Value:  "active",
+    Filter: sqlh.JsonFilter{
+        Type:  sqlc.JsonFilterType("eq"),
+        Field: "name",
+        Value: "Ada",
     },
-    OrderBy: []sqlc.JsonOrder{{Column: "created_at", Direction: "desc"}},
+    OrderBy: []sqlh.JsonOrder{{Field: "createdAt", Direction: "desc"}},
     Page: sqlh.ListPage{
         Limit:  50,
         Offset: 100,
@@ -282,19 +282,47 @@ The generated list endpoint accepts a body such as:
 ```json
 {
   "filter": {
-    "type": "eq",
-    "column": "status",
-    "value": "active"
+    "type": "and",
+    "fields": [
+      {"type": "eq", "field": "name", "value": "Ada"},
+      {"type": "or", "fields": [
+        {"type": "eq", "field": "email", "value": "ada@example.com"},
+        {"type": "eq", "field": "email", "value": "ada@example.org"}
+      ]}
+    ]
   },
-  "orderBy": [
-    {"column": "created_at", "direction": "desc"}
-  ],
+  "orderBy": [{"field": "createdAt", "direction": "desc"}],
   "page": {
     "limit": 50,
     "offset": 100
   }
 }
 ```
+
+`sqlh.JsonFilter` uses SQLC's filter operators and value grammar, including recursive `and`/`or` groups, but every leaf uses `field`, not `column`. Its `Type` remains `sqlc.JsonFilterType`. `sqlh.JsonOrder` also uses `field`. SQLC's low-level `sqlc.JsonFilter` and query builders still use trusted database identifiers; their contract has not changed.
+
+### Public Query Fields
+
+SQLH resolves filter and sort names against the entity schema, not the output mapper. With `QueryFields == nil`, it derives eligible directly mapped scalar fields from their visible JSON names. This follows `encoding/json` naming and embedding rules: a tagged `StartDate` can expose `startDate`; an untagged field keeps its exact Go name. Hidden fields (`json:"-"`) and ambiguous names are not exposed. Primitive scalars and `time.Time`, including pointers to them, are eligible. Relations are not automatically exposed.
+
+Use `CrudDefinition.QueryFields` to define an explicit **complete allowlist**, especially when a response DTO uses different names or only some entity fields should be queryable:
+
+<CodeBlock title="main.go" language="go" snippet="query fields">{CrudMain}</CodeBlock>
+
+Keys are public API field names; values are Go entity field paths, not database columns. This map exposes `createdAt` even though the example's output DTO uses `created_at`. A non-nil map replaces automatic discovery entirely: fields omitted from it cannot be filtered or sorted, and an empty map permits no public query fields.
+
+For an entity with a supported direct to-one relation, explicitly expose a path such as:
+
+```go
+definition.QueryFields = map[string]string{
+    "id":        "PublicID",
+    "ownerName": "Owner.Name",
+}
+```
+
+Here `Owner` must be an SQLR `BelongsTo` or `HasOne` relation and `Name` a mapped scalar. SQLH adds a `LEFT JOIN` when the filter or order needs that path, preserving rows with no related entity unless the filter itself excludes them. To-many relations and deeper relation traversal are not supported query paths. Query-field declarations are validated when the handler is constructed; invalid paths fail startup.
+
+Before list callbacks or repository work, SQLH validates every filter leaf and sort field, including nested groups. Unknown public fields, raw database/table names, SQL expressions, and legacy `column` keys are rejected rather than passed through. A database name is accepted only if it was deliberately registered as a public name. Request validation also runs for custom list operations; it does not turn those operations into an authorization boundary.
 
 SQLH returns a `ListOutput` value:
 
@@ -305,7 +333,7 @@ SQLH returns a `ListOutput` value:
 }
 ```
 
-The default list applies user filters, force filters, delete scope, and query modifiers to both the row and count builders. Only the row builder receives pagination. SQLR `Count` removes ordering, limit, offset, and locking, but preserves grouping and HAVING.
+The default list applies resolved public filters and ordering, force filters, delete scope, and trusted custom query modifiers to both the row and count builders. Only the row builder receives pagination. SQLR `Count` removes ordering, limit, offset, and locking, but preserves grouping and HAVING.
 
 ### Ordering
 
@@ -324,17 +352,15 @@ input.AddForceFilter(func(qb *sqlr.QueryBuilderSelect) {
 ```
 
 SQLH applies force filters to list, count, identity, update, PATCH, and delete lookups.
-A force filter must only add restrictive `WHERE` conditions.
+A force filter must only add restrictive `WHERE` conditions. It is trusted backend SQL, separate from the public field resolver and its allowlist: use it for mandatory tenant/account restrictions, not to forward request-provided identifiers.
 
 ### Custom List Inputs
 
-SQLH v0.7.1 `InputQuery` contained only `filter`. SQLH v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`.
-If the old endpoint had no pagination, use a custom `ListInputSource` with only the old fields.
-Preserve the old unknown-field behavior and implement every required phase.
-Use no-op query-modifier, pagination, and validation methods when the old API had none. SQLH v0.8.1 also adds `ValidateQueryModifiers` to `ListInputSource`; implement it when upgrading a custom input that does not embed `sqlh.ListInput`.
+A custom `ListInputSource` can omit pagination or expose additional typed request fields. Preserve the endpoint's intended request shape, but do not accept legacy raw SQL identifiers as public query fields.
+Use no-op pagination and pagination-validation methods when the API has no pagination.
 Construct `CrudDefinition` with all type parameters because `NewCrudDefinition` fixes the input type to `sqlh.ListInput`.
 
-Embed `sqlh.ListInput` to retain native filters, pagination, and force filters. Override `ApplyFilters` to interpret additional request fields:
+Embed `sqlh.ListInput` to retain public filters, ordering, pagination, and force filters. Optional `ApplyFilters` is a trusted backend extension for additional typed fields; do not call the removed `ListInput.ApplyFilters` method:
 
 ```go
 type AuthorListInput struct {
@@ -343,9 +369,7 @@ type AuthorListInput struct {
 }
 
 func (i AuthorListInput) ApplyFilters(qb *sqlr.QueryBuilderSelect) error {
-    if err := i.ListInput.ApplyFilters(qb); err != nil {
-        return err
-    }
+    // SQLH has already resolved and validated the embedded public filter.
     if i.Name != "" {
         qb.Where(sqlc.Col("name").Eq(i.Name))
     }
@@ -355,12 +379,13 @@ func (i AuthorListInput) ApplyFilters(qb *sqlr.QueryBuilderSelect) error {
 
 A custom list input must implement `ListInputSource`:
 
-- `ApplyFilters` adds user filters and joins.
-- `ApplyQueryModifiers` adds grouping and ordering.
+- `GetFilter() sqlh.JsonFilter` returns the public filter tree.
+- `GetOrderBy() []sqlh.JsonOrder` returns public sort fields.
 - `ApplyPagination` adds the page limit and offset.
-- `ValidatePagination` validates the input.
-- `ValidateQueryModifiers` validates ordering before any list query runs.
+- `ValidatePagination` validates pagination.
 - `GetForceFilters` exposes the embedded, server-owned filters.
+
+Embedding `sqlh.ListInput` supplies these methods. `ApplyFilters(*sqlr.QueryBuilderSelect) error` and `ApplyQueryModifiers(*sqlr.QueryBuilderSelect)` are optional trusted backend extensions, not native request filter/sort processors. The embedded list input no longer has either method. Never pass arbitrary request identifiers or SQL expressions to these extensions.
 
 Custom `Query` callbacks must apply `QueryPlan.ApplyBuilder`, check `ApplyScope`, then apply query modifiers and pagination.
 Custom `Count` callbacks must apply the builder and scope, return scope errors, and not apply query modifiers or pagination.
@@ -421,7 +446,7 @@ Keep database mapping, relationship shape, HTTP input, and CRUD policy separate:
 | `db:"column"` | Maps an entity field to a database column. Use `db:"-"` on non-column relation fields. |
 | `sqlr:"..."` | Defines relationships and schema-wide preload or synchronization defaults. |
 | `sqlh:"..."` | Adds operation-specific preload and synchronization paths to SQLH's default builders. |
-| `json:"field"` | Defines the request field name and helps SQLH derive PATCH association paths. |
+| `json:"field"` | Defines JSON names, automatic public query-field names on entities, and PATCH association paths on inputs. |
 | `binding:"..."` | Defines request validation. Validate the merged PATCH input explicitly. |
 | `uri:"id" json:"-"` | Binds the route identity without accepting it from JSON. `InputById` supplies these tags. |
 
@@ -575,7 +600,7 @@ The custom factory receives the same `sqlc.Client` that SQLH uses to start trans
 
 <CodeBlock title="main.go" language="go" snippet="repository wrapper">{CustomRepositoryMain}</CodeBlock>
 
-The repository wrapper retains its defaults for direct queries, but SQLH v0.8.0 prepares the list builder and copies it into the repository query, so those defaults alone do not affect the list route. The example also applies them through a custom `ListInputSource`: it adds the newest-first order as a query modifier and applies the 100-row fallback only when no page limit was requested. It embeds `sqlh.ListInput` to preserve native filters, force filters, and offsets. The default count does not apply pagination, so its total remains uncapped.
+The repository wrapper retains its trusted SQL defaults for direct queries, but SQLH prepares the list builder and copies it into the repository query, so those defaults alone do not affect the list route. The example also applies defaults through a custom `ListInputSource`: `GetOrderBy` returns a public `createdAt` sort only when the request has no ordering, and pagination applies the 100-row fallback only when no page limit was requested. It embeds `sqlh.ListInput` to supply `GetFilter`, force filters, and pagination validation, and its definition explicitly allowlists public query fields. Both client ordering and default ordering go through the same resolver; no raw SQL is accepted from the request. The default count does not apply pagination, so its total remains uncapped.
 
 <CodeBlock title="main.go" language="go" snippet="reporting list input">{CustomRepositoryMain}</CodeBlock>
 
@@ -633,6 +658,8 @@ Use these replacements:
 | Repository factory | `WithRepositoryTxFactory` returning `sqlr.RepositoryTx` |
 | Generic query list handler | `ListInput`, `ListOutput`, `Query`, and `Count` |
 | Implicit patch association behavior | `sqlh` relation tags and `PatchAssociationTriggers` |
+| Public `sqlc.JsonFilter.Column` / raw order expressions | `sqlh.JsonFilter.Field`, `sqlh.JsonOrder.Field`, and `CrudDefinition.QueryFields` |
+| Native `ListInput.ApplyFilters` / `ApplyQueryModifiers` | `GetFilter` / `GetOrderBy`; SQLH validates and resolves the public names |
 
 Add parity tests before changing the implementation. Check routes, response bodies, status codes, authorization, association behavior, filters, pagination, and transaction rollback behavior.
 
