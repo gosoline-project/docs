@@ -8,7 +8,7 @@ title: Package db-repo
 
 ## API and activation
 
-Repository-operation timing is an explicit opt-in: wrap a repository with `db_repo.NewMetricRepository(config, logger, repo)`. The wrapper records `Create`, `Read`, `Update`, `Delete`, and `Query`; it does not override `Count`, and the package does not automatically wrap every repository. Model-event notification counts are emitted by the separate `db_repo.NewPublisherNotifier` path after each publisher result. See [`NewMetricRepository`](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db-repo/metric_repo.go#L27-L36) and [`NewPublisherNotifier`](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db-repo/notification_publisher.go#L19-L22).
+Repository-operation timing and counting are explicit opt-ins: wrap a repository with `db_repo.NewMetricRepository(config, logger, repo)`. The wrapper records `Create`, `Read`, `Update`, `Delete`, and `Query`; it does not override `Count`, and the package does not automatically wrap every repository. Model-event notification counts are emitted by the separate `db_repo.NewPublisherNotifier` path after each publisher result. See [`NewMetricRepository`](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/db-repo/metric_repo.go) and [`NewPublisherNotifier`](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/db-repo/notification_publisher.go).
 
 ## Metrics
 
@@ -16,7 +16,8 @@ The table lists names and units authored by Gosoline. The OpenTelemetry writer e
 
 | Metric | Instrument | Authored unit | Dimensions | Description |
 |--------|------------|---------------|------------|-------------|
-| `db.repo.operation.duration` | Histogram | `ms` | `operation.name`: `create`, `read`, `update`, `delete`, `query`; `model.id`: repository model ID; `error.type`: `{{default}}` on success, `operation_failed` on error | Records one observation after each wrapped repository operation. The observation count is the operation count; failures remain observations and are identified by `error.type`. `Count` is not wrapped by this metric repository. |
+| `db.repo.operation.duration` | Histogram | `ms` | `operation.name`: `create`, `read`, `update`, `delete`, `query`; `model.id`: repository model ID; `error.type`: `{{default}}` on success, `operation_failed` on error | Records one duration observation after each wrapped repository operation. Keep this histogram for latency; use the Counter for operation volume. `Count` is not wrapped by this metric repository. |
+| `db.repo.operations` | Counter | `count` | `operation.name`: `create`, `read`, `update`, `delete`, `query`; `model.id`: repository model ID; `error.type`: `{{default}}` on success, `operation_failed` on error | Adds one after each wrapped call returns. High-priority zero defaults exist for both outcomes per model and operation. |
 | `db.repo.model_event.notifications` | Counter | `count` | `model.id`: configured model ID; `error.type`: `{{default}}` when publish succeeds, `notify_failed` when it returns an error, including cancellation | Adds one after each model-event `Publisher.Publish` result. Notification type is not a dimension; the counter records publish outcomes rather than the underlying database operation. |
 
 ## Related references
@@ -24,4 +25,4 @@ The table lists names and units authored by Gosoline. The OpenTelemetry writer e
 - [SQL database client package](/reference/package-db)
 - [Working with relational databases](/how-to/databases-sql)
 - [Metric schema](/reference/metric-schema)
-- [Repository metric implementation](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db-repo/metric_repo.go#L38-L128)
+- [Repository metric implementation](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/db-repo/metric_repo.go)
