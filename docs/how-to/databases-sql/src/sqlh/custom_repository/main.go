@@ -154,6 +154,7 @@ func main() {
 					UpdateInput:          mapper.TransformUpdateInput,
 					PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
 					Output:               mapper.TransformOutput,
+					// Complete allowlist overrides automatic Go names and scalar field tags.
 					FieldMappings: map[string]string{
 						"id":        "Id",
 						"name":      "Name",

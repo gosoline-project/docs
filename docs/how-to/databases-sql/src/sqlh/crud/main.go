@@ -93,6 +93,8 @@ func NewAuthorCrud() httpserver.RegisterFactoryFunc {
 		transformer.TransformOutput,
 	)
 	// snippet-start: query fields
+	// Complete allowlist: public names match case-insensitively; Go paths stay exact.
+	// No scalar field aliases are needed when mappings are explicit.
 	definition.FieldMappings = map[string]string{
 		"id":        "Id",
 		"name":      "Name",
