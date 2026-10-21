@@ -7,10 +7,10 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```
-go get github.com/gosoline-project/sqlc@v0.4.2-0.20261021102907-3f46fec6e6d1
+go get github.com/gosoline-project/sqlc@v0.4.1-0.20261013124322-f3bdb6518b42
 ```
 
-This published pseudo-version is for SQLC `v0.4.2`; it is not a stable release tag.
+This documentation branch pins a migration prerelease snapshot, not a stable `v0.4.1` release.
 
 Then import the package in your Go code:
 
@@ -110,14 +110,15 @@ Use `parameters` for driver-specific settings such as PostgreSQL `sslmode` or `c
 
 ## Metrics[​](#metrics "Direct link to Metrics")
 
-Settings-based SQLC database construction emits the canonical `db.client` metrics used by the [SQL database client reference](/docs/pr-5/reference/package-db/.md). Driver opens are event Counters; pool snapshots are Gauges. SQLC writes both used and idle pool series immediately and then once per minute, including zero values, with no separate total/open pool series.
+Settings-based SQLC database construction emits the legacy metric `DbConnectionCount` with an empty authored namespace. It is separate from the namespaced SDK metrics documented by the [`db` client reference](/docs/pr-5/reference/package-db/.md) and the [`db-repo` reference](/docs/pr-5/reference/package-db-repo/.md). The pinned SQLC source leaves `Kind` unset and uses `UnitCountAverage`; the pinned Gosoline metric package infers a counter from the count unit, including for sampled pool-state values.
 
-| Metric                       | Instrument | Authored unit                | Dimensions                         | Description                                                                                                                                                        |
-| ---------------------------- | ---------- | ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `db.client.connections`      | Counter    | `count` (`UnitCount`)        | None                               | Adds one before each underlying `driver.Driver.Open` call, including failed opens; counts open attempts since process start, not live connections.                 |
-| `db.client.connection.count` | Gauge      | `count` (`UnitCountAverage`) | `connection.state`: `used`, `idle` | Reports `sql.DB.Stats().InUse` and `.Idle`, respectively, immediately and once per minute. Both states are written, including zero; there is no total/open series. |
+| Metric              | Instrument                                                | Authored unit                | Dimensions                             | Description                                                                                                                                                                                                                                                                                       |
+| ------------------- | --------------------------------------------------------- | ---------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DbConnectionCount` | Counter (kind inferred; source datum leaves `Kind` unset) | `count` (`UnitCountAverage`) | `Type`: `new`, `open`, `inUse`, `idle` | `new` adds one before each wrapped `driver.Open` attempt, including failed opens. `open`, `inUse`, and `idle` record `sql.DB.Stats()` values after setup and every minute thereafter. They are point-in-time pool counts but share the same legacy counter contract; do not label them as gauges. |
 
-These metrics reach a writer when the application wires `application.WithMetrics`, sets `metric.enabled: true`, and configures at least one writer under `metric.writers`; SQLC has no separate metric-enable setting. The docs module pins SQLC `v0.4.2-0.20261021102907-3f46fec6e6d1`; see the [pinned metric source](https://github.com/gosoline-project/sqlc/blob/3f46fec6e6d17f37c64c567380c2e5185cfdc7cf/metrics.go) for the canonical namespace, types, units, and dimensions. The [`db-repo` reference](/docs/pr-5/reference/package-db-repo/.md) documents separate repository-operation metrics.
+The metric name is authored without a namespace; the OpenTelemetry writer applies Gosoline's `gosoline.` prefix. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for the writer contract and count-unit handling. The pinned [SQLC metric source](https://github.com/gosoline-project/sqlc/blob/f3bdb6518b42/metrics.go#L13-L90) defines the name, unit, and exact `Type` values.
+
+These legacy observations reach an exporter only when the application wires `application.WithMetrics`, sets `metric.enabled: true`, and configures at least one writer under `metric.writers`; SQLC has no separate metric-enable setting. Framework metrics are different: `db.client.connections` is an undimensioned counter of driver `Open` attempts, `db.client.connection.count` is a gauge with `connection.state=used|idle`, and `db.repo.*` covers framework repository operations and notifications. Do not interpret those framework names as aliases for SQLC's `DbConnectionCount`.
 
 ## Migrations[​](#migrations "Direct link to Migrations")
 

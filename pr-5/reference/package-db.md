@@ -4,7 +4,7 @@
 
 ## API and activation[​](#api-and-activation "Direct link to API and activation")
 
-Use `db.ProvideConnection(ctx, config, logger, name)` to provide a named connection; it resolves the corresponding settings and creates the managed connection. The open-attempt counter is part of this connection setup, while the pool-state sampler starts after connection setup, lifecycle registration, and migrations succeed. There is no separate database-metrics switch: export still depends on the application's configured Gosoline metric writer. See [`ProvideConnection`](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/db/connection.go) and the [metric wrapper](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/db/metrics.go).
+Use `db.ProvideConnection(ctx, config, logger, name)` to provide a named connection; it resolves the corresponding settings and creates the managed connection. The open-attempt counter is part of this connection setup, while the pool-state sampler starts after connection setup, lifecycle registration, and migrations succeed. There is no separate database-metrics switch: export still depends on the application's configured Gosoline metric writer. See [`ProvideConnection`](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db/connection.go#L18-L47) and the [metric wrapper](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/db/metrics.go#L39-L107).
 
 ## Metrics[​](#metrics "Direct link to Metrics")
 
@@ -18,6 +18,6 @@ The table lists names and units authored by Gosoline. The OpenTelemetry writer e
 ## Related references[​](#related-references "Direct link to Related references")
 
 * [Working with relational databases](/docs/pr-5/how-to/databases-sql/.md)
-* [SQL client and SQLC metrics](/docs/pr-5/how-to/databases-sql/sqlc/.md)
+* [SQL client and legacy SQLC metrics](/docs/pr-5/how-to/databases-sql/sqlc/.md)
 * [SQL repository package](/docs/pr-5/reference/package-db-repo/.md)
 * [Metric schema](/docs/pr-5/reference/metric-schema/.md)

@@ -4,13 +4,13 @@ The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the c
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
-Install the SQLH version pinned by this documentation module:
+Install the SQLH snapshot pinned by this documentation branch:
 
 ```
-go get github.com/gosoline-project/sqlh@v0.8.2-0.20261021104309-052781e8e8b8
+go get github.com/gosoline-project/sqlh@v0.8.1-0.20261013125801-b3d114e8cae0
 ```
 
-The examples use the docs module's published dependency pins: SQLH `v0.8.2-0.20261021104309-052781e8e8b8`, HTTPServer `v0.6.5-0.20261021102849-b86cdb16238f`, SQLC `v0.4.2-0.20261021102907-3f46fec6e6d1`, SQLR `v0.9.2-0.20261021103503-2e52c2637837`, and Gosoline `v0.68.4-0.20261021101322-e1a14ac09eab`. These are pseudo-versions, not stable release tags. SQLH requires Go 1.27.0 or newer.
+The examples use the docs module's migration prerelease pins: SQLH `v0.8.1-0.20261013125801-b3d114e8cae0`, `httpserver` `v0.6.5-0.20261013124439-0538a07a7c58`, `sqlc` `v0.4.1-0.20261013124322-f3bdb6518b42`, SQLR `v0.9.2-0.20261013125204-bbd729912067`, and Gosoline `v0.68.1-0.20261013123101-dd90ce372ff3`. These are branch snapshots, not stable releases. SQLH requires Go 1.27.0 or newer.
 
 Then import the package:
 

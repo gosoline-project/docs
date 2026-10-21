@@ -7,10 +7,10 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```
-go get github.com/gosoline-project/sqlr@v0.9.2-0.20261021103503-2e52c2637837
+go get github.com/gosoline-project/sqlr@v0.9.2-0.20261013125204-bbd729912067
 ```
 
-This published pseudo-version is for SQLR `v0.9.2`; it is not a stable release tag.
+This documentation branch pins a migration prerelease snapshot, not a stable `v0.9.2` release.
 
 Then import the package in your Go code:
 

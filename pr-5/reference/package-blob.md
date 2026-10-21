@@ -4,7 +4,7 @@
 
 ## API and activation[​](#api-and-activation "Direct link to API and activation")
 
-Register `blob.ProvideBatchRunner(name)` as a kernel module and provide the matching `blob.ProvideStore` with the same name. The store queues object operations for that named runner; the runner loads its settings from `blob.<name>`. See the pinned [runner registration](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/blob/runner.go) and [store provider](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/blob/store.go).
+Register `blob.ProvideBatchRunner(name)` as a kernel module and provide the matching `blob.ProvideStore` with the same name. The store queues object operations for that named runner; the runner loads its settings from `blob.<name>`. See the pinned [runner registration](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/blob/runner.go#L45-L50) and [store provider](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/blob/store.go#L118-L145).
 
 ## Metrics[​](#metrics "Direct link to Metrics")
 
@@ -17,4 +17,4 @@ The table lists names and units authored by Gosoline. The OpenTelemetry writer e
 ## Related references[​](#related-references "Direct link to Related references")
 
 * [Metric schema](/docs/pr-5/reference/metric-schema/.md)
-* [Batch operation implementation](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/blob/runner.go)
+* [Batch operation implementation](https://github.com/justtrackio/gosoline/blob/dd90ce372ff3/pkg/blob/runner.go#L139-L253)
