@@ -154,7 +154,7 @@ func main() {
 					UpdateInput:          mapper.TransformUpdateInput,
 					PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
 					Output:               mapper.TransformOutput,
-					QueryFields: map[string]string{
+					FieldMappings: map[string]string{
 						"id":        "Id",
 						"name":      "Name",
 						"email":     "Email",

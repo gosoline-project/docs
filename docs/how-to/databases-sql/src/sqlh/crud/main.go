@@ -93,7 +93,7 @@ func NewAuthorCrud() httpserver.RegisterFactoryFunc {
 		transformer.TransformOutput,
 	)
 	// snippet-start: query fields
-	definition.QueryFields = map[string]string{
+	definition.FieldMappings = map[string]string{
 		"id":        "Id",
 		"name":      "Name",
 		"email":     "Email",
@@ -117,7 +117,7 @@ func NewAuthorHandler() httpserver.HandlerFactory[AuthorCrudHandler] {
 		transformer.TransformOutput,
 	)
 	definition.DeleteOutput = definition.Output
-	definition.QueryFields = map[string]string{
+	definition.FieldMappings = map[string]string{
 		"id":        "Id",
 		"name":      "Name",
 		"email":     "Email",
