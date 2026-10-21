@@ -8,7 +8,7 @@ Record `Content-Type`, `Accept`, and response negotiation behavior.
 
 Use these downloaded sources as the API contract:
 
-- `github.com/gosoline-project/sqlh` at `v0.8.2-0.20261020145341-12ac66377fad`
+- `github.com/gosoline-project/sqlh` at `v0.8.2-0.20261021073547-b28f178abbb8`
 - `github.com/gosoline-project/sqlr` at `v0.9.1`
 - `github.com/gosoline-project/sqlc` at `v0.4.1`
 - `github.com/gosoline-project/httpserver` at `v0.6.4`
@@ -243,10 +243,10 @@ Every filter leaf and sort field is validated before callbacks/database work, in
 Unknown names, raw identifiers/expressions, and legacy `column` keys are rejected.
 SQLC's low-level filter and query-builder contract is unchanged.
 
-With `QueryFields == nil`, SQLH derives eligible directly mapped scalar fields from the entity's visible
+With `FieldMappings == nil`, SQLH derives eligible directly mapped scalar fields from the entity's visible
 `encoding/json` names, not the output DTO or database names. Untagged fields retain exact Go names; hidden and
 ambiguous fields are omitted. Primitive scalars and time.Time (including pointers) are supported.
-Set `CrudDefinition.QueryFields` to a complete public-name-to-Go-path allowlist, for example
+Set `CrudDefinition.FieldMappings` to a complete public-name-to-Go-path allowlist, for example
 `map[string]string{"id": "PublicID", "ownerName": "Owner.Name"}`. Non-nil replaces automatic discovery; empty exposes none.
 Explicit paths support one direct BelongsTo/HasOne hop to a mapped scalar and add a LEFT JOIN when needed.
 To-many and deeper relation paths are unsupported; invalid declarations fail handler construction.

@@ -14,7 +14,7 @@ Use it to preserve the service's public API and domain behavior.
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations.
 Do not replace domain rules with generic CRUD behavior.
 
-This guide targets SQLH `v0.8.2-0.20261020145341-12ac66377fad`, SQLR v0.9.1, SQLC v0.4.1, and httpserver v0.6.4.
+This guide targets SQLH `v0.8.2-0.20261021073547-b28f178abbb8`, SQLR v0.9.1, SQLC v0.4.1, and httpserver v0.6.4.
 This SQLH version declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
 
 ## 1. Review the Current API
@@ -220,7 +220,7 @@ Use the `ProjectListInput` type above for SQLH public-field filters, ordering, p
 
 Migrate public filters from `column` to `field` and ordering to `{"field":"name","direction":"asc"}` objects in `orderBy`. `sqlh.JsonFilter.Type` remains `sqlc.JsonFilterType`; nested `Fields` use `sqlh.JsonFilter` too. SQLH validates every leaf and sort field before callbacks or database work, including custom list operations. Unknown names, raw identifiers/expressions, and legacy `column` keys are rejected.
 
-With `CrudDefinition.QueryFields == nil`, eligible directly mapped scalar entity fields use their visible `encoding/json` names, not output DTO names or database columns. Untagged fields keep their exact Go names; hidden or ambiguous fields are omitted. Set `QueryFields` to a complete public-name-to-Go-path allowlist, for example `map[string]string{"id": "PublicID", "ownerName": "Owner.Name"}`. Non-nil replaces automatic discovery; an empty map exposes none. Explicit relation paths support one direct `BelongsTo` or `HasOne` hop to a scalar; SQLH adds a `LEFT JOIN`. To-many/deeper paths are unsupported, and invalid declarations fail handler construction.
+With `CrudDefinition.FieldMappings == nil`, eligible directly mapped scalar entity fields use their visible `encoding/json` names, not output DTO names or database columns. Untagged fields keep their exact Go names; hidden or ambiguous fields are omitted. Set `FieldMappings` to a complete public-name-to-Go-path allowlist, for example `map[string]string{"id": "PublicID", "ownerName": "Owner.Name"}`. Non-nil replaces automatic discovery; an empty map exposes none. Explicit relation paths support one direct `BelongsTo` or `HasOne` hop to a scalar; SQLH adds a `LEFT JOIN`. To-many/deeper paths are unsupported, and invalid declarations fail handler construction.
 
 If `LegacyFilter` represents an additional typed field, optional `ApplyFilters` can add its trusted backend predicate. Optional `ApplyQueryModifiers` can add trusted grouping or ordering. These are not native public-query processors; do not delegate to removed `ListInput.ApplyFilters` or `ListInput.ApplyQueryModifiers` methods or forward request-provided SQL. Force filters remain separate trusted server-owned restrictions.
 

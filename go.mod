@@ -6,7 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/gosoline-project/httpserver v0.6.4
 	github.com/gosoline-project/sqlc v0.4.1
-	github.com/gosoline-project/sqlh v0.8.2-0.20261020145341-12ac66377fad
+	github.com/gosoline-project/sqlh v0.8.2-0.20261021073547-b28f178abbb8
 	github.com/gosoline-project/sqlr v0.9.1
 	github.com/justtrackio/gosoline v0.63.7
 )

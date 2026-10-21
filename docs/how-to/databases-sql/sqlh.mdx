@@ -303,9 +303,9 @@ The generated list endpoint accepts a body such as:
 
 ### Public Query Fields
 
-SQLH resolves filter and sort names against the entity schema, not the output mapper. With `QueryFields == nil`, it derives eligible directly mapped scalar fields from their visible JSON names. This follows `encoding/json` naming and embedding rules: a tagged `StartDate` can expose `startDate`; an untagged field keeps its exact Go name. Hidden fields (`json:"-"`) and ambiguous names are not exposed. Primitive scalars and `time.Time`, including pointers to them, are eligible. Relations are not automatically exposed.
+SQLH resolves filter and sort names against the entity schema, not the output mapper. With `FieldMappings == nil`, it derives eligible directly mapped scalar fields from their visible JSON names. This follows `encoding/json` naming and embedding rules: a tagged `StartDate` can expose `startDate`; an untagged field keeps its exact Go name. Hidden fields (`json:"-"`) and ambiguous names are not exposed. Primitive scalars and `time.Time`, including pointers to them, are eligible. Relations are not automatically exposed.
 
-Use `CrudDefinition.QueryFields` to define an explicit **complete allowlist**, especially when a response DTO uses different names or only some entity fields should be queryable:
+Use `CrudDefinition.FieldMappings` to define an explicit **complete allowlist**, especially when a response DTO uses different names or only some entity fields should be queryable:
 
 <CodeBlock title="main.go" language="go" snippet="query fields">{CrudMain}</CodeBlock>
 
@@ -314,7 +314,7 @@ Keys are public API field names; values are Go entity field paths, not database 
 For an entity with a supported direct to-one relation, explicitly expose a path such as:
 
 ```go
-definition.QueryFields = map[string]string{
+definition.FieldMappings = map[string]string{
     "id":        "PublicID",
     "ownerName": "Owner.Name",
 }
@@ -652,7 +652,7 @@ Use these replacements:
 | Repository factory | `WithRepositoryTxFactory` returning `sqlr.RepositoryTx` |
 | Generic query list handler | `ListInput`, `ListOutput`, `Query`, and `Count` |
 | Implicit patch association behavior | `sqlh` relation tags and `PatchAssociationTriggers` |
-| Public `sqlc.JsonFilter.Column` / raw order expressions | `sqlh.JsonFilter.Field`, `sqlh.JsonOrder.Field`, and `CrudDefinition.QueryFields` |
+| Public `sqlc.JsonFilter.Column` / raw order expressions | `sqlh.JsonFilter.Field`, `sqlh.JsonOrder.Field`, and `CrudDefinition.FieldMappings` |
 | Native `ListInput.ApplyFilters` / `ApplyQueryModifiers` | `GetFilter` / `GetOrderBy`; SQLH validates and resolves the public names |
 
 Add parity tests before changing the implementation. Check routes, response bodies, status codes, authorization, association behavior, filters, pagination, and transaction rollback behavior.
