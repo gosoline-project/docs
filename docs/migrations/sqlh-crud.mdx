@@ -14,7 +14,7 @@ Use it to preserve the service's public API and domain behavior.
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations.
 Do not replace domain rules with generic CRUD behavior.
 
-This guide targets SQLH `v0.8.2-0.20261021073547-b28f178abbb8`, SQLR v0.9.1, SQLC v0.4.1, and httpserver v0.6.4.
+This guide targets SQLH `v0.8.2-0.20261021102431-15719b2020e0`, SQLR v0.9.1, SQLC v0.4.1, and httpserver v0.6.4.
 This SQLH version declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
 
 ## 1. Review the Current API
@@ -57,7 +57,7 @@ Use SQLR tags for relationship shape and schema defaults. `foreignKey:<column>` 
 
 Use `parentKey:<column>` and `relatedKey:<column>` for nonstandard many-to-many join-column names. Other relevant options are `primaryKey`, `autoCreateTime`, `autoUpdateTime`, `preload`, `sync:create,update,delete`, and `syncMode:many2many`. Separate SQLR options with semicolons. `syncMode:many2many` requires `sync:update` and a many-to-many relation.
 
-Use SQLH tags for CRUD-phase builders. Valid directives are `preload:create,read,query,update` and `sync:create,update,delete`; separate directives with semicolons and phases with commas. Relation paths use Go field names such as `Rules` or `Rules.Owner`, not database columns or JSON names. Unknown directives, phases, and scalar-field tags fail during handler setup.
+Use SQLH relation tags for CRUD-phase builders: `preload:create,read,query,update` and `sync:create,update,delete`. Separate directives with semicolons and phases with commas. Relation paths use exact Go field names such as `Rules` or `Rules.Owner`, not database columns or JSON names. Scalar fields support `sqlh:"field:alias"` or `sqlh:"field:-"` for automatic query naming or exclusion, not preload/sync. Unknown directives, unsupported phases, empty or duplicate `field` directives, and directives on embedded fields fail during handler setup.
 
 `sqlr:"...;preload"` is a schema-level auto-preload. `sqlh:"preload:<phases>"` adds phase-specific builders, and `preload:update` affects the update lookup and update write, not only post-write loading. SQLH parses nested relation tags recursively.
 
@@ -220,7 +220,13 @@ Use the `ProjectListInput` type above for SQLH public-field filters, ordering, p
 
 Migrate public filters from `column` to `field` and ordering to `{"field":"name","direction":"asc"}` objects in `orderBy`. `sqlh.JsonFilter.Type` remains `sqlc.JsonFilterType`; nested `Fields` use `sqlh.JsonFilter` too. SQLH validates every leaf and sort field before callbacks or database work, including custom list operations. Unknown names, raw identifiers/expressions, and legacy `column` keys are rejected.
 
-With `CrudDefinition.FieldMappings == nil`, eligible directly mapped scalar entity fields use their visible `encoding/json` names, not output DTO names or database columns. Untagged fields keep their exact Go names; hidden or ambiguous fields are omitted. Set `FieldMappings` to a complete public-name-to-Go-path allowlist, for example `map[string]string{"id": "PublicID", "ownerName": "Owner.Name"}`. Non-nil replaces automatic discovery; an empty map exposes none. Explicit relation paths support one direct `BelongsTo` or `HasOne` hop to a scalar; SQLH adds a `LEFT JOIN`. To-many/deeper paths are unsupported, and invalid declarations fail handler construction.
+With `CrudDefinition.FieldMappings == nil`, eligible directly mapped scalar entity fields use exported Go names with anonymous-field promotion and Go shadowing rules, not output DTO names or database columns. Binding tags (`json`, `xml`, `form`, `yaml`, etc.) are ignored. Use `sqlh:"field:alias"` only when a different automatic public name is needed, or `sqlh:"field:-"` to exclude a field.
+
+**Migration warning:** `json:"-"` no longer excludes a field from automatic query discovery. Add `sqlh:"field:-"` or select the complete public allowlist with `FieldMappings`. JSON renames that differ from Go names by more than case also need a SQLH alias or explicit mapping.
+
+Public names match case-insensitively with Go's Unicode `strings.EqualFold` semantics, without punctuation/style normalization: `createdAt` matches `CreatedAt`, not `created_at`. Go paths and database identifiers stay exact. Active public names that collide under case folding fail handler construction with the conflicting names and Go paths; excluded fields do not participate.
+
+Set `FieldMappings` to a complete public-name-to-Go-path allowlist, for example `map[string]string{"id": "PublicID", "ownerName": "Owner.Name"}`. Non-nil replaces automatic discovery without merging names or aliases; an empty map exposes none. Explicit entries can select a mapped scalar even if its automatic name is aliased or excluded. Explicit relation paths support one direct `BelongsTo` or `HasOne` hop to a scalar; SQLH adds a `LEFT JOIN`. To-many/deeper paths are unsupported, and invalid declarations fail handler construction.
 
 If `LegacyFilter` represents an additional typed field, optional `ApplyFilters` can add its trusted backend predicate. Optional `ApplyQueryModifiers` can add trusted grouping or ordering. These are not native public-query processors; do not delegate to removed `ListInput.ApplyFilters` or `ListInput.ApplyQueryModifiers` methods or forward request-provided SQL. Force filters remain separate trusted server-owned restrictions.
 

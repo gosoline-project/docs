@@ -303,13 +303,17 @@ The generated list endpoint accepts a body such as:
 
 ### Public Query Fields
 
-SQLH resolves filter and sort names against the entity schema, not the output mapper. With `FieldMappings == nil`, it derives eligible directly mapped scalar fields from their visible JSON names. This follows `encoding/json` naming and embedding rules: a tagged `StartDate` can expose `startDate`; an untagged field keeps its exact Go name. Hidden fields (`json:"-"`) and ambiguous names are not exposed. Primitive scalars and `time.Time`, including pointers to them, are eligible. Relations are not automatically exposed.
+SQLH resolves filter and sort names against the entity schema, not the output mapper. With `FieldMappings == nil`, eligible directly mapped scalar fields use their exported Go names, with anonymous-field promotion and Go shadowing rules. Primitive scalars and `time.Time`, including pointers to them, are eligible; relations and nonpersisted fields are not automatically exposed. JSON, XML, form, YAML, and other binding tags do not affect query-field discovery.
+
+Use `sqlh:"field:alias"` on a scalar field to change its automatic public name, or `sqlh:"field:-"` to exclude it. For example, `StartDate time.Time` defaults to `StartDate`; adding `sqlh:"field:start_date"` exposes `start_date` instead. A field with `json:"-"` is still queryable unless excluded with `sqlh:"field:-"` or a complete explicit map.
+
+Public names match case-insensitively using Go's Unicode `strings.EqualFold` semantics: `StartDate` also accepts `startDate`, but `start_date` is a different name. There is no punctuation or naming-style normalization. Active public names that differ only by case folding cause a deterministic handler-construction error identifying the conflicting names and Go paths; excluded fields do not participate.
 
 Use `CrudDefinition.FieldMappings` to define an explicit **complete allowlist**, especially when a response DTO uses different names or only some entity fields should be queryable:
 
 <CodeBlock title="main.go" language="go" snippet="query fields">{CrudMain}</CodeBlock>
 
-Keys are public API field names; values are Go entity field paths, not database columns. This map exposes `createdAt` even though the example's output DTO uses `created_at`. A non-nil map replaces automatic discovery entirely: fields omitted from it cannot be filtered or sorted, and an empty map permits no public query fields.
+Keys are public API field names; values are exact Go entity field paths, not database columns. Only public-name lookup is case-insensitive; Go paths and database identifiers retain their exact spelling. This map exposes `createdAt` even though the example's output DTO uses `created_at`. A non-nil map replaces automatic discovery entirely, without merging Go names or `sqlh` aliases: fields omitted from it cannot be filtered or sorted, and an empty map permits no public query fields. An explicit entry may select a mapped scalar by its Go path even when its automatic name is aliased or excluded.
 
 For an entity with a supported direct to-one relation, explicitly expose a path such as:
 
@@ -445,8 +449,8 @@ Keep database mapping, relationship shape, HTTP input, and CRUD policy separate:
 |---|---|
 | `db:"column"` | Maps an entity field to a database column. Use `db:"-"` on non-column relation fields. |
 | `sqlr:"..."` | Defines relationships and schema-wide preload or synchronization defaults. |
-| `sqlh:"..."` | Adds operation-specific preload and synchronization paths to SQLH's default builders. |
-| `json:"field"` | Defines JSON names, automatic public query-field names on entities, and PATCH association paths on inputs. |
+| `sqlh:"..."` | Defines automatic scalar query-field aliases/exclusions and operation-specific relation preload/synchronization paths. |
+| `json:"field"` | Defines JSON names and PATCH association paths on inputs, not public query-field names. |
 | `binding:"..."` | Defines request validation. Validate the merged PATCH input explicitly. |
 | `uri:"id" json:"-"` | Binds the route identity without accepting it from JSON. `InputById` supplies these tags. |
 
@@ -491,7 +495,7 @@ Separate directives with semicolons and phases with commas. There is no `patch` 
 | `preload` | `update` | Loads the relation before PUT/PATCH mapping and reloads it after the write. |
 | `sync` | `create`, `update`, `delete` | Adds association paths for persistence or owned-association cleanup. |
 
-SQLH traverses nested relation tags. Paths use Go field names, such as `Labels` or `Rules.Owner`, not column names or JSON names. Unknown directives, unsupported phases, and `sqlh` tags on scalar or embedded fields fail during handler construction.
+SQLH traverses nested relation tags. Paths use exact Go field names, such as `Labels` or `Rules.Owner`, not column names or JSON names. `preload` and `sync` require association fields; scalar fields instead support `field:alias` or `field:-` for automatic query discovery. Unknown directives, unsupported phases, empty or duplicate `field` directives, and directives on embedded fields fail during handler construction.
 
 ### Defaults and PATCH Selection
 
