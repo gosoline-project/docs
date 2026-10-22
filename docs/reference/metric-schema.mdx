@@ -322,8 +322,8 @@ CloudWatch omits default dimensions; select HTTP client failure series without t
 with the corresponding `error.type`.
 
 For the raw `http.server.routed.responses` counter in CloudWatch Metric Insights, fence the query to its
-five dimensions with `FROM SCHEMA("<CloudWatch namespace>", name, route, request.method,
-response.status_code, response.status_class)`. CloudWatch also stores a second class-projected series under
+five dimensions with `FROM SCHEMA("<CloudWatch namespace>", name, route, "request.method",
+"response.status_code", "response.status_class")`. CloudWatch also stores a second class-projected series under
 the same metric name, omitting `response.status_code`; for standard 100–599 statuses its dimensions are
 `name`, `route`, `request.method`, and `response.status_class`. OpenTelemetry and Prometheus export only the
 raw five-dimension Counter, without a second projection. Each observed class adds a CloudWatch time series
