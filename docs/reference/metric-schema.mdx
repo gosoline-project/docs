@@ -33,6 +33,8 @@ Each writer renders that canonical name for its backend:
 | `http.server.request.duration` | `HttpServerRequestDuration` | `gosoline_http_server_request_duration_seconds` | `gosoline.http.server.request.duration` |
 | `http.server.requests` | `HttpServerRequests` | `gosoline_http_server_requests_total` | `gosoline.http.server.requests` |
 | `http.server.routed.requests` | `HttpServerRoutedRequests` | `gosoline_http_server_routed_requests_total` | `gosoline.http.server.routed.requests` |
+| `http.server.responses` | `HttpServerResponses` | `gosoline_http_server_responses_total` | `gosoline.http.server.responses` |
+| `http.server.routed.responses` | `HttpServerRoutedResponses` | `gosoline_http_server_routed_responses_total` | `gosoline.http.server.routed.responses` |
 | Namespace-less counter `my.custom.metric` | `MyCustomMetric` | `gosoline_my_custom_metric_total` | `my.custom.metric` |
 
 The first row's duration is authored in milliseconds; Prometheus and OTEL values are scaled to seconds,
@@ -316,9 +318,21 @@ the default is an empty label value, so failed completion volume can be selected
 (use `request_canceled` for cancellations); successful status volume can filter
 `response_status_class="5xx"`. OpenTelemetry omits default attributes, so select failures by
 `error.type` while requiring `response.status_code` and `response.status_class` to be absent.
-CloudWatch omits default dimensions; select failure series without the code/class dimensions and
-with the corresponding `error.type`. For 5xx server totals, the bounded class supports an equality
-filter on `response.status_class="5xx"` while the full code remains available for exact-code queries.
+CloudWatch omits default dimensions; select HTTP client failure series without the code/class dimensions and
+with the corresponding `error.type`.
+
+For the raw `http.server.routed.responses` counter in CloudWatch Metric Insights, fence the query to its
+five dimensions with `FROM SCHEMA("<CloudWatch namespace>", name, route, request.method,
+response.status_code, response.status_class)`. CloudWatch also stores a second class-projected series under
+the same metric name, omitting `response.status_code`; for standard 100–599 statuses its dimensions are
+`name`, `route`, `request.method`, and `response.status_class`. OpenTelemetry and Prometheus export only the
+raw five-dimension Counter, without a second projection. Each observed class adds a CloudWatch time series
+for each name/route/method combination, so the projection adds per-class metric cost.
+
+For class totals and 5xx alarms, use a standard CloudWatch `MetricStat` with `Stat: Sum` for the projected
+metric and all four projection dimensions, including `response.status_class`; leave out `response.status_code`.
+Filter `response.status_class="5xx"` to include the whole 500–599 class rather than only 500–504. The separate
+`http.server.responses` counter has no class projection.
 
 ### `rpc.server`
 

@@ -1,4 +1,4 @@
-Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.6.5-0.20261021102849-b86cdb16238f, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
+Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.6.5-0.20261022101036-a7690f24137e, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
 
 Scope discovery:
 
@@ -24,7 +24,7 @@ Do not start with a global import replacement. First classify each usage, becaus
 
 Migration order:
 
-1. Add the new dependency with: go get github.com/gosoline-project/httpserver@v0.6.5-0.20261021102849-b86cdb16238f
+1. Add the new dependency with: go get github.com/gosoline-project/httpserver@v0.6.5-0.20261022101036-a7690f24137e
 2. Migrate server startup and router factories.
 3. Migrate route definitions from returned Definitions to mutating *Router.
 4. Migrate middleware registration.

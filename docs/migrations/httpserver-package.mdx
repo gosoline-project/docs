@@ -8,7 +8,7 @@ import { CopyToClipboardButton } from '../components.jsx';
 
 # Migrating to the Standalone HTTP Server Package
 
-This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module pinned at `v0.6.5-0.20261021102849-b86cdb16238f`.
+This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module pinned at `v0.6.5-0.20261022101036-a7690f24137e`.
 
 The new package keeps the Gin-based server lifecycle and middleware model, but it changes the application-facing API. Instead of building and returning a `*httpserver.Definitions` tree, you receive a `*httpserver.Router` and register routes on it directly. Instead of implementing handler interfaces and manually unpacking an `httpserver.Request`, handlers are plain functions or methods registered through `Bind`, `BindN`, `BindR`, or SSE binding helpers.
 
@@ -17,7 +17,7 @@ The new package keeps the Gin-based server lifecycle and middleware model, but i
 Add the standalone module:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.6.5-0.20261021102849-b86cdb16238f
+go get github.com/gosoline-project/httpserver@v0.6.5-0.20261022101036-a7690f24137e
 ```
 
 Update imports:
