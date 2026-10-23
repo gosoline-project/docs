@@ -1,0 +1,20 @@
+---
+title: Package grpcserver
+---
+
+# grpcserver package
+
+The Gosoline SDK's `pkg/grpcserver` package (import path `github.com/justtrackio/gosoline/pkg/grpcserver`) wraps a gRPC server as a kernel module. `grpcserver.New(name, definer, middlewares...)` returns a module factory, reads server settings from `grpc_server.<name>`, and registers the defined services. Register the factory with the application using `application.WithModuleFactory`.
+
+The server's statistics handler is enabled by default through `grpc_server.<name>.stats.enabled`. Disabling it disables both statistics logging and the handler's metric observations. Metric export also requires the application metric daemon: wire `application.WithMetrics`, set `metric.enabled: true`, and configure a writer under `metric.writers`.
+
+## Metrics
+
+At each gRPC stats end event, the handler records one `rpc.server.requests` Counter and one duration observation, including failed calls. The full method name is split into `service` and `method`; for a name without a slash separating a method, `method` is `{{default}}`. The request Counter has no zero defaults; the histogram remains a separate latency instrument and neither metric adds a status or error dimension.
+
+| Metric | Instrument | Authored unit | Dimensions | Description |
+|---|---|---|---|---|
+| `rpc.server.requests` | Counter | count | `service` — service component of the full method name; `method` — method component, or `{{default}}` when the full method has no method separator | One for each gRPC call recorded at stats end, including failed calls. No zero-valued defaults. |
+| `rpc.server.request.duration` | histogram | ms | `service` — service component of the full method name; `method` — method component, or `{{default}}` when the full method has no method separator | Duration of a completed gRPC server call. Retain this histogram for latency distributions, not RPC volume. |
+
+The table lists Gosoline-authored names and units. Configured writers may transform exported names and duration units; see [Metric schema](/reference/metric-schema).
