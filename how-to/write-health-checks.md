@@ -58,11 +58,11 @@ httpserver:
 
 By default, this route responds with a `200 OK` status code if the application is considered healthy.
 
-If you want to have more control over the module's health status, you can implement the `kernel.HealthChecked` interface for your application modules.
+If you want to have more control over the module's health status, you can implement the `kernel.HealthCheckedModule` interface for your application modules.
 
 ## Customize your health check[​](#customize-your-health-check "Direct link to Customize your health check")
 
-To control how the health of your application is verified, you'll implement the `kernel.HealthChecked` interface:
+To control how the health of your application is verified, you'll implement the `kernel.HealthCheckedModule` interface:
 
 ```
 package kernel

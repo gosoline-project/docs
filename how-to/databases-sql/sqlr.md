@@ -1672,4 +1672,4 @@ Associations follow the normal `Create()` behavior described above. If your fixt
 
 The built-in `sqlr` fixture writer uses the `default` sqlc client name. If you define multiple fixture sets without embedding them as associations, make sure their factory order still respects your foreign-key dependencies.
 
-For more details about gosoline fixture loading, grouping, purge behavior, and named fixture references, see the [fixtures package reference](/docs/reference/package-fixtures/.md).
+For more details about gosoline fixture loading, grouping, and named fixture references, see the [fixtures package reference](/docs/reference/package-fixtures/.md).

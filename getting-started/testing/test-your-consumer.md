@@ -283,12 +283,14 @@ import (
 
 
 
+	"github.com/justtrackio/gosoline/pkg/stream"
+
 	"github.com/justtrackio/gosoline/pkg/test/suite"
 
 )
 ```
 
-Here, you've imported the standard `testing` package as well as gosoline's `test/suite`.
+Here, you've imported the standard `testing` package, gosoline's `stream` encoding constants, and `test/suite`.
 
 ### Create a test suite[​](#create-a-test-suite "Direct link to Create a test suite")
 
@@ -400,7 +402,11 @@ func (s *ConsumerTestSuite) TestSuccess() *suite.StreamTestCase {
 
 					},					
 
-					ExpectedAttributes: map[string]string{},
+					ExpectedAttributes: map[string]string{
+
+						stream.AttributeEncoding: stream.EncodingJson.String(),
+
+					},
 
 				},
 

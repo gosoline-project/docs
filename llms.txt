@@ -62,7 +62,7 @@
 - [cfg package](/reference/package-cfg.md): With the cfg package, you can configure and use configurations in your gosoline project.
 - [Package cloud/aws](/reference/package-cloud_aws.md): The cloud/aws package
 - [dbx package](/reference/package-dbx.md): The dbx package provides a fluent API to build SQL queries.
-- [Gosoline Fixture Loader](/reference/package-fixtures.md): While using gosoline you are able to define fixtures directly in code.
+- [Gosoline Fixture Loader](/reference/package-fixtures.md): Define fixture data with fixtures.NamedFixtures[T], pass it to a writer, and register fixture-set factories with the application.
 - [httpserver package](/reference/package-httpserver.md): Package httpserver provides a modular HTTP server built on Gin and the gosoline kernel. It offers structured request binding, typed responses, middleware, SSE streaming, and dependency-injected handler registration.
 - [log package](/reference/package-log.md): The gosoline logger is based upon a simple interface that uses handlers internally to enable fully customizable log handling.
 - [Package test](/reference/package-test.md): This package acts as a wrapper over Golang's testing module.

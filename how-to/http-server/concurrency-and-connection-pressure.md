@@ -120,7 +120,7 @@ After signalling closure the advisor resets its tracking for that remote address
 
 note
 
-The `Connection: close` header works for both HTTP/1.1 and HTTP/2. For HTTP/1.1 the client closes and reopens the TCP connection. For HTTP/2 the client initiates a graceful stream reset.
+For HTTP/1.1, `Connection: close` tells the client to reconnect. Go's HTTP/2 server translates this setting into a `GOAWAY` frame and closes the connection after active streams finish.
 
 ## Combined configuration example[​](#combined-configuration-example "Direct link to Combined configuration example")
 

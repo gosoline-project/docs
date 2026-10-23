@@ -23,10 +23,10 @@ cloud:
 AWS service clients are created and configured by name. The pattern here is:
 
 ```
-func ProvideClient(ctx context.Context, config cfg.Config, logger log.Logger, name string, optFns ...func(options *awsCfg.LoadOptions) error) (*serviceX.Client, error)
+func ProvideClient(ctx context.Context, config cfg.Config, logger log.Logger, name string, optFns ...ClientOption) (*serviceX.Client, error)
 ```
 
-The resulting client can be configured by:
+`ClientOption` belongs to the selected service package and configures that service's `ClientConfig`, including its AWS SDK load options. The resulting client can be configured by:
 
 ```
 cloud:
@@ -55,9 +55,9 @@ cloud:
 
                     credentials:
 
-                        access_key_id: justtrack
+                        access_key_id: ""
 
-                        secret_access_key: justtrack
+                        secret_access_key: ""
 
                         session_token: ""
 
@@ -81,7 +81,7 @@ cloud:
 | Setting                                         | Description                                                                       | Default                      |
 | ----------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------- |
 | assume\_role                                    | If defined, this role will be used to gain access                                 | ""                           |
-| backoff.cancel\_delay                           | If the request get canceled, how long should the cancel delayed                   | 1s                           |
+| backoff.cancel\_delay                           | If the request gets canceled, how long cancellation should be delayed             | 0s                           |
 | backoff.initial\_interval                       | The initial duration to wait before retrying the request on error                 | 50ms                         |
 | backoff.max\_attempts                           | How many attempts should be done                                                  | 10 (0 means retry forever)   |
 | backoff.max\_interval                           | Max duration between 2 calls when retrying                                        | 10s                          |
@@ -106,7 +106,13 @@ import(
 
 
 
-cloudwatchClient := gosoCloudwatch.ProvideClient(ctx, config, logger , "default")
+cloudwatchClient, err := gosoCloudwatch.ProvideClient(ctx, config, logger, "default")
+
+if err != nil {
+
+    return err
+
+}
 ```
 
 to get the default cloudwatch client. You don't have to provide any config if you want to go with the default settings. The default settings are:
@@ -138,9 +144,9 @@ cloud:
 
                     credentials:
 
-                        access_key_id: justtrack
+                        access_key_id: ""
 
-                        secret_access_key: justtrack
+                        secret_access_key: ""
 
                         session_token: ""
 
@@ -162,6 +168,8 @@ cloud:
 ```
 
 These are the default values which are used if you don't provide any config by yourself.
+
+In ordinary builds, empty credentials leave credential resolution to the AWS SDK's default chain. The `integration` build tag supplies test credentials instead. Set `endpoint: ""` when using AWS endpoints rather than LocalStack. See the [released client settings](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/cloud/aws/awsv2.go) and [credential selection](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/cloud/aws/credentials.go).
 
 ### Different Client Names[​](#different-client-names "Direct link to Different Client Names")
 
@@ -254,14 +262,14 @@ Then, the dynamodb client `clientWithoutEnvInName` will use:
 * **`region`**: `eu-central-1` (from `cloud.aws.dynamodb.clients.default` since `region` is not explicitly set for `clientWithoutEnvInName`).
 * **`naming.table_pattern`**: `{app.tags.group}-{name}` (from `cloud.aws.dynamodb.clients.clientWithoutEnvInName`).
 * **`credentials`**: `default-access-key` and `default-secret` (from `cloud.aws.defaults`).
-* **`backoff.type`**: `infinite` (from `cloud.aws.defaults.clientWithoutEnvInName`).
+* **`backoff.type`**: `infinite` (from `cloud.aws.defaults.clients.clientWithoutEnvInName`).
 
 The sqs client `clientWithoutEnvInName` will use:
 
 * **`region`**: `eu-west-2` (from `cloud.aws.defaults.clients.default` since `region` is not explicitly set for `clientWithoutEnvInName`).
 * **`naming.queue_pattern`**: `{app.tags.group}-{queueId}` (from `cloud.aws.sqs.clients.clientWithoutEnvInName`).
 * **`credentials`**: `default-access-key` and `default-secret` (from `cloud.aws.defaults`).
-* **`backoff.type`**: `infinite` (from `cloud.aws.defaults.clientWithoutEnvInName`).
+* **`backoff.type`**: `infinite` (from `cloud.aws.defaults.clients.clientWithoutEnvInName`).
 
 ### Full reference[​](#full-reference "Direct link to Full reference")
 
@@ -364,9 +372,7 @@ cloud:
 
           usePathStyle: false
 
-          credentials:
-
-            endpoint: "https://s3.eu-central-1.amazonaws.com"
+          endpoint: "https://s3.eu-central-1.amazonaws.com"
 
     sqs:
 

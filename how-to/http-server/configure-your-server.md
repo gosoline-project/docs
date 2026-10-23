@@ -100,7 +100,7 @@ httpserver:
 
           - .png
 
-        pathRegex:
+        path_regex:
 
           - \.json$
 ```
@@ -113,11 +113,11 @@ httpserver:
 
 ### Compression exclude settings[​](#compression-exclude-settings "Direct link to Compression exclude settings")
 
-| Field       | Type         | Description                                   |
-| ----------- | ------------ | --------------------------------------------- |
-| `extension` | string array | File extensions to exclude (e.g., `.png`).    |
-| `path`      | string array | Exact paths to exclude (e.g., `/api/events`). |
-| `pathRegex` | string array | Regex patterns to exclude (e.g., `\.json$`).  |
+| Field        | Type         | Description                                   |
+| ------------ | ------------ | --------------------------------------------- |
+| `extension`  | string array | File extensions to exclude (e.g., `.png`).    |
+| `path`       | string array | Exact paths to exclude (e.g., `/api/events`). |
+| `path_regex` | string array | Regex patterns to exclude (e.g., `\.json$`).  |
 
 caution
 

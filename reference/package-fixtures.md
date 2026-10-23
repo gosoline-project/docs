@@ -1,115 +1,131 @@
 # Gosoline Fixture Loader
 
-While using *gosoline* you are able to define fixtures directly in code.
+Define fixture data with `fixtures.NamedFixtures[T]`, pass it to a writer, and register fixture-set factories with the application.
 
 ## Usage[​](#usage "Direct link to Usage")
 
-* Enable fixture loading in your `config.dist.yml` File
+Enable fixture loading in `config.dist.yml`:
 
 ```
 fixtures:
 
-    enabled: true
+  enabled: true
+
+  groups: [default]
 ```
 
-* Make sure to use a custom build tag named `fixtures`
+Build or run the application with the `fixtures` build tag. Without that tag, the fixture loader is a no-op. Only the configured groups are loaded; `default` is the default group.
 
-* Define your fixtures in code while using one of the built in `FixtureWriter`s and defining a slice of `[]fixtures.FixtureSet{}` or use `fixtures.FixtureSetFactory` or `fixtures.FixtureSetsFactory` depending on your use-case. For more details check the `/examples/fixtures` Directory or read the short example below.
-
-* The `fixtures.FixtureSet` interface allows you to define any custom implementation for writing fixture sets to their destination and take control of purging prior writing too. You can however use the `fixures.simpleFixtureSet` via the `fixtures.NewSimpleFixtureSet` factory func to use a simple yet effective and prebuilt solution. This is the simpleFixtureSet struct definition:
+`fixtures.FixtureSetFactory` creates one set. `fixtures.FixtureSetsFactory` creates several sets and receives the group name:
 
 ```
-type simpleFixtureSet[T any] struct {
+type FixtureSetFactory func(context.Context, cfg.Config, log.Logger) (fixtures.FixtureSet, error)
 
-	Enabled  bool
-
-	Purge    bool
-
-	Writer   FixtureWriter
-
-	Fixtures NamedFixtures[T]
-
-}
+type FixtureSetsFactory func(context.Context, cfg.Config, log.Logger, string) ([]fixtures.FixtureSet, error)
 ```
 
-You can easily define multiple fixtures for different destinations in one file, enable/disable them or even enable/disable purging for each `fixtures.FixtureSet` via the `fixtures.WithEnabled` and `fixtures.WithPurge` `fixtures.FixtureSetOption` for the `fixtures.NewSimpleFixtureSet` func.
+Use `fixtures.NewFixtureSetsFactory` to combine single-set factories. Register the resulting factory with `application.WithFixtureSetFactory("default", factory)`.
 
-* Currently there are 7 different FixtureWriter implementations for loading fixtures:
+`fixtures.NewSimpleFixtureSet(data, writer, options...)` implements the `fixtures.FixtureSet` interface. `fixtures.WithEnabled(false)` skips a set. The old `fixtures.WithPurge` option and the `Purge` field no longer exist; cleanup behavior belongs to the selected writer or an application-owned set.
 
-|                                               |                                                |                                                     |
-| --------------------------------------------- | ---------------------------------------------- | --------------------------------------------------- |
-| Implementation                                | Direct creation                                | Factory for use with fixtures.NewFixtureSetsFactory |
-| Blob stores (AWS S3)                          | fixtures.NewBlobFixtureWriter\`                | fixtures.BlobFixtureSetFactory                      |
-| AWS DynamoDB                                  | fixtures.NewDynamoDbFixtureWriter\`            | fixtures.DynamoDbFixtureSetFactory                  |
-| KvStore backed by AWS DynamoDB                | fixtures.DynamoDbKvStoreFixtureWriterFactory\` | fixtures.DynamoDbKvStoreFixtureSetFactory           |
-| MySQL (backed by gosoline ORM implementation) | fixtures.MysqlOrmFixtureWriterFactory\`        | fixtures.MysqlOrmFixtureSetFactory                  |
-| MySQL (plain columns/values)                  | fixtures.MysqlPlainFixtureWriterFactory\`      | fixtures.MysqlPlainFixtureSetFactory                |
-| MySQL (sqlx named prepared statements)        | fixtures.NewMysqlSqlxFixtureWriter\`           | fixtures.MysqlSqlxFixtureSetFactory                 |
-| Redis                                         | fixtures.NewRedisFixtureWriter\`               | fixtures.RedisFixtureSetFactory                     |
-| KvStore backed by Redis                       | fixtures.NewRedisKvStoreFixtureWriter\`        | fixtures.RedisKvStoreFixtureSetFactory              |
+Fixture writers live in the package for their destination:
+
+| Destination                | Constructor                                   | Single-set factory                             |
+| -------------------------- | --------------------------------------------- | ---------------------------------------------- |
+| Blob store                 | `blob.NewBlobFixtureWriter`                   | `blob.BlobFixtureSetFactory`                   |
+| DynamoDB                   | `ddb.NewDynamoDbFixtureWriter`                | `ddb.DynamoDbFixtureSetFactory`                |
+| DynamoDB key-value store   | `kvstore.NewDynamoDbKvStoreFixtureWriter`     | `kvstore.DynamoDbKvStoreFixtureSetFactory`     |
+| Configured key-value store | `kvstore.NewConfigurableKvStoreFixtureWriter` | `kvstore.ConfigurableKvStoreFixtureSetFactory` |
+| MySQL ORM                  | `db_repo.NewMysqlOrmFixtureWriter`            | `db_repo.MysqlOrmFixtureSetFactory`            |
+| MySQL columns and values   | `db.NewMysqlPlainFixtureWriter`               | `db.MysqlPlainFixtureSetFactory`               |
+| MySQL named SQL statements | `db.NewMysqlSqlxFixtureWriter`                | `db.MysqlSqlxFixtureSetFactory`                |
+| Redis                      | `redis.NewRedisFixtureWriter`                 | `redis.RedisFixtureSetFactory`                 |
+| Redis key-value store      | `kvstore.NewRedisKvStoreFixtureWriter`        | `kvstore.RedisKvStoreFixtureSetFactory`        |
+
+The import for `db_repo` is `github.com/justtrackio/gosoline/pkg/db-repo`. Constructors, metadata, and write behavior differ by destination; inspect the [released writer implementations](https://github.com/justtrackio/gosoline/tree/v0.68.3/pkg) before choosing one.
 
 ## Quick Usage[​](#quick-usage "Direct link to Quick Usage")
 
-* During the creation of your Application make sure to pass the `WithFixtureSetsFactory` option and provide the group name and a fixture sets factory as arguments of type `fixtures.WithFixtureSetsFactory`. The `default` group is enabled by default.
-
-```
-func main() {
-
-	application.Run(
-
-		application.WithConfigFile("config.dist.yml", "yml"),
-
-		application.WithFixtureSetFactory("default", fixtureSetsFactory),
-
-		application.WithModuleFactory("main", func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.Module, error) {
-
-			return &mod{}, nil
-
-		}),
-
-	)
-
-}
-```
-
-For blob stores (when using the `BlobFixtureWriterFactory`) you need a configuration entry added:
-
-```
-blob:
-
-  blobconfig:
-
-    bucket: s3-fixtures-bucket
-```
+The following example registers a `fixtures.FixtureSetsFactory` under the `default` group. Configure its backing services and blob fixture files before running it with `go run -tags fixtures .` from the example directory.
 
 ## ID Generation[​](#id-generation "Direct link to ID Generation")
 
-You can also generate a locally unique identifier for your fixtures via `fixtures.AutoNumbered`.
+Use `fixtures.NewNumberSequence` or `fixtures.NewNumberSequenceFrom` for sequential identifiers. The older `NewAutoNumbered` and `NewAutoNumberedFrom` names remain deprecated aliases. Use `fixtures.NewUuidSequence` or `fixtures.NewByteSequence` when a deterministic seeded UUID or byte sequence is needed.
 
-## Example with available fixture writers:[​](#example-with-available-fixture-writers "Direct link to Example with available fixture writers:")
+## Example with available fixture writers[​](#example-with-available-fixture-writers "Direct link to Example with available fixture writers")
+
+This example is read directly from the maintained source file:
+
+examples/fixtures/simple/main.go
 
 ```
-func main() {
+//go:build fixtures
 
-	application.Run(
 
-		application.WithConfigFile("config.dist.yml", "yml"),
 
-		application.WithFixtureSetFactory("default", fixtureSetsFactory),
+package main
 
-		application.WithModuleFactory("main", func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.Module, error) {
 
-			return &mod{}, nil
 
-		}),
+import (
 
-	)
+	"context"
+
+	"fmt"
+
+	"time"
+
+
+
+	"github.com/justtrackio/gosoline/pkg/application"
+
+	"github.com/justtrackio/gosoline/pkg/blob"
+
+	"github.com/justtrackio/gosoline/pkg/cfg"
+
+	"github.com/justtrackio/gosoline/pkg/db"
+
+	"github.com/justtrackio/gosoline/pkg/db-repo"
+
+	"github.com/justtrackio/gosoline/pkg/ddb"
+
+	"github.com/justtrackio/gosoline/pkg/fixtures"
+
+	"github.com/justtrackio/gosoline/pkg/kernel"
+
+	"github.com/justtrackio/gosoline/pkg/kvstore"
+
+	"github.com/justtrackio/gosoline/pkg/log"
+
+	"github.com/justtrackio/gosoline/pkg/mdl"
+
+	"github.com/justtrackio/gosoline/pkg/redis"
+
+)
+
+
+
+type DynamoDbExampleModel struct {
+
+	Name  string `ddb:"key=hash"`
+
+	Value string `ddb:"global=hash"`
 
 }
 
 
 
-var autoNumbered = fixtures.NewAutoNumberedFrom(2)
+type OrmFixtureExample struct {
+
+	db_repo.Model
+
+	Name *string
+
+}
+
+
+
+var autoNumbered = fixtures.NewNumberSequenceFrom(2)
 
 
 
@@ -123,9 +139,11 @@ func mysqlOrmFixtureSet(ctx context.Context, config cfg.Config, logger log.Logge
 
 		},
 
+		TableName: "orm_fixture_examples",
+
 	}
 
-	mysqlOrmWriter, err := fixtures.NewMysqlOrmFixtureWriter(ctx, config, logger, mysqlMetadata)
+	mysqlOrmWriter, err := db_repo.NewMysqlOrmFixtureWriter(ctx, config, logger, mysqlMetadata)
 
 	if err != nil {
 
@@ -135,13 +153,13 @@ func mysqlOrmFixtureSet(ctx context.Context, config cfg.Config, logger log.Logge
 
 
 
-	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[OrmFixtureExample]{
+	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*OrmFixtureExample]{
 
-		&fixtures.NamedFixture[OrmFixtureExample]{
+		&fixtures.NamedFixture[*OrmFixtureExample]{
 
 			Name: "foo",
 
-			Value: OrmFixtureExample{
+			Value: &OrmFixtureExample{
 
 				Model: db_repo.Model{
 
@@ -163,7 +181,7 @@ func mysqlOrmFixtureSet(ctx context.Context, config cfg.Config, logger log.Logge
 
 func mysqlPlainFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (fixtures.FixtureSet, error) {
 
-	mysqlPlainWriter, err := fixtures.NewMysqlPlainFixtureWriter(ctx, config, logger, &fixtures.MysqlPlainMetaData{
+	mysqlPlainWriter, err := db.NewMysqlPlainFixtureWriter(ctx, config, logger, &db.MysqlPlainMetaData{
 
 		TableName: "plain_fixture_example",
 
@@ -179,13 +197,13 @@ func mysqlPlainFixtureSet(ctx context.Context, config cfg.Config, logger log.Log
 
 
 
-	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[fixtures.MysqlPlainFixtureValues]{
+	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[db.MysqlPlainFixtureValues]{
 
 		{
 
 			Name:  "foo2",
 
-			Value: fixtures.MysqlPlainFixtureValues{1, "testName1"},
+			Value: db.MysqlPlainFixtureValues{1, "testName1"},
 
 		},
 
@@ -193,7 +211,7 @@ func mysqlPlainFixtureSet(ctx context.Context, config cfg.Config, logger log.Log
 
 			Name:  "foo3",
 
-			Value: fixtures.MysqlPlainFixtureValues{2, "testName2"},
+			Value: db.MysqlPlainFixtureValues{2, "testName2"},
 
 		},
 
@@ -205,17 +223,21 @@ func mysqlPlainFixtureSet(ctx context.Context, config cfg.Config, logger log.Log
 
 func dynamodbKvstoreFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (fixtures.FixtureSet, error) {
 
-	dynamoDbKvStoreWriter, err := fixtures.NewDynamoDbKvStoreFixtureWriter[DynamoDbExampleModel](ctx, config, logger, &mdl.ModelId{
+	dynamoDbKvStoreWriter, err := kvstore.NewDynamoDbKvStoreFixtureWriter[DynamoDbExampleModel](ctx, config, logger, &mdl.ModelId{
 
-		Project:     "gosoline",
+		Name:        "exampleModel",
 
-		Environment: "dev",
-
-		Family:      "example",
+		Env:         "dev",
 
 		Application: "fixture-loader",
 
-		Name:        "exampleModel",
+		Tags: map[string]string{
+
+			"project": "gosoline",
+
+			"family":  "example",
+
+		},
 
 	})
 
@@ -227,13 +249,13 @@ func dynamodbKvstoreFixtureSet(ctx context.Context, config cfg.Config, logger lo
 
 
 
-	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*fixtures.KvStoreFixture]{
+	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*kvstore.KvStoreFixture]{
 
 		{
 
 			Name: "kv_somekey",
 
-			Value: &fixtures.KvStoreFixture{
+			Value: &kvstore.KvStoreFixture{
 
 				Key:   "SomeKey",
 
@@ -251,7 +273,7 @@ func dynamodbKvstoreFixtureSet(ctx context.Context, config cfg.Config, logger lo
 
 func redisFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (fixtures.FixtureSet, error) {
 
-	redisWriter, err := fixtures.NewRedisFixtureWriter(ctx, config, logger, "default", fixtures.RedisOpSet)
+	redisWriter, err := redis.NewRedisFixtureWriter(ctx, config, logger, "default", redis.RedisOpSet)
 
 	if err != nil {
 
@@ -261,13 +283,13 @@ func redisFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) 
 
 
 
-	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*fixtures.RedisFixture]{
+	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*redis.RedisFixture]{
 
 		{
 
 			Name: "redis_example",
 
-			Value: &fixtures.RedisFixture{
+			Value: &redis.RedisFixture{
 
 				Key:    "example-key",
 
@@ -287,19 +309,23 @@ func redisFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) 
 
 func dynamodbFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (fixtures.FixtureSet, error) {
 
-	dynamodbWriter, err := fixtures.NewDynamoDbFixtureWriter(ctx, config, logger, &ddb.Settings{
+	dynamodbWriter, err := ddb.NewDynamoDbFixtureWriter(ctx, config, logger, &ddb.Settings{
 
 		ModelId: mdl.ModelId{
 
-			Project:     "gosoline",
+			Name:        "exampleModel",
 
-			Environment: "dev",
-
-			Family:      "example",
+			Env:         "dev",
 
 			Application: "fixture-loader",
 
-			Name:        "exampleModel",
+			Tags: map[string]string{
+
+				"project": "gosoline",
+
+				"family":  "example",
+
+			},
 
 		},
 
@@ -353,13 +379,11 @@ func dynamodbFixtureSet(ctx context.Context, config cfg.Config, logger log.Logge
 
 func blobFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (fixtures.FixtureSet, error) {
 
-	blobWriter, err := fixtures.NewBlobFixtureWriter(ctx, config, logger, &fixtures.BlobFixturesSettings{
+	fileReaderFactory := blob.NewFileReader("../../../test/fixtures/blob/test_data/fixtures_test_data")
 
-		ConfigName: "test",
 
-		BasePath:   "../../test/test_data/s3_fixtures_test_data",
 
-	})
+	blobWriter, err := blob.NewBlobFixtureWriter(ctx, config, logger, fileReaderFactory, "test")
 
 	if err != nil {
 
@@ -369,13 +393,13 @@ func blobFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (
 
 
 
-	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*fixtures.BlobFixture]{}, blobWriter), nil
+	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*blob.BlobFixture]{}, blobWriter), nil
 
 }
 
 
 
-func fixtureSetsFactory(ctx context.Context, config cfg.Config, logger log.Logger) ([]fixtures.FixtureSet, error) {
+func fixtureSetsFactory(ctx context.Context, config cfg.Config, logger log.Logger, group string) ([]fixtures.FixtureSet, error) {
 
 	mysqlOrmFs, err := mysqlOrmFixtureSet(ctx, config, logger)
 
@@ -454,13 +478,91 @@ func fixtureSetsFactory(ctx context.Context, config cfg.Config, logger log.Logge
 	}, nil
 
 }
+
+
+
+type mod struct {
+
+	kernel.ForegroundModule
+
+}
+
+
+
+func (m *mod) Run(ctx context.Context) error {
+
+	<-ctx.Done()
+
+
+
+	return nil
+
+}
+
+
+
+func main() {
+
+	app := application.Default(
+
+		application.WithConfigFile("config.dist.yml", "yml"),
+
+		application.WithFixtureSetFactory("default", fixtureSetsFactory),
+
+		application.WithModuleFactory("main", func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.Module, error) {
+
+			return &mod{}, nil
+
+		}),
+
+	)
+
+
+
+	app.Run()
+
+}
 ```
 
 ## Named Fixtures[​](#named-fixtures "Direct link to Named Fixtures")
 
-With named fixtures you can create some fixtures and in future fixtures refer to the already created ones, e.g. for referencing (auto numbered) IDs:
+Named fixture collections let later fixtures refer to an already-created value with `GetValueByName`:
+
+examples/fixtures/simple/named/main.go
 
 ```
+//go:build fixtures
+
+
+
+package main
+
+
+
+import (
+
+	"context"
+
+	"fmt"
+
+
+
+	"github.com/justtrackio/gosoline/pkg/application"
+
+	"github.com/justtrackio/gosoline/pkg/cfg"
+
+	"github.com/justtrackio/gosoline/pkg/db-repo"
+
+	"github.com/justtrackio/gosoline/pkg/fixtures"
+
+	"github.com/justtrackio/gosoline/pkg/log"
+
+	"github.com/justtrackio/gosoline/pkg/mdl"
+
+)
+
+
+
 type DynamoDbExampleModel struct {
 
 	Name  string `ddb:"key=hash"`
@@ -536,12 +638,10 @@ func main() {
 	_ = fx.Value
 
 }
-
-}
 ```
 
 ## Further Information[​](#further-information "Direct link to Further Information")
 
-* Existing fixtures will be updated instead of created.
-* When purge is enabled only the destination of the fixtures will be purged, not everything. That means for example while loading MySQL Fixtures with purge only the tables will be purged not the whole database.
-* If you want to use the MySQL ORM based implementation make sure that your fixture struct embeds `db_repo.Model`
+* Writers control insert, update, and cleanup behavior; do not assume all writers upsert or purge their destinations.
+* MySQL ORM fixture models embed `db_repo.Model`.
+* See the [released fixture interfaces and factory helper](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/fixtures/types.go) and [simple set options](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/fixtures/fixture_set_options.go).

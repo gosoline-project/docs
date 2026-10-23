@@ -233,7 +233,63 @@ Configure concurrency on **the input**, using `stream.input.<name>.runner_count`
 
 Kafka and Kinesis ordered mode still allows concurrency across partitions or shards. With several unordered runners, records from the same partition or shard may execute concurrently.
 
-Callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
+Ordinary callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
+
+### Batch callbacks in v0.68.0 and later[​](#batch-callbacks-in-v0680-and-later "Direct link to Batch callbacks in v0.68.0 and later")
+
+For application-level batching, implement `stream.BatchConsumerCallback[M]` and use `application.RunBatchConsumer`:
+
+```
+func (c *consumer) Consume(ctx context.Context, orders []OrderCreated, attributes []map[string]string) ([]bool, error) {
+
+    results := make([]bool, len(orders))
+
+    for i, order := range orders {
+
+        c.logger.Info(ctx, "received order %s with total %.2f", order.Id, order.Total)
+
+        results[i] = true
+
+    }
+
+    return results, nil
+
+}
+```
+
+The factory returns `stream.BatchConsumerCallback[OrderCreated]`. `RunBatchConsumers` accepts a `stream.BatchConsumerCallbackMap[M]`; untyped callbacks use `RunUntypedBatchConsumer` or `RunUntypedBatchConsumers`.
+
+Set collection limits on the consumer:
+
+```
+stream:
+
+  consumer:
+
+    default:
+
+      input: orders
+
+      batch_size: 100
+
+      buffer_size: 100
+
+      idle_timeout: 5s
+```
+
+| Setting        | Default | Meaning                                                                                                     |
+| -------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `batch_size`   | `1`     | Flush when the collected batch reaches this size. Aggregate envelopes can contribute several child records. |
+| `buffer_size`  | `0`     | Admission-channel capacity; `0` uses `batch_size`.                                                          |
+| `idle_timeout` | `10s`   | Flush interval, restarted after each timed or size-triggered flush.                                         |
+
+One collection loop calls the batch callback serially. Return one boolean per model; only false results request retry. A callback error is logged independently of the per-model results. Failed primary records use the configured retry handler; failed retry deliveries remain unacknowledged for redelivery.
+
+caution
+
+Batch consumers acknowledge primary messages when admitted to an **in-memory buffer**, before business processing succeeds. Enable retries when failed primary work must be persisted, and keep side effects idempotent. A crash before processing or retry persistence, exhausted retries, or an incomplete drain can require replay. This differs from the ordinary callback acknowledgement contract above.
+
+At input completion or shutdown, pending work is drained within the shared consumer grace deadline. See the [released runnable example](https://github.com/justtrackio/gosoline/tree/v0.68.3/examples/stream/batch-consumer), [callback API](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch_module_factory.go), and [batch implementation](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch.go) before choosing batching for an existing consumer.
 
 ## Graceful processing[​](#graceful-processing "Direct link to Graceful processing")
 

@@ -156,6 +156,8 @@ The handler factory must have this signature:
 func NewMyHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*MyHandler, error)
 ```
 
+Since httpserver v0.6.4, handlers registered through `With` that implement `io.Closer` are closed after the server stops serving requests. Implement `Close() error` as blocking, idempotent cleanup. See the [released registration contract](https://github.com/gosoline-project/httpserver/blob/v0.6.4/with.go).
+
 ## Request binding[​](#request-binding "Direct link to Request binding")
 
 ### Bind functions[​](#bind-functions "Direct link to Bind functions")
@@ -372,11 +374,11 @@ Config key: `httpserver.<name>`
 
 ### CompressionExcludeSettings[​](#compressionexcludesettings "Direct link to CompressionExcludeSettings")
 
-| Field       | Type         | Description                 |
-| ----------- | ------------ | --------------------------- |
-| `extension` | string array | File extensions to exclude. |
-| `path`      | string array | Exact paths to exclude.     |
-| `pathRegex` | string array | Regex patterns to exclude.  |
+| Field        | Type         | Description                 |
+| ------------ | ------------ | --------------------------- |
+| `extension`  | string array | File extensions to exclude. |
+| `path`       | string array | Exact paths to exclude.     |
+| `path_regex` | string array | Regex patterns to exclude.  |
 
 ### CorsSettings[​](#corssettings "Direct link to CorsSettings")
 
