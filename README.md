@@ -1,6 +1,6 @@
 # Website
 
-This website is built using [Docusaurus 2](https://docusaurus.io/), a modern static website generator.
+This website is built using [Docusaurus 3](https://docusaurus.io/), a modern static website generator.
 
 ##  Installation
 
@@ -39,6 +39,10 @@ $ GIT_USER=<Your GitHub username> bun run deploy
 ```
 
 If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+
+## Search
+
+Production builds use hosted Algolia DocSearch. Crawling is managed independently from deployments and should use the public [sitemap](https://gosoline-project.github.io/docs/sitemap.xml). Pull request previews use the local search plugin so preview-only content remains searchable.
 
 ## Custom Components
 

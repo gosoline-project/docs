@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
 
@@ -87,14 +87,41 @@ jobs:
 
       - name: Comment on PR
         if: github.event.action != 'closed'
-        uses: thollander/actions-comment-pull-request@v2
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
-          message: |
-            :rocket: **Docs Preview Deployed!**
-            
-            View the preview here: https://gosoline-project.github.io/docs/pr-${{ github.event.number }}/
-          comment_tag: docs_preview
-          mode: recreate
+          script: |
+            const marker = '<!-- docs_preview -->';
+            const legacyMarker = '<!-- thollander/actions-comment-pull-request "docs_preview" -->';
+            const body = [
+              ':rocket: **Docs Preview Deployed!**',
+              '',
+              `View the preview here: https://gosoline-project.github.io/docs/pr-${context.issue.number}/`,
+              marker,
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find(
+              (comment) => comment.body?.includes(marker) || comment.body?.includes(legacyMarker),
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
 
 permissions:
   contents: write
