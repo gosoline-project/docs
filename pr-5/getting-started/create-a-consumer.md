@@ -178,7 +178,7 @@ Next, you implemented some methods for the `Consumer`:
 ```
 // 1
 
-func NewConsumer(ctx context.Context, config cfg.Config, logger log.Logger) (stream.ConsumerCallback, error) {
+func NewConsumer(ctx context.Context, config cfg.Config, logger log.Logger) (stream.ConsumerCallback[Input], error) {
 
 	return &Consumer{
 
@@ -192,23 +192,9 @@ func NewConsumer(ctx context.Context, config cfg.Config, logger log.Logger) (str
 
 // 2
 
-func (c Consumer) GetModel(attributes map[string]any) any {
+func (c Consumer) Consume(ctx context.Context, input Input, attributes map[string]string) (bool, error) {
 
-	return &Input{}
-
-}
-
-
-
-// 3
-
-func (c Consumer) Consume(ctx context.Context, model any, attributes map[string]any) (bool, error) {
-
-	input := model.(*Input)
-
-
-
-	c.logger.WithContext(ctx).Info("got input with id %q and body %q", input.Id, input.Body)
+	c.logger.Info(ctx, "got input with id %q and body %q", input.Id, input.Body)
 
 
 
@@ -219,11 +205,10 @@ func (c Consumer) Consume(ctx context.Context, model any, attributes map[string]
 
 Here, you implemented:
 
-1. A constructor for creating new `Consumer` objects. This implements the `stream.ConsumerCallbackFactory` type and is used to add the callback to your application.
-2. `GetModal()`, a method that returns the expected input model struct which is used to unmarshal the data.
-3. `Consume()`, a method that loads the model (`Input`) with data, logs the data, and returns `true` because it successfully handled the message. This is called for every incoming message.
+1. A constructor for creating new `Consumer` objects. It matches `stream.ConsumerCallbackFactory[Input]` and is used to add the callback to your application.
+2. `Consume()`, which receives the decoded `Input`, logs the data, and returns `true` because it successfully handled the message. This is called for every incoming message. Typed callbacks do not need `GetModel`; Gosoline derives the model from `Input`.
 
-Together, these methods implement the `ConsumerCallback` interface.
+The `Consume` method implements `stream.ConsumerCallback[Input]`.
 
 ## Implement `main.go`[​](#implement-maingo "Direct link to implement-maingo")
 
@@ -251,7 +236,7 @@ func main() {
 }
 ```
 
-Here, you execute your consumer. `RunConsumer()` expects a parameter of the type `stream.ConsumerCallbackFactory` to create and run the consumer. `NewConsumer()` implements this interface.
+Here, you execute your consumer. `RunConsumer()` accepts a `stream.ConsumerCallbackFactory[Input]` to create and run the consumer. The model type is inferred from `NewConsumer`.
 
 ## Configure your consumer[​](#configure-your-consumer "Direct link to Configure your consumer")
 

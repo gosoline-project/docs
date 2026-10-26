@@ -233,19 +233,75 @@ Configure concurrency on **the input**, using `stream.input.<name>.runner_count`
 
 Kafka and Kinesis ordered mode still allows concurrency across partitions or shards. With several unordered runners, records from the same partition or shard may execute concurrently.
 
-Callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
+Ordinary callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
+
+### Batch callbacks in v0.68.0 and later[​](#batch-callbacks-in-v0680-and-later "Direct link to Batch callbacks in v0.68.0 and later")
+
+For application-level batching, implement `stream.BatchConsumerCallback[M]` and use `application.RunBatchConsumer`:
+
+```
+func (c *consumer) Consume(ctx context.Context, orders []OrderCreated, attributes []map[string]string) ([]bool, error) {
+
+    results := make([]bool, len(orders))
+
+    for i, order := range orders {
+
+        c.logger.Info(ctx, "received order %s with total %.2f", order.Id, order.Total)
+
+        results[i] = true
+
+    }
+
+    return results, nil
+
+}
+```
+
+The factory returns `stream.BatchConsumerCallback[OrderCreated]`. `RunBatchConsumers` accepts a `stream.BatchConsumerCallbackMap[M]`; untyped callbacks use `RunUntypedBatchConsumer` or `RunUntypedBatchConsumers`.
+
+Set collection limits on the consumer:
+
+```
+stream:
+
+  consumer:
+
+    default:
+
+      input: orders
+
+      batch_size: 100
+
+      buffer_size: 100
+
+      idle_timeout: 5s
+```
+
+| Setting        | Default | Meaning                                                                                                     |
+| -------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `batch_size`   | `1`     | Flush when the collected batch reaches this size. Aggregate envelopes can contribute several child records. |
+| `buffer_size`  | `0`     | Admission-channel capacity; `0` uses `batch_size`.                                                          |
+| `idle_timeout` | `10s`   | Flush interval, restarted after each timed or size-triggered flush.                                         |
+
+One collection loop calls the batch callback serially. Return one boolean per model; only false results request retry. A callback error is logged independently of the per-model results. Failed primary records use the configured retry handler; failed retry deliveries remain unacknowledged for redelivery.
+
+caution
+
+Batch consumers acknowledge primary messages when admitted to an **in-memory buffer**, before business processing succeeds. Enable retries when failed primary work must be persisted, and keep side effects idempotent. A crash before processing or retry persistence, exhausted retries, or an incomplete drain can require replay. This differs from the ordinary callback acknowledgement contract above.
+
+At input completion or shutdown, pending work is drained within the shared consumer grace deadline. See the [released runnable example](https://github.com/justtrackio/gosoline/tree/v0.68.3/examples/stream/batch-consumer), [callback API](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch_module_factory.go), and [batch implementation](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch.go) before choosing batching for an existing consumer.
 
 ## Metrics[​](#metrics "Direct link to Metrics")
 
 The names below are canonical Gosoline metric names as authored. They are not backend-exported names: OpenTelemetry prefixes the namespace with `gosoline.` and converts duration values from authored milliseconds to seconds; CloudWatch and Prometheus apply their own name and unit conventions. See the [metric schema reference](/docs/pr-5/reference/metric-schema/.md) for exporter mappings.
 
-| Metric                     | Instrument | Authored unit | Dimensions                                                                                      | Description                                                                                                                                                                                      |
-| -------------------------- | ---------- | ------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `stream.process.duration`  | Histogram  | milliseconds  | `consumer.name` (configured consumer name)                                                      | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one duration for the whole batch callback, not one per message. |
-| `stream.consumed.messages` | Counter    | count         | `consumer.name` (configured consumer name); `error.type` = `{{default}}` or `processing_failed` | Number of messages processed. The `{{default}}` series is the all-processed total; `processing_failed` counts failed messages.                                                                   |
-| `stream.retry.operations`  | Counter    | count         | `consumer.name` (configured consumer name); `operation` = `get` or `put`                        | Retry-queue get/put attempts; not a retried-record count or evidence that a queue operation succeeded.                                                                                           |
+| Metric                     | Instrument | Authored unit | Dimensions                                                                                                                           | Description                                                                                                                                                                                                       |
+| -------------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stream.process.duration`  | Histogram  | milliseconds  | `consumer.name` (configured consumer name)                                                                                           | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one duration for the whole batch callback, not one per message.                  |
+| `stream.consumed.messages` | Counter    | count         | `consumer.name` (configured consumer name); `error.type` = `{{default}}`, `processing_failed`, or `model_lookup_failed`              | The default series is the all-processed total. `processing_failed` counts failed records; `model_lookup_failed` diagnoses every model lookup failure. These diagnostics overlap the total, not disjoint outcomes. |
+| `stream.retry.operations`  | Counter    | count         | `consumer.name` (configured consumer name); `operation` = `get` or `put`; `error.type` = `{{default}}` or `retry_handler_put_failed` | Retry-queue operation attempts. A failed `put` also emits the overlapping `retry_handler_put_failed` diagnostic; filter the default series for total attempt volume.                                              |
 
-For `stream.consumed.messages`, the `processing_failed` series is an overlapping per-message subset of the `{{default}}` total, not a disjoint outcome: callback failures are already included in the total. In a batch, the total and any failure count increase by the number of records, while `process.duration` adds one observation for the full batch callback. Do not add the failure series to the total or subtract it to infer successes. Ignored model errors and canceled processing do not emit the failure series. These current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle migration](/docs/pr-5/migrations/stream-consumer-lifecycle/.md).
+For `stream.consumed.messages`, the `processing_failed` series is an overlapping per-record subset of the `{{default}}` all-processed total. Every `GetModel` failure also emits `model_lookup_failed`, including failures configured to be ignored. Non-ignored lookup failures overlap `processing_failed`; ignored lookup failures do not. Both diagnostics overlap the default total, so filter `processing_failed` for processing-error totals rather than summing nondefault values. For retry attempts, normal `get`/`put` operations use `error.type="{{default}}"`; a failed retry-handler `put` also emits `retry_handler_put_failed` on the same operation series. That marker is an overlapping diagnostic subset, not another attempt; filter the default error type for totals. The default marker is writer-specific: select `error_type=""` in Prometheus, an absent `error.type` attribute in OpenTelemetry, or the series without that dimension in CloudWatch. For processing-error totals, filter `error_type="processing_failed"` in Prometheus or its matching explicit `error.type` value in other writers. In a batch, totals and diagnostic counters are record-based while `process.duration` records one observation for the full callback. Cancellation does not emit `processing_failed`. These current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle migration](/docs/pr-5/migrations/stream-consumer-lifecycle/.md).
 
 ## Graceful processing[​](#graceful-processing "Direct link to Graceful processing")
 

@@ -7,10 +7,10 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```
-go get github.com/gosoline-project/sqlr@v0.9.2-0.20261013125204-bbd729912067
+go get github.com/gosoline-project/sqlr@v0.9.2-0.20261022101442-f23fc53d1d89
 ```
 
-This documentation branch pins a migration prerelease snapshot, not a stable `v0.9.2` release.
+This published pseudo-version is for SQLR `v0.9.2`; it is not a stable release tag.
 
 Then import the package in your Go code:
 
@@ -1674,4 +1674,4 @@ Associations follow the normal `Create()` behavior described above. If your fixt
 
 The built-in `sqlr` fixture writer uses the `default` sqlc client name. If you define multiple fixture sets without embedding them as associations, make sure their factory order still respects your foreign-key dependencies.
 
-For more details about gosoline fixture loading, grouping, purge behavior, and named fixture references, see the [fixtures package reference](/docs/pr-5/reference/package-fixtures/.md).
+For more details about gosoline fixture loading, grouping, and named fixture references, see the [fixtures package reference](/docs/pr-5/reference/package-fixtures/.md).

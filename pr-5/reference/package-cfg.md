@@ -24,6 +24,40 @@ info
 
 YAML is currently the only supported configuration filetype.
 
+### GetSettings() and GetDefaults()[​](#getsettings-and-getdefaults "Direct link to GetSettings() and GetDefaults()")
+
+Available in Gosoline **v0.68.3** and later, these generic helpers return a settings value together with an error:
+
+```
+type Settings struct {
+
+    Port int `cfg:"port" default:"8080" validate:"min=1,max=65535"`
+
+}
+
+
+
+settings, err := cfg.GetSettings[Settings](config, "server")
+
+if err != nil {
+
+    return err
+
+}
+
+
+
+defaults, err := cfg.GetDefaults[Settings](config)
+
+if err != nil {
+
+    return err
+
+}
+```
+
+`GetSettings` delegates to `config.UnmarshalKey`, including configured values, environment overrides, defaults, and validation. `GetDefaults` delegates to `config.UnmarshalDefaults`; it reads defaults without loading configured values. Both accept additional `cfg.UnmarshalDefaults` arguments. See the [released implementations](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/cfg/config.go).
+
 ## Methods[​](#methods "Direct link to Methods")
 
 ### [GetInt()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/cfg/config.go#L129)[​](#getint "Direct link to getint")
@@ -93,18 +127,6 @@ if err := config.Option(options...); err != nil {
 
 
 
-// Prints 8080
-
-fmt.Println(config.GetString("port"))
-
-
-
-os.Setenv("PORT", "8081")
-
-
-
-// Prints 8081
-
 port, err := config.GetString("port")
 
 if err != nil {
@@ -113,7 +135,23 @@ if err != nil {
 
 }
 
-fmt.Println(port)
+fmt.Println(port) // Prints 8080
+
+
+
+os.Setenv("PORT", "8081")
+
+
+
+port, err = config.GetString("port")
+
+if err != nil {
+
+    panic(err)
+
+}
+
+fmt.Println(port) // Prints 8081
 ```
 
 #### Related methods[​](#related-methods "Direct link to Related methods")

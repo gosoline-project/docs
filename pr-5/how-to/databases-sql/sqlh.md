@@ -4,13 +4,13 @@ The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the c
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
-Install the SQLH snapshot pinned by this documentation branch:
+Install the SQLH version pinned by this documentation module:
 
 ```
-go get github.com/gosoline-project/sqlh@v0.8.1-0.20261013125801-b3d114e8cae0
+go get github.com/gosoline-project/sqlh@v0.8.2-0.20261022102734-962184e2f219
 ```
 
-The examples use the docs module's migration prerelease pins: SQLH `v0.8.1-0.20261013125801-b3d114e8cae0`, `httpserver` `v0.6.5-0.20261013124439-0538a07a7c58`, `sqlc` `v0.4.1-0.20261013124322-f3bdb6518b42`, SQLR `v0.9.2-0.20261013125204-bbd729912067`, and Gosoline `v0.68.1-0.20261013123101-dd90ce372ff3`. These are branch snapshots, not stable releases. SQLH requires Go 1.27.0 or newer.
+The examples use the docs module's published dependency pins: SQLH `v0.8.2-0.20261022102734-962184e2f219`, HTTPServer `v0.6.5-0.20261022101036-a7690f24137e`, SQLC `v0.4.2-0.20261022101232-4e97a8c5efc7`, SQLR `v0.9.2-0.20261022101442-f23fc53d1d89`, and Gosoline `v0.68.4-0.20261022095443-a18815d97543`. These are pseudo-versions, not stable release tags. SQLH requires Go 1.27.0 or newer.
 
 Then import the package:
 
@@ -725,7 +725,7 @@ A custom `PatchOperation` receives `*sqlh.PatchInput[Id]`. Read the parsed `sqlh
 
 ## List Inputs, Filters, and Counts[​](#list-inputs-filters-and-counts "Direct link to List Inputs, Filters, and Counts")
 
-The standard list input contains a JSON SQLC filter, page limit, page offset, and server-owned force filters:
+The standard list input contains a JSON SQLC filter, ordering, page limit, page offset, and server-owned force filters:
 
 ```
 input := sqlh.ListInput{
@@ -739,6 +739,8 @@ input := sqlh.ListInput{
         Value:  "active",
 
     },
+
+    OrderBy: []sqlc.JsonOrder{{Column: "created_at", Direction: "desc"}},
 
     Page: sqlh.ListPage{
 
@@ -766,6 +768,12 @@ The generated list endpoint accepts a body such as:
 
   },
 
+  "orderBy": [
+
+    {"column": "created_at", "direction": "desc"}
+
+  ],
+
   "page": {
 
     "limit": 50,
@@ -791,6 +799,12 @@ SQLH returns a `ListOutput` value:
 
 The default list applies user filters, force filters, delete scope, and query modifiers to both the row and count builders. Only the row builder receives pagination. SQLR `Count` removes ordering, limit, offset, and locking, but preserves grouping and HAVING.
 
+### Ordering[​](#ordering "Direct link to Ordering")
+
+SQLH v0.8.1 adds `orderBy`, using SQLC's [JSON ordering syntax](/docs/pr-5/how-to/databases-sql/sqlc/.md#json-ordering). Omitted directions default to ascending. SQLH validates ordering before running default queries or custom query/count callbacks, and rejects malformed columns or directions as validation errors.
+
+`ListInput.ValidateQueryModifiers` validates syntax rather than a list of allowed columns. Override it to restrict sortable columns for your endpoint. If you call `ApplyQueryModifiers` directly, validate first. See the [released list input and interface](https://github.com/gosoline-project/sqlh/blob/v0.8.1/filters.go).
+
 ### Force Filters[​](#force-filters "Direct link to Force Filters")
 
 Force filters are server-owned restrictions. They are not bound from HTTP input and the caller cannot remove them. Embed `sqlh.ForceFilters` through `sqlh.ListInput` or `sqlh.InputById`, then add filters after authentication:
@@ -807,7 +821,7 @@ SQLH applies force filters to list, count, identity, update, PATCH, and delete l
 
 ### Custom List Inputs[​](#custom-list-inputs "Direct link to Custom List Inputs")
 
-SQLH v0.7.1 `InputQuery` contained only `filter`. SQLH v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`. If the old endpoint had no pagination, use a custom `ListInputSource` with only the old fields. Preserve the old unknown-field behavior and implement every required phase. Use no-op query-modifier, pagination, and pagination-validation methods when the old API had none. Construct `CrudDefinition` with all type parameters because `NewCrudDefinition` fixes the input type to `sqlh.ListInput`.
+SQLH v0.7.1 `InputQuery` contained only `filter`. SQLH v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`. If the old endpoint had no pagination, use a custom `ListInputSource` with only the old fields. Preserve the old unknown-field behavior and implement every required phase. Use no-op query-modifier, pagination, and validation methods when the old API had none. SQLH v0.8.1 also adds `ValidateQueryModifiers` to `ListInputSource`; implement it when upgrading a custom input that does not embed `sqlh.ListInput`. Construct `CrudDefinition` with all type parameters because `NewCrudDefinition` fixes the input type to `sqlh.ListInput`.
 
 Embed `sqlh.ListInput` to retain native filters, pagination, and force filters. Override `ApplyFilters` to interpret additional request fields:
 
@@ -847,6 +861,7 @@ A custom list input must implement `ListInputSource`:
 * `ApplyQueryModifiers` adds grouping and ordering.
 * `ApplyPagination` adds the page limit and offset.
 * `ValidatePagination` validates the input.
+* `ValidateQueryModifiers` validates ordering before any list query runs.
 * `GetForceFilters` exposes the embedded, server-owned filters.
 
 Custom `Query` callbacks must apply `QueryPlan.ApplyBuilder`, check `ApplyScope`, then apply query modifiers and pagination. Custom `Count` callbacks must apply the builder and scope, return scope errors, and not apply query modifiers or pagination. The default count applies query modifiers but not pagination. SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING. Write a custom count when joins or grouping change the old total.
