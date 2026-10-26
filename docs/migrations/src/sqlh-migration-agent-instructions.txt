@@ -8,7 +8,7 @@ Record `Content-Type`, `Accept`, and response negotiation behavior.
 
 Use these downloaded sources as the API contract:
 
-- `github.com/gosoline-project/sqlh` at `v0.8.2-0.20261021102431-15719b2020e0`
+- `github.com/gosoline-project/sqlh` at `v0.8.2-0.20261026102747-43b5948549c5`
 - `github.com/gosoline-project/sqlr` at `v0.9.1`
 - `github.com/gosoline-project/sqlc` at `v0.4.1`
 - `github.com/gosoline-project/httpserver` at `v0.6.4`
