@@ -11,6 +11,8 @@ for metric grammar, units, and attribute shape where useful, but emits its own n
 `http.server.request.duration` is authored by Gosoline and exported by OTEL as
 `gosoline.http.server.request.duration`, not as an unqualified semantic-convention metric.
 
+**Source status:** The histogram profiles and HTTP server rejection projection described here are coordinated v2 development-source changes under review in [Gosoline PR #1434](https://github.com/justtrackio/gosoline/pull/1434) and [HTTPServer PR #11](https://github.com/gosoline-project/httpserver/pull/11). Existing published pseudo-version pins remain unchanged and do not yet include these follow-ups; this page is not a release or deployment claim.
+
 ## Schema version
 
 The current metric contract is **`v2.0`** (`metric.SchemaVersion`). When the metric daemon is enabled,
@@ -91,6 +93,20 @@ a UCUM item annotation from that leaf's singular form: `stream.consumed.messages
 `.count` use unit `1`. CloudWatch receives the authored CloudWatch unit. The source inventory below
 distinguishes a counter from a gauge or histogram: their equal `count` units do not make their measurements
 interchangeable.
+
+## Standard duration histogram boundaries
+
+In the v2 development source under review, Gosoline duration histograms for measurements covered by an OpenTelemetry semantic convention use the applicable family recommendation below. These recommendations inform bucket selection; Gosoline keeps its own metric names, attributes, and measurement boundaries. Bounds are authored in milliseconds, and the Prometheus and OTEL writers scale both observations and explicit bounds to seconds, using explicit bucket histograms as described by the [OTEL Metrics SDK](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation).
+
+| Measurement family | Gosoline histograms | Authored boundaries (ms) | Exported boundaries (s) | Primary recommendation |
+|---|---|---|---|---|
+| HTTP request duration | `http.server.request.duration`, `http.client.request.duration` | `[5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000]` | `[0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]` | [HTTP metrics](https://opentelemetry.io/docs/specs/semconv/http/http-metrics/) |
+| RPC server call duration | `rpc.server.request.duration` | `[5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000]` | `[0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]` | [RPC metrics](https://opentelemetry.io/docs/specs/semconv/rpc/rpc-metrics/) |
+| Messaging processing and client operations | `stream.process.duration`, `kafka.consumer.process.duration`, `cloud.aws.kinesis.process.duration`, `kafka.producer.produce.duration`, `kafka.consumer.poll.duration`, `kafka.consumer.commit.duration` | `[5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000]` | `[0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]` | [Messaging metrics](https://opentelemetry.io/docs/specs/semconv/messaging/messaging-metrics/) |
+| Database operation duration | `db.repo.operation.duration`, `ddb.operation.duration` | `[1, 5, 10, 50, 100, 500, 1000, 5000, 10000]` | `[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10]` | [Database metrics](https://opentelemetry.io/docs/specs/semconv/db/database-metrics/) |
+
+HTTP, RPC, and messaging recommendations currently share values, but each histogram uses the profile for its measured operation, not the namespace. Histograms outside the table have no directly applicable standard boundary recommendation identified and retain generic writer defaults. The OTEL explicit-bucket aggregation default uses `[0, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000]` in exported base units, while Prometheus `DefBuckets` are `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]` in exported base units ([OTEL SDK](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation), [Prometheus DefBuckets](https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#DefBuckets)). Thus count and byte values above 10 have no finite Prometheus bucket, and custom waits below five seconds have poor resolution with the generic OTEL boundaries. These exporter defaults are not evidence of workload fit; do not infer a standard profile for the other metrics.
+
 
 Every framework metric has a registered description. Prometheus and OTEL use that help text; a
 per-datum `Kind.WithHelp` value overrides the registered description. If no help has been registered
@@ -280,13 +296,15 @@ for the package-specific emission details and source pin.
 
 V1→V2 replaced the legacy aggregate and per-route latency measurements without a response-status
 dimension with one canonical `http.server.request.duration` histogram keyed by `name`, `route`,
-`request.method`, and `response.status_code`. V2 rejection telemetry is the
-`http.server.rejected.requests` counter keyed by `name`, `route`, and `request.method`; it does not
-retain a server-only `KindTotal` aggregate. The statusless request counters keep their existing
-semantics. The restored response counters add the full numeric `response.status_code` and bounded
+`request.method`, and `response.status_code`. V2 rejection telemetry retains the detailed raw
+`http.server.rejected.requests` Counter keyed by `name`, `route`, and `request.method`. A same-name
+server-wide `KindTotal` `Count` projection supplements that Counter only in CloudWatch, uses `{name}`
+alone, and receives a zero-valued default per configured server. OTEL and Prometheus continue to
+export only the detailed Counter. The statusless request counters keep their existing semantics.
+The restored response counters add the full numeric `response.status_code` and bounded
 `response.status_class` (`1xx` through `5xx`) only to response-count series; outside HTTP codes
 100–599 the class uses `{{default}}`. These response counters have no zero defaults. The existing
-duration histogram and rejection counter retain their definitions.
+duration histogram and detailed rejection Counter retain their definitions.
 
 | Canonical metric | Type | Authored unit | Dimensions | Description / actual measurement |
 |---|---|---|---|---|
@@ -295,7 +313,7 @@ duration histogram and rejection counter retain their definitions.
 | `http.server.responses` | monotonic counter (high priority) | Count | `name`, `response.status_code` — decimal numeric status, `response.status_class` — `1xx` through `5xx` | One for each matched response after the middleware chain unwinds, including middleware-aborted responses and matched `/health` requests. Unmatched routes are excluded; no zero defaults are seeded. |
 | `http.server.routed.responses` | monotonic counter (high priority) | Count | `name`, `route`, `request.method`, `response.status_code` — decimal numeric status, `response.status_class` — `1xx` through `5xx` | One for each matched response after the middleware chain unwinds, including middleware-aborted responses and matched `/health` requests. Unmatched routes are excluded; no zero defaults are seeded. |
 | `http.server.request.duration` | histogram | ms | `name`, `route`, `request.method`, `response.status_code` | Duration of a matched HTTP request; the histogram keeps the full response code but has no response-class dimension. |
-| `http.server.rejected.requests` | counter | count | `name`, `route`, `request.method` | Requests explicitly rejected by the concurrency middleware, not every 4xx/5xx response; no response-status dimension, and registered routes continue to receive zero-valued defaults. |
+| `http.server.rejected.requests` | counter | count | `name`, `route`, `request.method` | Detailed raw Counter for requests explicitly rejected by the concurrency middleware, not every 4xx/5xx response; it has no response-status dimension, and registered routes receive zero-valued defaults. CloudWatch also receives a same-name server-wide `KindTotal` Count projection keyed only by `name`, with a zero-valued default per configured server. The projection has no OTEL or Prometheus series. |
 | `http.server.active_request.count` | gauge | count | `name` | HTTP requests the server is currently handling. |
 | `http.server.connection.count` | gauge | count | `name` | Connections the HTTP server currently holds open. |
 
