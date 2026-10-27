@@ -21,7 +21,7 @@ That transaction does not make external effects or non-transactional DDL atomic.
 Install SQLH:
 
 ```bash
-go get github.com/gosoline-project/sqlh
+go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027082218-9b1d051f1817
 ```
 
 Use the dependency versions pinned in this documentation repository's `go.mod` for the executable examples.
@@ -324,7 +324,7 @@ definition.FieldMappings = map[string]string{
 }
 ```
 
-Here `Owner` must be an SQLR `BelongsTo` or `HasOne` relation and `Name` a mapped scalar. SQLH adds a `LEFT JOIN` when the filter or order needs that path, preserving rows with no related entity unless the filter itself excludes them. To-many relations and deeper relation traversal are not supported query paths. Query-field declarations are validated when the handler is constructed; invalid paths fail startup.
+Here `Owner` must be an SQLR `BelongsTo` or `HasOne` relation and `Name` a mapped scalar. SQLH adds a default `LEFT JOIN` when the filter or order needs that path. Without an explicit join, rows with no related entity remain eligible unless the filter excludes them. An explicit join from trusted backend code takes precedence, whether added before or after SQLH's default; its join type and ON conditions remain unchanged. Duplicate explicit joins remain invalid. To-many relations and deeper relation traversal are not supported query paths. Query-field declarations are validated when the handler is constructed; invalid paths fail startup.
 
 Before list callbacks or repository work, SQLH validates every filter leaf and sort field, including nested groups. Unknown public fields, raw database/table names, SQL expressions, and legacy `column` keys are rejected rather than passed through. A database name is accepted only if it was deliberately registered as a public name. Request validation also runs for custom list operations; it does not turn those operations into an authorization boundary.
 
@@ -337,13 +337,13 @@ SQLH returns a `ListOutput` value:
 }
 ```
 
-The default list applies resolved public filters and ordering, force filters, delete scope, and trusted custom query modifiers to both the row and count builders. Only the row builder receives pagination. SQLR `Count` removes ordering, limit, offset, and locking, but preserves grouping and HAVING.
+The default row and count queries share the builder and scope, including public filters, trusted filters, force filters, and delete scope. The default count excludes row modifiers, ordering, and pagination. If modifiers change row cardinality, implement a custom count with the corresponding cardinality logic.
 
 ### Ordering
 
-SQLH v0.8.1 adds `orderBy`, using SQLC's [JSON ordering syntax](./sqlc.mdx#json-ordering). Omitted directions default to ascending. SQLH validates ordering before running default queries or custom query/count callbacks, and rejects malformed columns or directions as validation errors.
+SQLH uses `[]sqlh.JsonOrder` for `orderBy`. Each item contains a public `field` name and an optional `direction` (`asc` or `desc`). Omitted directions default to ascending. SQLH resolves and validates public sort fields before default queries or custom query/count callbacks. Unknown fields, legacy `column` keys, and invalid directions produce validation errors.
 
-`ListInput.ValidateQueryModifiers` validates syntax rather than a list of allowed columns. Override it to restrict sortable columns for your endpoint. If you call `ApplyQueryModifiers` directly, validate first. See the [released list input and interface](https://github.com/gosoline-project/sqlh/blob/v0.8.1/filters.go).
+Use `CrudDefinition.FieldMappings` to restrict public query fields. `ListInputSource.ValidateQueryModifiers() error` provides additional input validation. Return `nil` when no additional validation is required. Optional `ApplyQueryModifiers` methods add trusted backend modifiers, not public ordering.
 
 ### Force Filters
 
@@ -387,15 +387,16 @@ A custom list input must implement `ListInputSource`:
 - `GetOrderBy() []sqlh.JsonOrder` returns public sort fields.
 - `ApplyPagination` adds the page limit and offset.
 - `ValidatePagination` validates pagination.
+- `ValidateQueryModifiers() error` validates additional query modifiers. A no-op that returns `nil` is valid.
 - `GetForceFilters` exposes the embedded, server-owned filters.
 
 Embedding `sqlh.ListInput` supplies these methods. `ApplyFilters(*sqlr.QueryBuilderSelect) error` and `ApplyQueryModifiers(*sqlr.QueryBuilderSelect)` are optional trusted backend extensions, not native request filter/sort processors. The embedded list input no longer has either method. Never pass arbitrary request identifiers or SQL expressions to these extensions.
 
 Custom `Query` callbacks must apply `QueryPlan.ApplyBuilder`, check `ApplyScope`, then apply query modifiers and pagination.
-Custom `Count` callbacks must apply the builder and scope, return scope errors, and not apply query modifiers or pagination.
-The default count applies query modifiers but not pagination.
-SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING.
-Write a custom count when joins or grouping change the old total.
+Custom `Count` callbacks must apply the builder and scope, return scope errors, and omit row modifiers, ordering, and pagination.
+The default count shares the builder and scope, including public filters, trusted filters, force filters, and delete scope.
+It excludes row modifiers, ordering, and pagination.
+If modifiers change row cardinality, implement a custom count with the corresponding cardinality logic.
 
 `NewCrudDefinition` fixes its list input to `sqlh.ListInput`. Construct the definition explicitly for `AuthorListInput`. Use the entity value type `Author` for `E`: callback signatures already use `*E`.
 

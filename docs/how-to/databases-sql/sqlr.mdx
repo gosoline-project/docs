@@ -15,7 +15,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlr@v0.9.1
+go get github.com/gosoline-project/sqlr@v0.9.2-0.20261027082100-6457eb1a5893
 ```
 
 Then import the package in your Go code:
@@ -838,6 +838,8 @@ Use `LeftJoin()` or `InnerJoin()` to load related entities via SQL JOINs. Joins 
 ### Joins on Query
 
 <CodeBlock title="main.go" language="go" snippet="query join">{Auto}</CodeBlock>
+
+`QueryBuilderSelect.DefaultLeftJoin("Author")` adds a fallback LEFT JOIN. Use it when framework code needs a relation but application code can define that join. An explicit `LeftJoin` or `InnerJoin` takes precedence, whether it is added before or after the default. Its join type and ON conditions remain unchanged. Repeated defaults add no extra join; duplicate explicit joins remain invalid. `DefaultLeftJoin` does not accept ON conditions.
 
 ### Joins on Read
 
