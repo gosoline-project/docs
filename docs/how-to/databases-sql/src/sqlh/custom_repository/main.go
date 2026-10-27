@@ -17,8 +17,8 @@ import (
 // snippet-start: entities
 type Author struct {
 	sqlr.Entity[int64]
-	Name  string `db:"name"`
-	Email string `db:"email"`
+	Name  string `db:"name" json:"name"`
+	Email string `db:"email" json:"email"`
 }
 
 type AuthorCreateInput struct {
@@ -67,11 +67,16 @@ const (
 )
 
 type reportingAuthorListInput struct {
+	// Promotes GetFilter, ValidatePagination, and GetForceFilters.
 	sqlh.ListInput
 }
 
-func (i reportingAuthorListInput) ApplyQueryModifiers(qb *sqlr.QueryBuilderSelect) {
-	qb.OrderBy(reportingAuthorOrderBy)
+func (i reportingAuthorListInput) GetOrderBy() []sqlh.JsonOrder {
+	if len(i.OrderBy) > 0 {
+		return i.ListInput.GetOrderBy()
+	}
+
+	return []sqlh.JsonOrder{{Field: "createdAt", Direction: "desc"}}
 }
 
 func (i reportingAuthorListInput) ApplyPagination(qb *sqlr.QueryBuilderSelect) {
@@ -149,6 +154,13 @@ func main() {
 					UpdateInput:          mapper.TransformUpdateInput,
 					PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
 					Output:               mapper.TransformOutput,
+					// Complete allowlist overrides automatic Go names and scalar field tags.
+					FieldMappings: map[string]string{
+						"id":        "Id",
+						"name":      "Name",
+						"email":     "Email",
+						"createdAt": "CreatedAt",
+					},
 				}
 				router.HandleWith(sqlh.WithCrudHandlers(
 					1,
