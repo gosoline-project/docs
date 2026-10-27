@@ -17,3 +17,25 @@ There are three primary uses cases for gosoline:
 <br />
 
 Want to skip the guided walkthroughs and get straight to the information? Check out our [API reference docs](/category/reference).
+
+## Running the Go examples
+
+The executable examples share the repository's root Go module and require **Go 1.27.3 or newer**.
+Use the dependency versions in `go.mod` and `go.sum`; copying an older example's imports
+into another module does not carry these security fixes with it.
+
+Run `go test -count=1 -tags=fixtures ./...` to compile all snippets and test the examples.
+The `sqlh/result_transformer` directory is a compile-only fragment, not a standalone program.
+The SQLR fixture integration example additionally needs Docker and the
+`integration fixtures` build tags. The HTTP build-service example can be run directly
+from `docs/how-to/http-server/src/build-service` with `go run .`.
+
+The dependency update keeps the existing example APIs. AWS S3 uses the SDK's current
+request-checksum and response-validation defaults; custom S3-compatible endpoints must
+support them. The legacy PostgreSQL and Avro dependencies still have advisories without
+compatible released fixes. Gosoline v0.68.3 needs the OpenTelemetry log v0.20 API and
+the stable SDK/exporters v1.44 resource schema. The security fixes in log v0.21 and
+stable v1.45 cannot be selected until a compatible Gosoline release exists: v0.21 removes
+log APIs, while SDK v1.45 changes the default resource schema and prevents enabled
+telemetry from starting with this Gosoline version. These examples are therefore not
+a vulnerability-free dependency baseline.
