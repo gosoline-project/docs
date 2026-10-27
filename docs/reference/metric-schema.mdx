@@ -11,7 +11,7 @@ for metric grammar, units, and attribute shape where useful, but emits its own n
 `http.server.request.duration` is authored by Gosoline and exported by OTEL as
 `gosoline.http.server.request.duration`, not as an unqualified semantic-convention metric.
 
-**Source status:** The histogram profiles and HTTP server rejection projection described here are coordinated v2 development-source changes under review in [Gosoline PR #1434](https://github.com/justtrackio/gosoline/pull/1434) and [HTTPServer PR #11](https://github.com/gosoline-project/httpserver/pull/11). Existing published pseudo-version pins remain unchanged and do not yet include these follow-ups; this page is not a release or deployment claim.
+**Source status:** The histogram profiles below are implemented in the published Gosoline SDK version pinned by this documentation, `v0.68.4-0.20261026102448-e669b1bf2ab6`. Both this SDK version and the standalone HTTPServer version pinned here, `v0.6.5-0.20261026100922-13fdf9916b14`, include the server-wide CloudWatch rejection projection described below; see the [Gosoline SDK HTTP server reference](/reference/package-gosoline-httpserver) and [standalone HTTP server reference](/reference/package-httpserver). These statements describe module source, not whether an application has adopted or deployed either version.
 
 ## Schema version
 
@@ -96,7 +96,7 @@ interchangeable.
 
 ## Standard duration histogram boundaries
 
-In the v2 development source under review, Gosoline duration histograms for measurements covered by an OpenTelemetry semantic convention use the applicable family recommendation below. These recommendations inform bucket selection; Gosoline keeps its own metric names, attributes, and measurement boundaries. Bounds are authored in milliseconds, and the Prometheus and OTEL writers scale both observations and explicit bounds to seconds, using explicit bucket histograms as described by the [OTEL Metrics SDK](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation).
+The Gosoline SDK module version pinned by this documentation applies the applicable family recommendation below to duration histograms covered by an OpenTelemetry semantic convention. These recommendations inform bucket selection; Gosoline keeps its own metric names, attributes, and measurement boundaries. Bounds are authored in milliseconds, and the Prometheus and OTEL writers scale both observations and explicit bounds to seconds, using explicit bucket histograms as described by the [OTEL Metrics SDK](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation).
 
 | Measurement family | Gosoline histograms | Authored boundaries (ms) | Exported boundaries (s) | Primary recommendation |
 |---|---|---|---|---|
