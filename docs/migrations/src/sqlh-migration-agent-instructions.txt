@@ -8,14 +8,14 @@ Record `Content-Type`, `Accept`, and response negotiation behavior.
 
 Use these downloaded sources as the API contract:
 
-- `github.com/gosoline-project/sqlh` at `v0.8.2-0.20261027082218-9b1d051f1817`
-- `github.com/gosoline-project/sqlr` at `v0.9.2-0.20261027082100-6457eb1a5893`
+- `github.com/gosoline-project/sqlh` at `v0.8.2-0.20261027132918-7e9d41caf9c9`
+- `github.com/gosoline-project/sqlr` at `v0.9.2-0.20261027132740-484c58e94d7b`
 - `github.com/gosoline-project/sqlc` at `v0.4.1`
 - `github.com/gosoline-project/httpserver` at `v0.6.4`
 - `github.com/justtrackio/gosoline` at `v0.63.5`
 
 The pinned SQLH version declares Go 1.27.0.
-Its `go.mod` requires SQLR v0.9.1, SQLC v0.4.1, httpserver v0.6.4, and Gosoline v0.63.5.
+Its `go.mod` requires SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, SQLC v0.4.1, httpserver v0.6.4, and Gosoline v0.63.5.
 Keep compatible newer versions selected by Go.
 Do not downgrade dependencies or change unrelated imports.
 
