@@ -8,7 +8,7 @@ import { CopyToClipboardButton } from '../components.jsx';
 
 # Migrating to the Standalone HTTP Server Package
 
-This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module pinned at `v0.6.5-0.20261022101036-a7690f24137e`.
+This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module pinned at `v0.6.5-0.20261026100922-13fdf9916b14`.
 
 The new package keeps the Gin-based server lifecycle and middleware model, but it changes the application-facing API. Instead of building and returning a `*httpserver.Definitions` tree, you receive a `*httpserver.Router` and register routes on it directly. Instead of implementing handler interfaces and manually unpacking an `httpserver.Request`, handlers are plain functions or methods registered through `Bind`, `BindN`, `BindR`, or SSE binding helpers.
 
@@ -17,7 +17,7 @@ The new package keeps the Gin-based server lifecycle and middleware model, but i
 Add the standalone module:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.6.5-0.20261022101036-a7690f24137e
+go get github.com/gosoline-project/httpserver@v0.6.5-0.20261026100922-13fdf9916b14
 ```
 
 Update imports:
@@ -899,13 +899,13 @@ httpserver:
 ```
 
 Keep these points in mind while migrating:
-The V1→V2 migration replaced legacy aggregate and per-route latency measurements without a response-status dimension with one canonical histogram keyed by `name`, `route`, `request.method`, and `response.status_code`. Existing statusless request counters keep their server-only and route/method dimensions; the restored response counters add full numeric `response.status_code` and bounded `response.status_class` (`1xx` through `5xx`, default outside 100–599). V2 rejection reporting keeps only `name`, `route`, and `request.method` with no server-only `KindTotal` aggregate. The duration histogram and rejection-counter definitions remain unchanged.
+The V1→V2 migration replaced legacy aggregate and per-route latency measurements without a response-status dimension with one canonical histogram keyed by `name`, `route`, `request.method`, and full numeric `response.status_code`. The pinned HTTPServer module uses the HTTP semantic convention's recommended duration boundaries: `[0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]` seconds, authored as `[5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000]` milliseconds. The detailed rejection Counter remains statusless and route-scoped, with registered-route zero defaults; CloudWatch also receives a same-name server-only `KindTotal` `Count` projection keyed only by `name`, with a zero-valued default per configured server. This CloudWatch-only projection adds a server-level view without changing the detailed Counter dimensions. These statements describe published module source, not application deployment.
 
 | Area | Notes |
 |---|---|
 | Server name | `RunDefaultServer` reads `httpserver.default`. `NewServer("admin", ...)` reads `httpserver.admin`. |
 | Routes | `/health` is still registered by the server. Unhealthy modules are reported as `"unhealthy"`; underlying error strings are logged but not exposed in the response. |
-| HTTP metrics | The v2 contract emits high-priority monotonic `Count` counters `http.server.requests` (`name` only) and `http.server.routed.requests` (`name`, `route`, `request.method`) after the matched-route middleware chain unwinds. They count matched requests aborted by middleware and exclude unmatched paths; `/health` counts when matched but has no pre-request zero default. Existing request counters retain their server and route/method zero defaults. The restored `http.server.responses` and `http.server.routed.responses` add the full numeric status code and bounded `response.status_class`; they count matched responses, have no zero defaults, and exclude unmatched paths. The duration histogram retains the full code without a class, while rejections remain statusless. No extra hook or alias is required. See [Metric schema](/reference/metric-schema) and the [HTTP server metrics reference](/reference/package-httpserver). |
+| HTTP metrics | The v2 contract emits high-priority monotonic `Count` counters `http.server.requests` (`name` only) and `http.server.routed.requests` (`name`, `route`, `request.method`) after the matched-route middleware chain unwinds. They count matched requests aborted by middleware and exclude unmatched paths; `/health` counts when matched but has no pre-request zero default. Existing request counters retain their server and route/method zero defaults. The restored `http.server.responses` and `http.server.routed.responses` add the full numeric status code and bounded `response.status_class`; they count matched responses, have no zero defaults, and exclude unmatched paths. The duration histogram retains the full code without a class and uses the standard bounds noted above. Rejections remain a statusless, route-scoped detailed Counter; CloudWatch also gets the same-name server-only `KindTotal` `Count` projection keyed only by `name`, with a zero default per configured server. This projection is not a Prometheus or OpenTelemetry series. No extra hook or alias is required. See [Metric schema](/reference/metric-schema) and the [HTTP server metrics reference](/reference/package-httpserver). |
 | Compression | Exclude SSE endpoints from compression. |
 | Request body limit | `max_body_bytes` defaults to `10485760` bytes (10 MiB). Set it to `0` to disable the limit or raise it for large upload endpoints. The limit is applied after request decompression. |
 | Binding errors | `Bind` and `BindSse` binding or validation failures return `400 Bad Request`. |
