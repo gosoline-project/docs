@@ -4,7 +4,7 @@ This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers. Use
 
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations. Do not replace domain rules with generic CRUD behavior.
 
-This guide targets SQLH `v0.8.2-0.20261027082218-9b1d051f1817`, SQLR `v0.9.2-0.20261027082100-6457eb1a5893`, SQLC v0.4.1, and httpserver v0.6.4. This SQLH version declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
+This guide targets SQLH `v0.8.2-0.20261027132918-7e9d41caf9c9`, SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, SQLC v0.4.1, and httpserver v0.6.4. This SQLH version declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
 
 ## 1. Review the Current API[​](#1-review-the-current-api "Direct link to 1. Review the Current API")
 

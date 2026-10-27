@@ -7,7 +7,7 @@ The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the c
 Install SQLH:
 
 ```
-go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027082218-9b1d051f1817
+go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027132918-7e9d41caf9c9
 ```
 
 Use the dependency versions pinned in this documentation repository's `go.mod` for the executable examples. The examples require Go 1.27.0 or newer.
