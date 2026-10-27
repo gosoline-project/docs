@@ -4,7 +4,7 @@ This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers. Use
 
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations. Do not replace domain rules with generic CRUD behavior.
 
-This guide targets SQLH `v0.8.2-0.20261026102747-43b5948549c5`, SQLR v0.9.1, SQLC v0.4.1, and httpserver v0.6.4. This SQLH version declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
+This guide targets SQLH `v0.8.2-0.20261027082218-9b1d051f1817`, SQLR `v0.9.2-0.20261027082100-6457eb1a5893`, SQLC v0.4.1, and httpserver v0.6.4. This SQLH version declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
 
 ## 1. Review the Current API[​](#1-review-the-current-api "Direct link to 1. Review the Current API")
 
@@ -232,7 +232,16 @@ In SQLH v0.8.0, custom PATCH operations read the parsed document from `input.Doc
 
 ## 6. Preserve List Compatibility[​](#6-preserve-list-compatibility "Direct link to 6. Preserve List Compatibility")
 
-Use the `ProjectListInput` type above for SQLH public-field filters, ordering, pagination, and force filters. Embedding `sqlh.ListInput` supplies `GetFilter() sqlh.JsonFilter`, `GetOrderBy() []sqlh.JsonOrder`, `ApplyPagination`, `ValidatePagination`, and `GetForceFilters`. These are the required `ListInputSource` methods.
+Use the `ProjectListInput` type above for SQLH public-field filters, ordering, pagination, and force filters. Embedding `sqlh.ListInput` supplies the required `ListInputSource` methods:
+
+* `GetFilter() sqlh.JsonFilter`
+* `GetOrderBy() []sqlh.JsonOrder`
+* `ApplyPagination`
+* `ValidatePagination`
+* `ValidateQueryModifiers() error`
+* `GetForceFilters`
+
+A custom `ValidateQueryModifiers` method can return `nil` when no additional validation is required.
 
 Migrate public filters from `column` to `field` and ordering to `{"field":"name","direction":"asc"}` objects in `orderBy`. `sqlh.JsonFilter.Type` remains `sqlc.JsonFilterType`; nested `Fields` use `sqlh.JsonFilter` too. SQLH validates every leaf and sort field before callbacks or database work, including custom list operations. Unknown names, raw identifiers/expressions, and legacy `column` keys are rejected.
 
@@ -248,7 +257,7 @@ If `LegacyFilter` represents an additional typed field, optional `ApplyFilters` 
 
 Do not add pagination if the old API did not expose it. A custom `ListInputSource` can retain the intended fields, provide empty public-filter/order getters when absent, and use no-op pagination and pagination validation. Instantiate `CrudDefinition` with every type parameter; `NewCrudDefinition` fixes the input type to `sqlh.ListInput`. Preserve intended unknown-field behavior outside the public filter/order grammar.
 
-Custom `Query` and `Count` callbacks must call `QueryPlan.ApplyBuilder` and then `QueryPlan.ApplyScope`. Return a scope error before repository work. A custom `Query` then applies modifiers and pagination, in that order. A custom `Count` must not apply query modifiers or pagination. The default count applies query modifiers but not pagination. SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING. Implement a custom count when joins or grouping change the old total. Use the same filter, force-filter, and delete scope for rows and counts.
+Custom `Query` and `Count` callbacks must call `QueryPlan.ApplyBuilder` and then `QueryPlan.ApplyScope`. Return a scope error before repository work. A custom `Query` then applies modifiers and pagination, in that order. A custom `Count` omits row modifiers, ordering, and pagination. The default count shares the builder and scope, including public filters, trusted filters, force filters, and delete scope. It excludes row modifiers, ordering, and pagination. If modifiers change row cardinality, implement a custom count with the corresponding cardinality logic. Keep the same builder and scope for rows and counts.
 
 `CrudHandler.List` and `CrudDefinition.ListOperation` always return `ListOutput[O]` with `Results` and `Total`. If the old API uses another outer envelope, call `handler.List` from a typed wrapper and map those fields, then register the wrapper manually:
 
