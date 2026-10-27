@@ -71,14 +71,14 @@ Set `max_connections: 0` (the default) to disable this limit.
 
 ### Metrics
 
-The server emits two gauge metrics (sampled every 10 seconds and on every change):
+The server emits two gauge metrics with current-state samples at startup, every 10 seconds, on each request or connection state change, and during shutdown:
 
-| Metric | Description |
+| Canonical metric | Description |
 |---|---|
-| `HttpConcurrentRequests` | Number of requests currently being handled. |
-| `HttpOpenConnections` | Number of currently open TCP connections. |
+| `http.server.active_request.count` | Number of requests currently being handled. |
+| `http.server.connection.count` | Number of currently open TCP connections. |
 
-Both metrics carry a `ServerName` dimension set to the server name (e.g. `default`).
+Both gauges carry only the `name` attribute, set to the named server (for example, `default`). Unlike request-level metrics, they are not split by route, `request.method`, or `response.status_code`. The names in this table are canonical Gosoline names; metric writers render them according to the selected backend. See the [SDK HTTP server metrics reference](/reference/package-gosoline-httpserver) and the [published HTTP server package reference](/reference/package-httpserver) for the complete per-metric unit and dimension tables, and [Metric schema](/reference/metric-schema) for writer conversion details.
 
 ## Connection lifecycle advisor
 
