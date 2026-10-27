@@ -10,7 +10,7 @@ Install SQLH:
 go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027132918-7e9d41caf9c9
 ```
 
-Use the dependency versions pinned in this documentation repository's `go.mod` for the executable examples. The examples require Go 1.27.0 or newer.
+Use the dependency versions pinned in this documentation repository's `go.mod` for the executable examples. The examples require Go 1.27.3 or newer. A module minimum does not patch an already-newer Go toolchain: the patched security floors are Go 1.26.10 on the 1.26 release line and Go 1.27.3 on the 1.27 release line. The 1.26 security floor does not override this repository's Go 1.27.3 build requirement.
 
 Then import the package:
 
