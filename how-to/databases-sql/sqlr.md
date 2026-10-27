@@ -7,7 +7,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```
-go get github.com/gosoline-project/sqlr@v0.9.1
+go get github.com/gosoline-project/sqlr@v0.9.2-0.20261027132740-484c58e94d7b
 ```
 
 Then import the package in your Go code:
@@ -1397,6 +1397,18 @@ func (s *BlogService) queryPostsWithAuthorJoin(ctx context.Context) ([]Post, err
 
 }
 ```
+
+`QueryBuilderSelect.DefaultJoin(joinType, relation, conditions...)` adds a fallback join. It supports `sqlc.JoinLeft` and `sqlc.JoinInner`, with optional ON conditions. Use it when framework code needs a relation but application code can define that join:
+
+```
+qb.DefaultJoin(sqlc.JoinInner, "Author",
+
+    sqlr.Condition(sqlc.Col("Author", "name").Eq("Alice")),
+
+)
+```
+
+The first default for a relation wins, including its join type and ON conditions. An explicit `LeftJoin` or `InnerJoin` takes precedence, whether it is added before or after the default. It replaces the default's type and conditions. Repeated defaults add no extra join; duplicate explicit joins remain invalid.
 
 ### Joins on Read[​](#joins-on-read "Direct link to Joins on Read")
 
