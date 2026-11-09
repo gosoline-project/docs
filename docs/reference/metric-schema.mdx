@@ -45,6 +45,9 @@ suffixes to the base name. Prometheus dimension keys also replace dots with unde
 `request.method`, `route`, and `response.status_code` attributes become `request_method`, `route`, and
 `response_status_code` labels. The default-dimension marker `{{default}}` is rendered as an empty
 Prometheus label value.
+Prometheus matches registered defaults against canonical metric names and dimensions before translating
+dotted dimension keys and `{{default}}` into label form, preserving the selected priority, unit, and
+instrument kind.
 
 For Gosoline metrics, the Prometheus writer always uses the fixed `gosoline` prefix. It names the
 framework that authored the metric, not the application. Do not configure an application-specific
@@ -178,13 +181,21 @@ dimensions. SQL pool state and SQL open attempts are separate metrics with diffe
 | `stream.reads` | counter | count | `list.name` | Read operations performed by a Redis list input. |
 | `stream.writes` | counter | count | `list.name` | Messages supplied to a Redis-list output batch, counted after the list's `RPush` calls; not a Redis command count or confirmation that each item was stored. |
 
-For `stream.consumed.messages`, `error.type="{{default}}"` is the all-processed total, including
-callback failures; `error.type="processing_failed"` is an overlapping per-record subset. Every
-`GetModel` failure also emits `error.type="model_lookup_failed"`, including ignored failures. A
-non-ignored model lookup failure overlaps `processing_failed`; an ignored one does not. Both
-diagnostics overlap the default total. Select `processing_failed` for processing-error counts rather
-than summing nondefault values. For retry-operation totals, select `error.type="{{default}}"`;
+For `stream.consumed.messages`, `error.type="{{default}}"` counts collected input records before
+decoding; it is an input-volume total, not an all-processed or successful-record count. A single-message
+invocation contributes one collected message. A batch contributes its collected record count before
+decoding, including records later skipped by ignored model lookup, records whose lookup or decoding
+fails, and records in an empty decoded batch. `error.type="processing_failed"` is an overlapping
+per-record subset for non-canceled processing errors. For a batch callback error it counts decoded
+records with false or missing acknowledgements, not the whole collected batch. A false or missing
+acknowledgement with a nil callback error can request deferred processing or retry without emitting
+`processing_failed`. Every `GetModel` failure also emits `error.type="model_lookup_failed"`, including
+ignored failures; only non-ignored lookup failures overlap `processing_failed`. Both diagnostics overlap
+the collected total. Select `processing_failed` for processing-error counts rather than summing
+nondefault values. For retry-operation totals, select `error.type="{{default}}"`;
 `retry_handler_put_failed` is an overlapping failed-put subset, not an additional attempt.
+The default marker is writer-specific: select `error_type=""` in Prometheus, an absent `error.type`
+attribute in OpenTelemetry, or the series without that dimension in CloudWatch.
 
 ### `kafka.consumer`
 
@@ -240,26 +251,37 @@ batch histograms for per-batch distributions: their `_count` and `_sum` are not 
 independent record or byte-volume Counters. Application-level `sent.messages` and `consumed.messages`
 count at different boundaries.
 
+`kafka.MetricPair` emits only topic-and-partition series. Its former topic-only CloudWatch
+`KindTotal` projection has been removed; aggregate the retained partition series for topic-level
+CloudWatch views.
+
 ### `cloud.aws.kinesis`
 
 | Canonical metric | Type | Authored unit | Dimensions | Description / actual measurement |
 |---|---|---|---|---|
-| `cloud.aws.kinesis.consumed.messages` | counter | count | `stream.name`, `partition.id`, `error.type` | Records processed by a Kinesis shard reader; the default series is the completed-batch total and `processing_failed` is an overlapping per-record subset. |
-| `cloud.aws.kinesis.sent.messages` | counter | count | `stream.name`, `error.type` | Records sent to a Kinesis stream per `PutRecords` attempt, by Kinesis error reason. |
-| `cloud.aws.kinesis.process.duration` | histogram | ms | `stream.name`, `partition.id` | Duration of processing one batch of Kinesis records. |
-| `cloud.aws.kinesis.reads` | counter | count | `stream.name`, `partition.id` | `GetRecords` calls a Kinesis shard reader performed. |
-| `cloud.aws.kinesis.lag` | histogram | ms | `stream.name`, `partition.id` | AWS-reported milliseconds behind the latest record for this shard reader, from Kinesis `GetRecordsOutput.MillisBehindLatest`; it is not wall-clock age of the last processed record. |
+| `cloud.aws.kinesis.consumed.messages` | counter | count | `stream.name`, `partition.id`, `error.type` (`{{default}}`, `processing_failed`) | The `{{default}}` series counts all records in a completed shard-reader batch, including handler failures; `processing_failed` is an overlapping per-record subset. |
+| `cloud.aws.kinesis.sent.messages` | counter | count | `stream.name`, `error.type` (`{{default}}` or generated `<count> <ErrorCode> errors` summary) | Accepted and rejected records reported by a normal `PutRecords` response; the error value is a generated per-attempt count summary that may combine codes, not necessarily one raw Kinesis error reason. |
+| `cloud.aws.kinesis.process.duration` | histogram | ms | `stream.name`, `partition.id` | Elapsed work for a fetched batch through processing and checkpoint; emitted only when the processing/checkpoint operation completes without error. |
+| `cloud.aws.kinesis.reads` | counter | count | `stream.name`, `partition.id` | Successful `GetRecords` responses only; failed API calls do not increment it. |
+| `cloud.aws.kinesis.lag` | histogram | ms | `stream.name`, `partition.id` | AWS-reported milliseconds behind the latest record for this shard, from `GetRecordsOutput.MillisBehindLatest`; not wall-clock age of the last processed record. |
 | `cloud.aws.kinesis.acquire.duration` | histogram | s | `stream.name`, `partition.id` | Time a Kinesis shard reader waited to acquire a shard. |
 | `cloud.aws.kinesis.sleep.duration` | histogram | ms | `stream.name`, `partition.id` | Completed per-record configured `ConsumeDelay` waits before processing; canceled waits produce no observation. |
 | `cloud.aws.kinesis.wait.duration` | histogram | ms | `stream.name`, `partition.id` | Computed delay scheduled before the next poll: normally the remaining `WaitTime` after the time since the previous `GetRecords` call, and zero when reported lag exceeds `WaitTime + ConsumeDelay`. |
 | `cloud.aws.kinesis.shard.count` | gauge | count | `stream.name` | Shards a Kinesis stream currently has. |
 | `cloud.aws.kinesis.client.count` | gauge | count | `stream.name` | Clients currently consuming a Kinesis stream. |
-| `cloud.aws.kinesis.batch.records` | histogram | count | `stream.name` | Records included in one `PutRecords` request attempt (including retries). |
+| `cloud.aws.kinesis.batch.records` | histogram | count | `stream.name` | Records included in each normal `PutRecords` response attempt, including retries. |
 
-For Kinesis `consumed.messages`, the `{{default}}` batch-total series includes failed records;
-`error.type="processing_failed"` is an overlapping per-record subset. For `sent.messages`,
-`error.type` carries the reason Kinesis reported. `lag` keeps millisecond samples and CloudWatch maximum
-aggregation; its OTEL histogram exposes the cumulative maximum per stream and shard.
+For Kinesis `consumed.messages`, a processing/checkpoint operation error suppresses both the
+`process.duration` observation and the `{{default}}` batch total. A per-record handler failure still
+emits the overlapping `processing_failed` count and checkpoints that record; selective native Kinesis
+retry is not used, and retry is handled through the stream retry path. Do not infer that every
+cancellation returns an operation error. `sent.messages` and `batch.records` are emitted only after a
+normal `PutRecords` response, including responses with per-record failures; request-level API errors
+produce neither metric. The failed-record `sent.messages` error value is a generated per-attempt
+ErrorCode-count summary (for example, `<count> <ErrorCode> errors`) that may combine codes. For
+CloudWatch stream-level views, see the [shard-reader projection contract](/reference/package-cloud_aws_kinesis-reader#cloudwatch-stream-projections): CloudWatch adds eight stream-only `KindTotal` projections, while Prometheus and OpenTelemetry retain only the detailed stream-and-shard series.
+
+`lag` keeps millisecond samples and CloudWatch maximum aggregation; its OTEL histogram exposes the cumulative maximum per stream and shard.
 
 ### `kvstore`
 
@@ -392,7 +414,7 @@ queries that used these removed names:
 |---|---|---|
 | `stream.errors` | `stream.consumed.messages` | `error.type` |
 | `kafka.producer.send.errors` | `kafka.producer.sent.messages` | `error.type` |
-| `cloud.aws.kinesis.send.errors` | `cloud.aws.kinesis.sent.messages` | `error.type` (the Kinesis-reported reason) |
+| `cloud.aws.kinesis.send.errors` | `cloud.aws.kinesis.sent.messages` | `error.type` (generated per-attempt ErrorCode-count summary, e.g. `<count> <ErrorCode> errors`; it may combine codes) |
 | `cloud.aws.kinesis.consume.errors` | `cloud.aws.kinesis.consumed.messages` | `error.type` |
 | `kvstore.hits` | `kvstore.reads` | `hit` (`true`, `false`) |
 | `limit.releases`, `limit.throttles`, `limit.errors` | `limit.attempted.takes`, `limit.takes`, `limit.throttled.takes` | `attempted.takes` records take starts; terminal `takes` uses only `outcome="allowed"` or `"error"`; throttles use their separate counter. Do not sum these Counters. |
@@ -402,14 +424,22 @@ queries that used these removed names:
 
 For disjoint outcomes, sum only exclusive values within the same metric and event boundary. The
 limiter's start, terminal, and throttle Counters are separate and must not be combined. For
-`stream.consumed.messages` and `cloud.aws.kinesis.consumed.messages`, `{{default}}` is the
-all-processed total and `processing_failed` is an overlapping subset. Stream `model_lookup_failed`
-diagnostics also overlap the default total; only non-ignored lookup failures overlap
-`processing_failed`. On retry operations, filter `error.type="{{default}}"` for attempt totals;
-`retry_handler_put_failed` is a diagnostic subset. Never add or subtract overlapping series to infer
-success. `error.type` is a bounded action/reason such as `send_failed`, `connect_failed`,
-`request_failed`, `request_canceled`, `operation_failed`, `notify_failed`, `apply_failed`, or
-`processing_failed`, not a Go error type or message.
+`stream.consumed.messages`, `{{default}}` is the all-collected input total, not an all-processed
+total; `processing_failed` is an overlapping per-record subset of non-canceled processing errors.
+Every stream `GetModel` failure emits `model_lookup_failed`; only non-ignored lookup failures overlap
+`processing_failed`. For Kinesis `consumed.messages`, `{{default}}` is the all-processed completed
+GetRecords-batch total, including handler failures, and `processing_failed` is an overlapping
+per-record subset. A processing/checkpoint operation error suppresses both the default total and
+`process.duration`; a per-record handler failure still emits `processing_failed` and checkpoints that
+record. Kinesis retries use the stream retry path, not selective native Kinesis retry. Kinesis
+`sent.messages` and `batch.records` are emitted only after a normal `PutRecords` response; request-level
+API errors produce neither. Failed-record `sent.messages` values are generated per-attempt
+ErrorCode-count summaries, such as `<count> <ErrorCode> errors`, and may combine codes. For retry
+operations, filter `error.type="{{default}}"` for attempt totals; `retry_handler_put_failed` is a
+diagnostic subset. Never add or subtract overlapping series to infer success. `error.type` is a bounded
+action/reason such as `send_failed`, `connect_failed`, `request_failed`, `request_canceled`,
+`operation_failed`, `notify_failed`, `apply_failed`, or `processing_failed`, not a Go error type or
+message. See the [Kinesis shard-reader projection contract](/reference/package-cloud_aws_kinesis-reader#cloudwatch-stream-projections) for its stream-level CloudWatch series and defaults.
 
 ### Other V1 name changes
 
