@@ -20,6 +20,8 @@ These are canonical Gosoline names as authored in the `kafka.producer` namespace
 
 `kafka.producer.batch.records` measures records passed to one synchronous producer call, not broker wire batches; the separate [Kafka client-hook metrics](/docs/pr-5/reference/package-kafka/.md) describe wire batches and broker activity. With the [producer daemon](/docs/pr-5/how-to/streaming-applications/use-the-producer-daemon/.md), the stream daemon's asynchronous output metrics are a separate set and do not turn a daemon write into a synchronous delivery confirmation. Producer result metrics are not evidence of durable application effects.
 
+Datums written directly to an injected backend writer carry the canonical `kafka.producer` namespace, authored unit, and instrument kind (`Counter` or `Histogram`) without relying on registered zero defaults. `kafka.producer.batch.records` remains a count-valued Histogram, and `kafka.producer.produce.duration` remains a millisecond-authored Histogram with the standard messaging-duration boundaries, exported in seconds by Prometheus and OpenTelemetry. The regular shared-writer path retains the same metric identities, units, and duration boundaries.
+
 ## Related[​](#related "Direct link to Related")
 
 * [General Kafka usage](/docs/pr-5/how-to/kafka/general/.md)
