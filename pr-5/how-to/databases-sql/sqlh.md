@@ -10,7 +10,7 @@ Install the SQLH version pinned by this documentation module:
 go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027132918-7e9d41caf9c9
 ```
 
-The examples use the docs module's published dependency pins: SQLH `v0.8.2-0.20261027132918-7e9d41caf9c9`, HTTPServer `v0.6.5-0.20261026100922-13fdf9916b14`, SQLC `v0.4.2-0.20261022101232-4e97a8c5efc7`, SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, and Gosoline `v0.68.4-0.20261026102448-e669b1bf2ab6`. These are pseudo-versions, not stable release tags. SQLH requires Go 1.27.0 or newer.
+The examples use the docs module's pinned dependency versions: SQLH `v0.8.2-0.20261027132918-7e9d41caf9c9`, HTTPServer `v0.6.5-0.20261026100922-13fdf9916b14`, SQLC `v0.4.2-0.20261022101232-4e97a8c5efc7`, SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, and Gosoline [`v0.69.0`](https://github.com/justtrackio/gosoline/releases/tag/v0.69.0), source [`f03013ad8ef537632e7fc9f09137b1848d0bc062`](https://github.com/justtrackio/gosoline/commit/f03013ad8ef537632e7fc9f09137b1848d0bc062). Gosoline is a stable release; the four provider module pins are pre-release pseudo-versions from open provider changes, not stable tags. SQLH requires Go 1.27.0 or newer.
 
 Then import the package:
 
