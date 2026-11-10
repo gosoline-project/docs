@@ -29,7 +29,7 @@ The table lists canonical Gosoline-authored names and units. The metric writer r
 | `conc.scheduler.batch.tasks` | Histogram | `count` | `name`: scheduler name | One observation per batch, written before the batch runner is called; the value is the number of jobs in the batch, including batches whose runner returns an error. |
 | `conc.scheduler.task.queue.duration` | Histogram | `ms` | `name`: scheduler name | One observation per job when its result arrives. It spans from entry to `ScheduleJob` through queueing, batch dispatch, and the entire batch-runner call; it is recorded before the success/error result is returned. |
 
-The standard `NewScheduler` writer is initialized with zero-valued defaults for both metrics, tagged with the scheduler `name`. The direct `NewSchedulerWithSettings` constructor accepts a writer supplied by the caller.
+There are no startup zero samples or other synthetic histogram entries. Each metric is observed only at the batch or job measurement boundary described above.
 
 ## Related
 
