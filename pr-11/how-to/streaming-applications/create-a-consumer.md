@@ -1,0 +1,322 @@
+# Create a consumer
+
+A consumer connects a configured input to your callback. Gosoline owns polling, decoding, acknowledgement, retries, health checks, metrics, tracing, and graceful shutdown; your callback owns the business operation.
+
+For a first walkthrough, see [Create a consumer](/docs/pr-11/getting-started/create-a-consumer/.md). This guide focuses on the current typed API and operational behavior.
+
+## Implement a typed callback[​](#implement-a-typed-callback "Direct link to Implement a typed callback")
+
+Define the expected message body and implement `stream.ConsumerCallback[M]`:
+
+```
+type OrderCreated struct {
+
+    Id    string  `json:"id"`
+
+    Total float64 `json:"total"`
+
+}
+
+
+
+func (c *consumer) Consume(ctx context.Context, order OrderCreated, attributes map[string]string) (bool, error) {
+
+    c.logger.Info(ctx, "received order %s with total %.2f", order.Id, order.Total)
+
+
+
+    return true, nil
+
+}
+```
+
+The callback boolean reports whether the business processing succeeded. The input uses that result to decide acknowledgement or redelivery; it is not itself the `processing_failed` metric. For example, a false result with no callback error can request deferred processing or retry without contributing to `processing_failed`.
+
+| Return       | Meaning                                                                            |
+| ------------ | ---------------------------------------------------------------------------------- |
+| `true, nil`  | Processing succeeded                                                               |
+| `false, nil` | Processing did not complete; use native redelivery or the configured retry handler |
+| `false, err` | Processing failed; record the error and retry where configured                     |
+
+Only return `true` after the business operation is complete. The boolean controls the retry decision independently of the error: `true, err` logs the error but still reports success.
+
+| Input                  | Failure behavior                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| SQS / SNS subscription | Failed messages are not deleted and can be redelivered after their visibility timeout. Native retry is selected automatically.      |
+| Kafka                  | Records handed to processing are committed even if processing fails. Enable the consumer retry handler for application failures.    |
+| Kinesis                | Records handed to processing are checkpointed even if processing fails. Enable the consumer retry handler for application failures. |
+| Redis list             | Reading removes the message from the list. Enable the consumer retry handler for application failures.                              |
+| File / in-memory       | Failed messages are not automatically read again. Enable the consumer retry handler when retries are needed.                        |
+
+For an input without native retry, configure `stream.consumer.<name>.retry.enabled: true`; the default retry transport is SQS. This writes failed callback messages to a separate retry queue rather than rewinding the original transport. Retry publication errors are logged; publication is not atomic with Kafka commits or Kinesis checkpoints. Model-selection and decoding errors return before this normal callback-retry path, so enabling retries is not a dead-letter guarantee for malformed messages. Make business operations idempotent because transport redelivery and retries can repeat them.
+
+## Run the consumer[​](#run-the-consumer "Direct link to Run the consumer")
+
+For one callback named `default`, use `application.RunConsumer`:
+
+```
+application.RunConsumer(newConsumer,
+
+    application.WithConfigFile("config.dist.yml", "yml"),
+
+)
+```
+
+The generic type is inferred from the factory's `stream.ConsumerCallback[OrderCreated]` return type.
+
+For several consumers accepting the same model, use `application.RunConsumers` with a `stream.ConsumerCallbackMap[M]`. Each map key must have a matching `stream.consumer.<name>` configuration. Prefer separate applications when callbacks process unrelated model types; use untyped consumers only when message attributes genuinely select among several models.
+
+## Connect the consumer to an input[​](#connect-the-consumer-to-an-input "Direct link to Connect the consumer to an input")
+
+The example maps consumer `default` to input `orders`:
+
+config.dist.yml
+
+```
+app:
+
+  env: dev
+
+  name: order-consumer
+
+
+
+stream:
+
+  consumer:
+
+    default:
+
+      input: orders
+
+      encoding: application/json
+
+
+
+  input:
+
+    orders:
+
+      type: file
+
+      filename: events.jsonl
+```
+
+The file input expects one serialized `stream.Message` per line, not a bare domain object:
+
+events.jsonl
+
+```
+{"body":"{\"id\":\"order-1001\",\"total\":42.5}"}
+
+{"body":"{\"id\":\"order-1002\",\"total\":18.75}"}
+```
+
+For SQS, only the input section changes:
+
+```
+stream:
+
+  consumer:
+
+    default:
+
+      input: orders
+
+
+
+  input:
+
+    orders:
+
+      type: sqs
+
+      queue_id: orders
+```
+
+## Complete example[​](#complete-example "Direct link to Complete example")
+
+main.go
+
+```
+package main
+
+
+
+import (
+
+	"context"
+
+
+
+	"github.com/justtrackio/gosoline/pkg/application"
+
+	"github.com/justtrackio/gosoline/pkg/cfg"
+
+	"github.com/justtrackio/gosoline/pkg/log"
+
+	"github.com/justtrackio/gosoline/pkg/stream"
+
+)
+
+
+
+type OrderCreated struct {
+
+	Id    string  `json:"id"`
+
+	Total float64 `json:"total"`
+
+}
+
+
+
+type consumer struct {
+
+	logger log.Logger
+
+}
+
+
+
+func main() {
+
+	application.RunConsumer(newConsumer,
+
+		application.WithConfigFile("config.dist.yml", "yml"),
+
+	)
+
+}
+
+
+
+func newConsumer(_ context.Context, _ cfg.Config, logger log.Logger) (stream.ConsumerCallback[OrderCreated], error) {
+
+	return &consumer{logger: logger}, nil
+
+}
+
+
+
+func (c *consumer) Consume(ctx context.Context, order OrderCreated, _ map[string]string) (bool, error) {
+
+	c.logger.Info(ctx, "received order %s with total %.2f", order.Id, order.Total)
+
+
+
+	return true, nil
+
+}
+```
+
+Run it from `docs/docs/how-to/streaming-applications/src/consumer`:
+
+```
+go run .
+```
+
+The file input finishes at EOF after its workers finish processing both records, so the example application exits by itself.
+
+The commands use the Gosoline version pinned in the docs repository's `go.mod`. To exercise an unreleased branch in a sibling `gosoline` checkout, create a local Go workspace from the docs repository root with `go work init . ../gosoline` (or add both modules to an existing workspace). Then run the example from its directory. Keep the local workspace out of commits.
+
+## Concurrency and batches[​](#concurrency-and-batches "Direct link to Concurrency and batches")
+
+Configure concurrency on **the input**, using `stream.input.<name>.runner_count`; the default is `1`. The callback instance is shared by its runners, so its state and downstream operations must be safe for concurrent use.
+
+| Input                    | Concurrency and ordering                                                                                                                                                      |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SQS / SNS subscription   | Each runner receives a batch and processes its messages sequentially. Multiple runners can process different batches concurrently.                                            |
+| Kafka                    | The runner count limits concurrent record callbacks. `processing_mode: ordered` preserves processing order within each partition; `unordered` is the default.                 |
+| Kinesis                  | The runner count limits concurrent record callbacks across owned shards. `processing_mode: ordered` preserves processing order within each shard; `unordered` is the default. |
+| File / Redis / in-memory | The runner count controls concurrent callback workers; there is no `processing_mode` setting.                                                                                 |
+
+Kafka and Kinesis ordered mode still allows concurrency across partitions or shards. With several unordered runners, records from the same partition or shard may execute concurrently.
+
+Ordinary callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
+
+### Batch callbacks in v0.68.0 and later[​](#batch-callbacks-in-v0680-and-later "Direct link to Batch callbacks in v0.68.0 and later")
+
+For application-level batching, implement `stream.BatchConsumerCallback[M]` and use `application.RunBatchConsumer`:
+
+```
+func (c *consumer) Consume(ctx context.Context, orders []OrderCreated, attributes []map[string]string) ([]bool, error) {
+
+    results := make([]bool, len(orders))
+
+    for i, order := range orders {
+
+        c.logger.Info(ctx, "received order %s with total %.2f", order.Id, order.Total)
+
+        results[i] = true
+
+    }
+
+    return results, nil
+
+}
+```
+
+The factory returns `stream.BatchConsumerCallback[OrderCreated]`. `RunBatchConsumers` accepts a `stream.BatchConsumerCallbackMap[M]`; untyped callbacks use `RunUntypedBatchConsumer` or `RunUntypedBatchConsumers`.
+
+Set collection limits on the consumer:
+
+```
+stream:
+
+  consumer:
+
+    default:
+
+      input: orders
+
+      batch_size: 100
+
+      buffer_size: 100
+
+      idle_timeout: 5s
+```
+
+| Setting        | Default | Meaning                                                                                                     |
+| -------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `batch_size`   | `1`     | Flush when the collected batch reaches this size. Aggregate envelopes can contribute several child records. |
+| `buffer_size`  | `0`     | Admission-channel capacity; `0` uses `batch_size`.                                                          |
+| `idle_timeout` | `10s`   | Flush interval, restarted after each timed or size-triggered flush.                                         |
+
+One collection loop calls the batch callback serially. Return one boolean per model; only false results request retry. A callback error is logged independently of the per-model results. Failed primary records use the configured retry handler; failed retry deliveries remain unacknowledged for redelivery.
+
+caution
+
+Batch consumers acknowledge primary messages when admitted to an **in-memory buffer**, before business processing succeeds. Enable retries when failed primary work must be persisted, and keep side effects idempotent. A crash before processing or retry persistence, exhausted retries, or an incomplete drain can require replay. This differs from the ordinary callback acknowledgement contract above.
+
+At input completion or shutdown, pending work is drained within the shared consumer grace deadline. See the [released runnable example](https://github.com/justtrackio/gosoline/tree/v0.68.3/examples/stream/batch-consumer), [callback API](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch_module_factory.go), and [batch implementation](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch.go) before choosing batching for an existing consumer.
+
+## Metrics[​](#metrics "Direct link to Metrics")
+
+The names below are canonical Gosoline metric names as authored. They are not backend-exported names: OpenTelemetry prefixes the namespace with `gosoline.` and converts duration values from authored milliseconds to seconds; CloudWatch and Prometheus apply their own name and unit conventions. See the [metric schema reference](/docs/pr-11/reference/metric-schema/.md) for exporter mappings.
+
+| Metric                     | Instrument | Authored unit | Dimensions                                                                                                                           | Description                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stream.process.duration`  | Histogram  | milliseconds  | `consumer.name` (configured consumer name)                                                                                           | One observation per processing operation. A single-record consumer records one observation per message; a batch consumer records one duration for the whole batch callback, not one per message.                                                                                                                                                                                               |
+| `stream.consumed.messages` | Counter    | count         | `consumer.name` (configured consumer name); `error.type` = `{{default}}`, `processing_failed`, or `model_lookup_failed`              | The default series counts collected input records before decoding, not successfully processed records: one per single-message invocation, or the collected batch size before decoding. Batch totals include records later skipped by ignored lookup, lookup or decoding failures, and empty decoded batches. `processing_failed` and `model_lookup_failed` are overlapping diagnostic subsets. |
+| `stream.retry.operations`  | Counter    | count         | `consumer.name` (configured consumer name); `operation` = `get` or `put`; `error.type` = `{{default}}` or `retry_handler_put_failed` | Retry-queue operation attempts. A failed `put` also emits the overlapping `retry_handler_put_failed` diagnostic; filter the default series for total attempt volume.                                                                                                                                                                                                                           |
+
+For `stream.consumed.messages`, the `{{default}}` series counts collected records, not successful processing. A single-message invocation contributes one; a batch contributes its collected record count before decoding, including records later skipped by ignored model lookup, lookup or decoding failures, and records in an empty decoded batch. `processing_failed` is an overlapping per-record subset for non-canceled processing errors, including preparation errors and panics. For a batch callback error it counts decoded records with false or missing acknowledgements, not the whole collected batch. A false or missing acknowledgement with a nil callback error can request deferred processing or retry without emitting `processing_failed`. Every `GetModel` failure emits `model_lookup_failed`, including ignored failures; only non-ignored lookup failures overlap `processing_failed`. Both diagnostics overlap the collected total. Filter `processing_failed` for processing-error totals rather than summing nondefault values. For retry attempts, normal `get`/`put` operations use `error.type="{{default}}"`; a failed retry-handler `put` also emits `retry_handler_put_failed` on the same operation series. That marker is an overlapping diagnostic subset, not another attempt; filter the default error type for totals. The default marker is writer-specific: select `error_type=""` in Prometheus, an absent `error.type` attribute in OpenTelemetry, or the series without that dimension in CloudWatch. For processing-error totals, filter `error_type="processing_failed"` in Prometheus or its matching explicit `error.type` value in other writers. In a batch, totals and diagnostic Counters are record-based while `process.duration` records one observation for the whole callback. Cancellation does not emit `processing_failed`. These current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle migration](/docs/pr-11/migrations/stream-consumer-lifecycle/.md).
+
+## Graceful processing[​](#graceful-processing "Direct link to Graceful processing")
+
+`stream.consumer.<name>.grace_time` defaults to `10s` and defines one shared processing deadline after shutdown begins, covering both the primary input and the retry input. Inputs stop fetching new messages; already fetched or admitted work may still reach the callback while draining. When the deadline expires, in-flight callback contexts are canceled.
+
+Final transport operations have separate windows:
+
+* SQS/SNS input `grace_time` allows final deletions after cancellation (default `10s`).
+* Kafka input `grace_time` allows final offset commits after processing finishes (default `10s`); see [Kafka shutdown](/docs/pr-11/how-to/kafka/general/.md#shutdown).
+* Kinesis input `release_delay` allows final checkpoint persistence, shard release, and client deregistration after processing ends (default `5s`).
+* Consumer `retry.grace_time` allows final retry writes; it defaults from `kernel.kill_timeout`.
+
+These windows rely on cooperative cancellation. Keep callback work bounded, pass its context to downstream calls, and give the kernel and deployment shutdown timeouts enough room for processing and final transport operations. Cancellation does not undo an operation or guarantee redelivery: the transport rules above still apply.
+
+## What's next?[​](#whats-next "Direct link to What's next?")
+
+* [Test your consumer](/docs/pr-11/getting-started/testing/test-your-consumer/.md)
+* [Use the producer daemon](/docs/pr-11/how-to/streaming-applications/use-the-producer-daemon/.md)
