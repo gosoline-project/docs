@@ -76,7 +76,7 @@ Set `max_connections: 0` (the default) to disable this limit.
 
 ### Metrics[​](#metrics "Direct link to Metrics")
 
-The server emits two gauge metrics with current-state samples at startup, every 10 seconds, on each request or connection state change, and during shutdown:
+The server records actual current-state values for these two gauges at startup, every 10 seconds, on each request or connection state change, and during shutdown. These are measurements of the current counts, not synthetic defaults; a zero is emitted when the measured count is zero. A series does not exist until an actual sample is emitted.
 
 | Canonical metric                   | Description                                 |
 | ---------------------------------- | ------------------------------------------- |

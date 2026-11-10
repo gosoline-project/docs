@@ -16,7 +16,7 @@ The table lists canonical Gosoline-authored names and units. The metric writer r
 
 The callback parses the model specification before installing its error-metric defer, so malformed or missing model attributes do not produce a metric. Delay errors and request cancellation that the callback handles as a retry also return without an error metric. Other returned errors after parsing—including transformer lookup, output lookup, or persistence errors—are counted as `outcome=applied,error.type=apply_failed`. Thus `applied` by itself does not imply success; read it with `error.type`.
 
-The writer seeds zero-valued defaults for `applied` and `skipped` with `error.type={{default}}` for each model ID known to the core. Those defaults are not consumed events; no zero-valued `apply_failed` series is seeded.
+There are no per-model startup zero samples. An `applied` or `skipped` series appears only when the callback handles a matching model event; `error.type={{default}}` is a dimension on actual successful persistence or skipped-event measurements, not a seeded series.
 
 ## Related[​](#related "Direct link to Related")
 

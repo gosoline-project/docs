@@ -7,10 +7,10 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```
-go get github.com/gosoline-project/sqlc@v0.4.2-0.20261022101232-4e97a8c5efc7
+go get github.com/gosoline-project/sqlc@v0.4.2-0.20261110112606-0b6d278a8c75
 ```
 
-This published pseudo-version is for SQLC `v0.4.2`; it is not a stable release tag.
+This published pseudo-version is for SQLC `v0.4.2`; it is a prerelease pseudo-version, not a stable release tag.
 
 Then import the package in your Go code:
 
@@ -117,7 +117,7 @@ Settings-based SQLC database construction emits the canonical `db.client` metric
 | `db.client.connections`      | High-priority Counter | `count` (`UnitCount`)        | None                               | Adds one before each underlying `driver.Driver.Open` call, including failed opens; counts open attempts since process start, not live connections.                 |
 | `db.client.connection.count` | High-priority Gauge   | `count` (`UnitCountAverage`) | `connection.state`: `used`, `idle` | Reports `sql.DB.Stats().InUse` and `.Idle`, respectively, immediately and once per minute. Both states are written, including zero; there is no total/open series. |
 
-These metrics reach a writer when the application wires `application.WithMetrics`, sets `metric.enabled: true`, and configures at least one writer under `metric.writers`; SQLC has no separate metric-enable setting. The docs module pins SQLC `v0.4.2-0.20261022101232-4e97a8c5efc7`; see the [pinned metric source](https://github.com/gosoline-project/sqlc/blob/4e97a8c5efc76af999d0ea85995ac0b3fbb9004e/metrics.go) for the canonical namespace, types, units, and dimensions. The [`db-repo` reference](/docs/pr-11/reference/package-db-repo/.md) documents separate repository-operation metrics.
+These metrics reach a writer when the application wires `application.WithMetrics`, sets `metric.enabled: true`, and configures at least one writer under `metric.writers`; SQLC has no separate metric-enable setting. The docs module pins SQLC `v0.4.2-0.20261110112606-0b6d278a8c75`; see the [pinned metric source](https://github.com/gosoline-project/sqlc/blob/0b6d278a8c75e755bef1028ce9c96bdb115d527e/metrics.go) for the canonical namespace, types, units, and dimensions. The [`db-repo` reference](/docs/pr-11/reference/package-db-repo/.md) documents separate repository-operation metrics.
 
 ## Migrations[​](#migrations "Direct link to Migrations")
 

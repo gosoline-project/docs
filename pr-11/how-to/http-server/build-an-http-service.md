@@ -15,10 +15,10 @@ Together with built-in middleware for logging, metrics, compression, and gracefu
 Install the package:
 
 ```
-go get github.com/gosoline-project/httpserver@v0.6.5-0.20261026100922-13fdf9916b14
+go get github.com/gosoline-project/httpserver@v0.6.5-0.20261110113715-f6493110894a
 ```
 
-The documentation module pins this published pseudo-version for HTTPServer `v0.6.5`; it is not a stable release tag.
+The documentation module pins the published pseudo-version `v0.6.5-0.20261110113715-f6493110894a` for HTTPServer `v0.6.5`; it is not a stable release tag.
 
 The entry point for any HTTP server is a `RouterFactory` — a function that receives a `*Router` and registers routes on it:
 

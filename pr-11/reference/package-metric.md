@@ -40,9 +40,9 @@ This framework metric is included in the current 80-name inventory in the [Metri
 
 | Metric               | Instrument | Authored unit | Dimensions                  | Description                                                                                                                              |
 | -------------------- | ---------- | ------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `metric.log.records` | counter    | count         | `level` = `warn` or `error` | Counts only warn- and error-level records delivered to the metric logger handler, separated by level. Other log levels are filtered out. |
+| `metric.log.records` | Counter    | Count         | `level` = `warn` or `error` | Counts only warn- and error-level records delivered to the metric logger handler, separated by level. Other log levels are filtered out. |
 
-The handler declares count-counter defaults for both levels and writes one increment for each matching record it receives ([handler source](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/metric/logger_handler.go)).
+The handler emits one `Count`/`Counter` increment for each matching record it receives ([handler source](https://github.com/justtrackio/gosoline/blob/d2be354ca7bc975f6e7a33c6d2cbdec1330feb7d/pkg/metric/logger_handler.go)). It creates no synthetic zero samples: a level series appears only after a matching record; a missing series means no matching record has been observed, not an observed zero.
 
 ### Prometheus HTTP-handler metrics (upstream-owned)[​](#prometheus-http-handler-metrics-upstream-owned "Direct link to Prometheus HTTP-handler metrics (upstream-owned)")
 
