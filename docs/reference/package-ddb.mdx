@@ -8,7 +8,7 @@ title: Package ddb
 
 ## API and activation
 
-`ddb.NewMetricRepository(config, logger, repo)` creates the metric-wrapped repository. In the standard DDB model output, both `Create` and `Update` persistence route through `PutItem` and are recorded with `operation.name=save`; deletes are not recorded by this wrapper. See [`NewMetricRepository`](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/ddb/metric_repo.go) and the [model output wiring](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/mdlsub/output_ddb.go).
+`ddb.NewMetricRepository(config, logger, repo)` creates the metric-wrapped repository. In the standard DDB model output, both `Create` and `Update` persistence route through `PutItem` and are recorded with `operation.name=save`; deletes are not recorded by this wrapper. See [`NewMetricRepository`](https://github.com/justtrackio/gosoline/blob/d2be354ca7bc975f6e7a33c6d2cbdec1330feb7d/pkg/ddb/metric_repo.go) and the [model output wiring](https://github.com/justtrackio/gosoline/blob/d2be354ca7bc975f6e7a33c6d2cbdec1330feb7d/pkg/mdlsub/output_ddb.go).
 
 ## Metrics
 
@@ -16,11 +16,12 @@ The table lists names and units authored by Gosoline. The OpenTelemetry writer e
 
 | Metric | Instrument | Authored unit | Dimensions | Description |
 |--------|------------|---------------|------------|-------------|
-| `ddb.operation.duration` | Histogram | `ms` | `operation.name`: `save`; `model.id`: repository model ID; `error.type`: `{{default}}` on success, `operation_failed` on error | Records after each wrapped `PutItem` result, including errors. **Source caveat:** the current implementation initializes the start time to `time.Time{}` and computes `time.Since(start)` after `PutItem`; the value is therefore measured from Go's zero time, not the call's elapsed duration. Do not interpret it as a normal per-operation latency. |
-| `ddb.operations` | Counter | `count` | `operation.name`: `save`; `model.id`: repository model ID; `error.type`: `{{default}}` on success, `operation_failed` on error | Adds one after each wrapped `PutItem`/save result, including failures. High-priority zero defaults exist for both outcomes per model and operation. |
+| `ddb.operation.duration` | Histogram | `ms` | `operation.name`: `save`; `model.id`: repository model ID; `error.type`: `{{default}}` on success, `operation_failed` on error | Records one elapsed duration observation after each wrapped `PutItem` result, including errors, using the database-duration histogram profile. |
+| `ddb.operations` | Counter | `count` | `operation.name`: `save`; `model.id`: repository model ID; `error.type`: `{{default}}` on success, `operation_failed` on error | Adds one after each wrapped `PutItem`/save result, including failures. |
+Both metrics are High priority, so successful duration samples can now be admitted by CloudWatch where the former Low-priority success seed could suppress them. This may increase CloudWatch metric volume and cost; it does not change the actual operation priorities.
 
 ## Related references
 
 - [Key-value store package](/reference/package-kvstore)
 - [Metric schema](/reference/metric-schema)
-- [DynamoDB metric implementation](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/ddb/metric_repo.go)
+- [DynamoDB metric implementation](https://github.com/justtrackio/gosoline/blob/d2be354ca7bc975f6e7a33c6d2cbdec1330feb7d/pkg/ddb/metric_repo.go)
