@@ -101,10 +101,6 @@ The executor provides automatic retry with configurable backoff for transient da
 - Handled errors: deadlocks (MySQL 1213), invalid connection, bad connection, I/O timeout
 - Configuration key: `db.<name>.retry`
 
-### Metrics / Observability
-
-Connection pool metrics are automatically published every minute under the metric name `DbConnectionCount`. Tracked dimensions: new connections, open connections, in-use connections, idle connections.
-
 ### SQL Parser
 
 `ParseWhere(input string)` parses a raw SQL WHERE string into a type-safe `Expression`. Useful for accepting dynamic filter strings from external sources.

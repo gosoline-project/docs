@@ -4,11 +4,11 @@ go 1.27.0
 
 require (
 	github.com/gin-gonic/gin v1.11.0
-	github.com/gosoline-project/httpserver v0.6.4
-	github.com/gosoline-project/sqlc v0.4.1
-	github.com/gosoline-project/sqlh v0.8.2-0.20261027132918-7e9d41caf9c9
-	github.com/gosoline-project/sqlr v0.9.2-0.20261027132740-484c58e94d7b
-	github.com/justtrackio/gosoline v0.68.3
+	github.com/gosoline-project/httpserver v0.6.5
+	github.com/gosoline-project/sqlc v0.5.0
+	github.com/gosoline-project/sqlh v0.9.0
+	github.com/gosoline-project/sqlr v0.10.0
+	github.com/justtrackio/gosoline v0.69.0
 )
 
 require (
@@ -87,7 +87,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1 // indirect
 	github.com/go-resty/resty/v2 v2.17.1 // indirect
 	github.com/go-sql-driver/mysql v1.9.3 // indirect
-	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
+	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/goccy/go-yaml v1.18.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect

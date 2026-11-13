@@ -39,3 +39,29 @@
 .blog-wrapper .container {
   max-width: 1600px;
 }
+
+/* Keep documentation tables readable; their native overflow stays within the table. */
+.theme-doc-markdown table {
+  table-layout: auto;
+  width: 100%;
+}
+
+.theme-doc-markdown th,
+.theme-doc-markdown td {
+  min-width: 10rem;
+  overflow-wrap: anywhere;
+}
+
+.theme-doc-markdown th {
+  white-space: nowrap;
+}
+
+.theme-doc-markdown th:nth-child(4),
+.theme-doc-markdown td:nth-child(4) {
+  min-width: 16rem;
+}
+
+.theme-doc-markdown th:nth-child(5),
+.theme-doc-markdown td:nth-child(5) {
+  min-width: 22rem;
+}
