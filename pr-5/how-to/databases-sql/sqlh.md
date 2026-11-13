@@ -7,10 +7,10 @@ The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the c
 Install the SQLH version pinned by this documentation module:
 
 ```
-go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027132918-7e9d41caf9c9
+go get github.com/gosoline-project/sqlh@v0.9.0
 ```
 
-The examples use the docs module's pinned dependency versions: SQLH `v0.8.2-0.20261027132918-7e9d41caf9c9`, HTTPServer [`v0.6.5`](https://github.com/gosoline-project/httpserver/releases/tag/v0.6.5), SQLC [`v0.5.0`](https://github.com/gosoline-project/sqlc/releases/tag/v0.5.0), SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, and Gosoline [`v0.69.0`](https://github.com/justtrackio/gosoline/releases/tag/v0.69.0), source [`f03013ad8ef537632e7fc9f09137b1848d0bc062`](https://github.com/justtrackio/gosoline/commit/f03013ad8ef537632e7fc9f09137b1848d0bc062). Gosoline, HTTPServer, and SQLC are released versions; the SQLH and SQLR pins are pre-release pseudo-versions from open provider changes, not stable tags. SQLH requires Go 1.27.0 or newer.
+The examples use the docs module's pinned dependency versions: SQLH [`v0.9.0`](https://github.com/gosoline-project/sqlh/releases/tag/v0.9.0), HTTPServer [`v0.6.5`](https://github.com/gosoline-project/httpserver/releases/tag/v0.6.5), SQLC [`v0.5.0`](https://github.com/gosoline-project/sqlc/releases/tag/v0.5.0), SQLR [`v0.10.0`](https://github.com/gosoline-project/sqlr/releases/tag/v0.10.0), and Gosoline [`v0.69.0`](https://github.com/justtrackio/gosoline/releases/tag/v0.69.0), source [`f03013ad8ef537632e7fc9f09137b1848d0bc062`](https://github.com/justtrackio/gosoline/commit/f03013ad8ef537632e7fc9f09137b1848d0bc062). Gosoline, HTTPServer, SQLC, SQLH, and SQLR are released versions. SQLH requires Go 1.27.0 or newer.
 
 Then import the package:
 
