@@ -4,14 +4,16 @@ This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers. Use
 
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations. Do not replace domain rules with generic CRUD behavior.
 
-This guide targets SQLH `v0.8.2-0.20261027132918-7e9d41caf9c9`, SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, SQLC v0.5.0, and httpserver v0.6.5. This SQLH version declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected. The SQLH pin alone does not select the security-updated Gosoline SDK. Use Go 1.27.4 or newer and select compatible SQLC and HTTP server versions with that SDK:
+This guide targets the coordinated security-update snapshots of SQLH, SQLR, SQLC, HTTP server, and Gosoline. These are pre-release versions, not release tags. Use Go 1.27.4 or newer and select the versions together:
 
 ```
-go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027132918-7e9d41caf9c9 \
+go get github.com/gosoline-project/sqlh@v0.9.2-0.20261119192959-e51cd6a2e6e2 \
 
-  github.com/gosoline-project/sqlc@v0.5.0 \
+  github.com/gosoline-project/sqlr@v0.10.1-0.20261119192756-5988af480e42 \
 
-  github.com/gosoline-project/httpserver@v0.6.5 \
+  github.com/gosoline-project/sqlc@v0.5.1-0.20261119192756-91e407c0fb08 \
+
+  github.com/gosoline-project/httpserver@v0.6.9-0.20261119192757-bb29cac74e89 \
 
   github.com/quic-go/quic-go@v0.59.1 \
 

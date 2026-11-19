@@ -4,14 +4,16 @@ The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the c
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
-Install SQLH with compatible SQLC, HTTP server, and security-updated Gosoline SDK versions. Use Go 1.27.4 or newer:
+To use the coordinated security-update snapshots, select SQLH, SQLR, SQLC, HTTP server, and the Gosoline SDK together. These are pre-release versions, not release tags. Use Go 1.27.4 or newer:
 
 ```
-go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027132918-7e9d41caf9c9 \
+go get github.com/gosoline-project/sqlh@v0.9.2-0.20261119192959-e51cd6a2e6e2 \
 
-  github.com/gosoline-project/sqlc@v0.5.0 \
+  github.com/gosoline-project/sqlr@v0.10.1-0.20261119192756-5988af480e42 \
 
-  github.com/gosoline-project/httpserver@v0.6.5 \
+  github.com/gosoline-project/sqlc@v0.5.1-0.20261119192756-91e407c0fb08 \
+
+  github.com/gosoline-project/httpserver@v0.6.9-0.20261119192757-bb29cac74e89 \
 
   github.com/quic-go/quic-go@v0.59.1 \
 
@@ -20,9 +22,9 @@ go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027132918-7e9d41caf9c9 \
   github.com/justtrackio/gosoline@v0.69.4-0.20261119192118-ea1ab1cd583b
 ```
 
-The SQLH pin alone does not select the security-updated Gosoline SDK. Review your module's selected dependency graph for other required security updates and compatibility.
+Review your module's selected dependency graph for other required security updates and compatibility.
 
-Use the dependency versions pinned in this documentation repository's `go.mod` for the executable examples. The examples require Go 1.27.4 or newer. A module minimum does not patch an already-newer Go toolchain: the patched security floors are Go 1.26.11 on the 1.26 release line and Go 1.27.4 on the 1.27 release line. The 1.26 security floor does not override this repository's Go 1.27.4 build requirement.
+The documentation repository's `go.mod` retains earlier SQLH and SQLR snapshots for its executable examples; the command above selects the coordinated security-update snapshots. The examples require Go 1.27.4 or newer. A module minimum does not patch an already-newer Go toolchain: the patched security floors are Go 1.26.11 on the 1.26 release line and Go 1.27.4 on the 1.27 release line. The 1.26 security floor does not override this repository's Go 1.27.4 build requirement.
 
 Then import the package:
 
