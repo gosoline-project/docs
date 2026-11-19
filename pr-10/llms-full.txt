@@ -4229,6 +4229,8 @@ Install SQLH:
 go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027132918-7e9d41caf9c9
 ```
 
+This SQLH version alone does not select the security-updated Gosoline SDK used by this documentation repository. When installing it in another module, review the selected dependency graph and use compatible versions that include the required security fixes.
+
 Use the dependency versions pinned in this documentation repository's `go.mod` for the executable examples. The examples require Go 1.27.4 or newer. A module minimum does not patch an already-newer Go toolchain: the patched security floors are Go 1.26.11 on the 1.26 release line and Go 1.27.4 on the 1.27 release line. The 1.26 security floor does not override this repository's Go 1.27.4 build requirement.
 
 Then import the package:
@@ -18702,7 +18704,7 @@ This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers. Use
 
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations. Do not replace domain rules with generic CRUD behavior.
 
-This guide targets SQLH `v0.8.2-0.20261027132918-7e9d41caf9c9`, SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, SQLC v0.4.1, and httpserver v0.6.4. This SQLH version declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
+This guide targets SQLH `v0.8.2-0.20261027132918-7e9d41caf9c9`, SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, SQLC v0.4.1, and httpserver v0.6.4. This SQLH version declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected. This SQLH pin alone does not select the security-updated Gosoline SDK used by this documentation repository. Review the service's selected dependency graph and use compatible versions that include the required security fixes.
 
 ## 1. Review the Current API[​](#1-review-the-current-api "Direct link to 1. Review the Current API")
 
