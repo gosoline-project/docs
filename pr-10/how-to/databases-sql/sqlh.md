@@ -4,13 +4,23 @@ The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the c
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
-Install SQLH:
+Install SQLH with compatible SQLC, HTTP server, and security-updated Gosoline SDK versions. Use Go 1.27.4 or newer:
 
 ```
-go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027132918-7e9d41caf9c9
+go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027132918-7e9d41caf9c9 \
+
+  github.com/gosoline-project/sqlc@v0.5.0 \
+
+  github.com/gosoline-project/httpserver@v0.6.5 \
+
+  github.com/quic-go/quic-go@v0.59.1 \
+
+  github.com/quic-go/qpack@v0.6.0 \
+
+  github.com/justtrackio/gosoline@v0.69.4-0.20261119192118-ea1ab1cd583b
 ```
 
-This SQLH version alone does not select the security-updated Gosoline SDK used by this documentation repository. When installing it in another module, review the selected dependency graph and use compatible versions that include the required security fixes.
+The SQLH pin alone does not select the security-updated Gosoline SDK. Review your module's selected dependency graph for other required security updates and compatibility.
 
 Use the dependency versions pinned in this documentation repository's `go.mod` for the executable examples. The examples require Go 1.27.4 or newer. A module minimum does not patch an already-newer Go toolchain: the patched security floors are Go 1.26.11 on the 1.26 release line and Go 1.27.4 on the 1.27 release line. The 1.26 security floor does not override this repository's Go 1.27.4 build requirement.
 
