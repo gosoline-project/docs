@@ -14,7 +14,7 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlc@v0.4.1
+go get github.com/gosoline-project/sqlc@v0.5.0
 ```
 
 Then import the package in your Go code:
@@ -211,7 +211,7 @@ query := sqlc.FromG[Experiment]("experiments").
     ForUpdate()
 ```
 
-Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. SQLR v0.9.1 also applies a repository query's `ForUpdate()` setting to its preloads.
+Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only the rows it selects. An SQLR repository query with `ForUpdate()` also locks rows selected by its separate preload queries in the same transaction.
 
 ## JSON Ordering
 

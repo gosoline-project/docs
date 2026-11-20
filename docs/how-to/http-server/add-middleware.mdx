@@ -10,7 +10,7 @@ The httpserver includes a built-in middleware chain and supports custom middlewa
 Every httpserver automatically includes these middleware, applied in order:
 
 1. **Sampling** — Applies sampling decisions based on HTTP headers
-2. **Metric** — Records request count, response time, and status code metrics
+2. **Metric** — Records [HTTP server metrics](/reference/package-httpserver)
 3. **Logging** — Logs request details using fingers-crossed scope (only logs on errors)
 4. **Compression** — Handles gzip compression/decompression
 5. **Max body size** — Limits incoming request bodies with `httpserver.<name>.max_body_bytes`
@@ -21,7 +21,7 @@ Every httpserver automatically includes these middleware, applied in order:
 10. **Concurrency** — Limits concurrent requests
 11. **Chaos** — Randomly introduces failures for resilience testing (disabled by default)
 
-You don't need to configure these — they are enabled by default (except chaos, which is opt-in).
+The server registers these middleware automatically. Chaos is opt-in, and [concurrent request limiting](./concurrency-and-connection-pressure.mdx#limiting-concurrent-requests) requires a positive `concurrency.max_requests` value.
 
 ## Request body size limit
 

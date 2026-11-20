@@ -210,3 +210,8 @@ See the [Naming Patterns reference](/reference/naming-patterns#modelid-domain-pa
 ## Migration quick start
 
 For full step-by-step instructions covering stream input/output config, `mdlsub` publishers, Go code changes, and per-service pattern updates, see the [migration guide](/migrations/app-identity-and-naming-patterns).
+
+*Historical metric note:* This February 2026 article records the naming behavior at publication. The
+current V2 schema supersedes its Prometheus-prefix statements: Prometheus now uses the fixed `gosoline`
+prefix, while application identity belongs on scrape-target labels. See the current [Metric schema
+reference](/reference/metric-schema) and [Naming Patterns reference](/reference/naming-patterns).
