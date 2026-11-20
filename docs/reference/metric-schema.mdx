@@ -150,7 +150,7 @@ Metric namespaces are naming prefixes, not one-to-one component identifiers. The
 | `rpc.server` | `sdk.grpcserver` | [gRPC server](/reference/package-grpcserver) |
 | `smpl` | `sdk.smpl` sampling | [Sampling](/how-to/sampling/use-sampling) |
 
-The SQLC page documents that package's use of the same canonical `db.client` connection metrics; it adds no separate SQLC metric names to this inventory. For broader workflow context, see the [streaming inputs and outputs guide](/how-to/streaming-applications/understand-inputs-and-outputs), the [Kafka guide](/how-to/kafka/general), the [AWS package reference](/reference/package-cloud_aws), and the [SQL database overview](/how-to/databases-sql). Those overview pages supplement, rather than replace, the component pages above.
+For broader workflow context, see the [AWS package reference](/reference/package-cloud_aws), the [Kafka guide](/how-to/kafka/general), the [SQL database overview](/how-to/databases-sql), and the [streaming inputs and outputs guide](/how-to/streaming-applications/understand-inputs-and-outputs). Those pages supplement the component pages above.
 
 The 80-name inventory below contains Gosoline-authored metrics only. `metric.schema_version` is metadata, not a metric; the upstream Prometheus handler metrics and Go/process collectors described on the [metric package page](/reference/package-metric) are separate from these 80 names.
 
@@ -305,11 +305,7 @@ CloudWatch stream-level views, see the [shard-reader projection contract](/refer
 | `ddb.operations` | counter | count | `operation.name`, `model.id`, `error.type` | One after the wrapped DynamoDB save returns (`operation.name="save"`). Success uses `{{default}}`; failure uses `operation_failed`. High-priority zero defaults exist for both outcomes per model. |
 | `ddb.operation.duration` | histogram | ms | `operation.name`, `model.id`, `error.type` | Duration of a DynamoDB repository operation. |
 
-The SQLC client emits the same canonical `db.client.connections` driver-open Counter and
-`db.client.connection.count` used/idle pool Gauges described above; these are shared metric names,
-not separate legacy metrics. SQLC's connection-count Gauges are written immediately and then once
-per minute, including zero values, with no total/open state. See the [SQLC guide](/how-to/databases-sql/sqlc)
-for the package-specific emission details and source pin.
+SQLC emits the same `db.client` metrics. See [SQLC connections in the database client reference](/reference/package-db#sqlc-connections) for emission and export details.
 
 ### `mdlsub`
 
