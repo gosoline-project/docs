@@ -10,8 +10,6 @@ Add the dependency to your Go module:
 go get github.com/gosoline-project/sqlc@v0.5.0
 ```
 
-SQLC `v0.5.0` is the current stable release.
-
 Then import the package in your Go code:
 
 ```
@@ -107,17 +105,6 @@ sqlc:
 | `timeouts.timeout`        | MySQL driver connection timeout. For PostgreSQL, use `parameters.connect_timeout`. | `0`                  |
 
 Use `parameters` for driver-specific settings such as PostgreSQL `sslmode` or `connect_timeout`. PostgreSQL connections use `uri.*` and `parameters`; the MySQL-specific settings above are ignored by the PostgreSQL driver.
-
-## Metrics[​](#metrics "Direct link to Metrics")
-
-Settings-based SQLC database construction emits the canonical `db.client` metrics used by the [SQL database client reference](/docs/pr-5/reference/package-db/.md). Driver opens are event Counters; pool snapshots are Gauges. SQLC writes both used and idle pool series immediately and then once per minute, including zero values, with no separate total/open pool series.
-
-| Metric                       | Instrument            | Authored unit                | Dimensions                         | Description                                                                                                                                                        |
-| ---------------------------- | --------------------- | ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `db.client.connections`      | High-priority Counter | `count` (`UnitCount`)        | None                               | Adds one before each underlying `driver.Driver.Open` call, including failed opens; counts open attempts since process start, not live connections.                 |
-| `db.client.connection.count` | High-priority Gauge   | `count` (`UnitCountAverage`) | `connection.state`: `used`, `idle` | Reports `sql.DB.Stats().InUse` and `.Idle`, respectively, immediately and once per minute. Both states are written, including zero; there is no total/open series. |
-
-These metrics reach a writer when the application wires `application.WithMetrics`, sets `metric.enabled: true`, and configures at least one writer under `metric.writers`; SQLC has no separate metric-enable setting. The docs module pins SQLC `v0.5.0`; see the [pinned metric source](https://github.com/gosoline-project/sqlc/blob/89ede23e657a11d223f9b24f16dc42abfbb059cc/metrics.go) for the canonical namespace, types, units, and dimensions. The [`db-repo` reference](/docs/pr-5/reference/package-db-repo/.md) documents separate repository-operation metrics.
 
 ## Migrations[​](#migrations "Direct link to Migrations")
 
@@ -486,7 +473,7 @@ query := sqlc.FromG[Experiment]("experiments").
     ForUpdate()
 ```
 
-Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. The SQLR migration-prerelease snapshot pinned by this documentation branch also applies a repository query's `ForUpdate()` setting to its preloads.
+Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only the rows it selects. An SQLR repository query with `ForUpdate()` also locks rows selected by its separate preload queries in the same transaction.
 
 ## JSON Ordering[​](#json-ordering "Direct link to JSON Ordering")
 

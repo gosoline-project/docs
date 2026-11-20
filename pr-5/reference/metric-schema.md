@@ -103,7 +103,7 @@ Metric namespaces are naming prefixes, not one-to-one component identifiers. The
 | `rpc.server`        | `sdk.grpcserver`                                                            | [gRPC server](/docs/pr-5/reference/package-grpcserver/.md)                              |
 | `smpl`              | `sdk.smpl` sampling                                                         | [Sampling](/docs/pr-5/how-to/sampling/use-sampling/.md)                                 |
 
-The SQLC page documents that package's use of the same canonical `db.client` connection metrics; it adds no separate SQLC metric names to this inventory. For broader workflow context, see the [streaming inputs and outputs guide](/docs/pr-5/how-to/streaming-applications/understand-inputs-and-outputs/.md), the [Kafka guide](/docs/pr-5/how-to/kafka/general/.md), the [AWS package reference](/docs/pr-5/reference/package-cloud_aws/.md), and the [SQL database overview](/docs/pr-5/how-to/databases-sql/.md). Those overview pages supplement, rather than replace, the component pages above.
+For broader workflow context, see the [AWS package reference](/docs/pr-5/reference/package-cloud_aws/.md), the [Kafka guide](/docs/pr-5/how-to/kafka/general/.md), the [SQL database overview](/docs/pr-5/how-to/databases-sql/.md), and the [streaming inputs and outputs guide](/docs/pr-5/how-to/streaming-applications/understand-inputs-and-outputs/.md). Those pages supplement the component pages above.
 
 The 80-name inventory below contains Gosoline-authored metrics only. `metric.schema_version` is metadata, not a metric; the upstream Prometheus handler metrics and Go/process collectors described on the [metric package page](/docs/pr-5/reference/package-metric/.md) are separate from these 80 names.
 
@@ -222,7 +222,7 @@ For Kinesis `consumed.messages`, a processing/checkpoint operation error suppres
 | `ddb.operations`                    | counter   | count         | `operation.name`, `model.id`, `error.type` | One after the wrapped DynamoDB save returns (`operation.name="save"`). Success uses `{{default}}`; failure uses `operation_failed`. High-priority zero defaults exist for both outcomes per model.                                |
 | `ddb.operation.duration`            | histogram | ms            | `operation.name`, `model.id`, `error.type` | Duration of a DynamoDB repository operation.                                                                                                                                                                                      |
 
-The SQLC client emits the same canonical `db.client.connections` driver-open Counter and `db.client.connection.count` used/idle pool Gauges described above; these are shared metric names, not separate legacy metrics. SQLC's connection-count Gauges are written immediately and then once per minute, including zero values, with no total/open state. See the [SQLC guide](/docs/pr-5/how-to/databases-sql/sqlc/.md) for the package-specific emission details and source pin.
+SQLC emits the same `db.client` metrics. See [SQLC connections in the database client reference](/docs/pr-5/reference/package-db/.md#sqlc-connections) for emission and export details.
 
 ### `mdlsub`[​](#mdlsub "Direct link to mdlsub")
 

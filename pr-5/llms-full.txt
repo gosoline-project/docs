@@ -1993,11 +1993,7 @@ app:
 * **Define once, use everywhere**: Set your hierarchy in one place
 * **Easy updates**: Change your naming convention globally by updating one config value
 * **Simplified patterns**: Use `{app.namespace}` instead of repeating the same placeholders
-* **Delimiter flexibility**: Resource patterns use service-specific delimiters; CloudWatch naming uses `/` and most AWS resource names use `-`.
-
-### Metrics use a separate schema[​](#metrics-use-a-separate-schema "Direct link to Metrics use a separate schema")
-
-Metric names are not resource names. The CloudWatch namespace can still be configured from application identity, but Gosoline's Prometheus writer uses a fixed `gosoline` prefix; application identity belongs on the scrape target through service discovery/target labels. For the V2 metric names, units, and backend rendering, see the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md).
+* **Delimiter flexibility**: Reuse the same pattern across services that use different separators
 
 ## How Naming Patterns Work[​](#how-naming-patterns-work "Direct link to How Naming Patterns Work")
 
@@ -3377,14 +3373,6 @@ The `sqlh` package provides typed, transaction-aware CRUD handlers for SQLR enti
 
 You can use multiple layers together within the same application—using `sqlh` for standard CRUD endpoints while leveraging `sqlc` directly for complex reporting queries.
 
-## Package references and metrics[​](#package-references-and-metrics "Direct link to Package references and metrics")
-
-The SDK's SQL connection and repository emitters have separate component references with their own metric tables:
-
-* [SQL database client package (`pkg/db`)](/docs/pr-5/reference/package-db/.md)
-* [SQL repository package (`pkg/db-repo`)](/docs/pr-5/reference/package-db-repo/.md)
-* [SQLC legacy connection metric](/docs/pr-5/how-to/databases-sql/sqlc/.md)
-
 
 ---
 
@@ -3399,8 +3387,6 @@ Add the dependency to your Go module:
 ```
 go get github.com/gosoline-project/sqlc@v0.5.0
 ```
-
-SQLC `v0.5.0` is the current stable release.
 
 Then import the package in your Go code:
 
@@ -3497,17 +3483,6 @@ sqlc:
 | `timeouts.timeout`        | MySQL driver connection timeout. For PostgreSQL, use `parameters.connect_timeout`. | `0`                  |
 
 Use `parameters` for driver-specific settings such as PostgreSQL `sslmode` or `connect_timeout`. PostgreSQL connections use `uri.*` and `parameters`; the MySQL-specific settings above are ignored by the PostgreSQL driver.
-
-## Metrics[​](#metrics "Direct link to Metrics")
-
-Settings-based SQLC database construction emits the canonical `db.client` metrics used by the [SQL database client reference](/docs/pr-5/reference/package-db/.md). Driver opens are event Counters; pool snapshots are Gauges. SQLC writes both used and idle pool series immediately and then once per minute, including zero values, with no separate total/open pool series.
-
-| Metric                       | Instrument            | Authored unit                | Dimensions                         | Description                                                                                                                                                        |
-| ---------------------------- | --------------------- | ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `db.client.connections`      | High-priority Counter | `count` (`UnitCount`)        | None                               | Adds one before each underlying `driver.Driver.Open` call, including failed opens; counts open attempts since process start, not live connections.                 |
-| `db.client.connection.count` | High-priority Gauge   | `count` (`UnitCountAverage`) | `connection.state`: `used`, `idle` | Reports `sql.DB.Stats().InUse` and `.Idle`, respectively, immediately and once per minute. Both states are written, including zero; there is no total/open series. |
-
-These metrics reach a writer when the application wires `application.WithMetrics`, sets `metric.enabled: true`, and configures at least one writer under `metric.writers`; SQLC has no separate metric-enable setting. The docs module pins SQLC `v0.5.0`; see the [pinned metric source](https://github.com/gosoline-project/sqlc/blob/89ede23e657a11d223f9b24f16dc42abfbb059cc/metrics.go) for the canonical namespace, types, units, and dimensions. The [`db-repo` reference](/docs/pr-5/reference/package-db-repo/.md) documents separate repository-operation metrics.
 
 ## Migrations[​](#migrations "Direct link to Migrations")
 
@@ -3876,7 +3851,7 @@ query := sqlc.FromG[Experiment]("experiments").
     ForUpdate()
 ```
 
-Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. The SQLR migration-prerelease snapshot pinned by this documentation branch also applies a repository query's `ForUpdate()` setting to its preloads.
+Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only the rows it selects. An SQLR repository query with `ForUpdate()` also locks rows selected by its separate preload queries in the same transaction.
 
 ## JSON Ordering[​](#json-ordering "Direct link to JSON Ordering")
 
@@ -4245,13 +4220,13 @@ The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the c
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
-Install the SQLH version pinned by this documentation module:
+Install SQLH:
 
 ```
 go get github.com/gosoline-project/sqlh@v0.9.0
 ```
 
-The examples use the docs module's pinned dependency versions: SQLH [`v0.9.0`](https://github.com/gosoline-project/sqlh/releases/tag/v0.9.0), HTTPServer [`v0.6.5`](https://github.com/gosoline-project/httpserver/releases/tag/v0.6.5), SQLC [`v0.5.0`](https://github.com/gosoline-project/sqlc/releases/tag/v0.5.0), SQLR [`v0.10.0`](https://github.com/gosoline-project/sqlr/releases/tag/v0.10.0), and Gosoline [`v0.69.0`](https://github.com/justtrackio/gosoline/releases/tag/v0.69.0), source [`f03013ad8ef537632e7fc9f09137b1848d0bc062`](https://github.com/justtrackio/gosoline/commit/f03013ad8ef537632e7fc9f09137b1848d0bc062). Gosoline, HTTPServer, SQLC, SQLH, and SQLR are released versions. SQLH requires Go 1.27.0 or newer.
+The examples require Go 1.27.0 or newer.
 
 Then import the package:
 
@@ -5823,8 +5798,6 @@ Add the dependency to your Go module:
 ```
 go get github.com/gosoline-project/sqlr@v0.10.0
 ```
-
-SQLR [`v0.10.0`](https://github.com/gosoline-project/sqlr/releases/tag/v0.10.0) is the stable release.
 
 Then import the package in your Go code:
 
@@ -7514,7 +7487,7 @@ The httpserver includes a built-in middleware chain and supports custom middlewa
 Every httpserver automatically includes these middleware, applied in order:
 
 1. **Sampling** — Applies sampling decisions based on HTTP headers
-2. **Metric** — Records response-duration observations, explicit request rejections, request/response counters, and active-request/connection gauges
+2. **Metric** — Records [HTTP server metrics](/docs/pr-5/reference/package-httpserver/.md)
 3. **Logging** — Logs request details using fingers-crossed scope (only logs on errors)
 4. **Compression** — Handles gzip compression/decompression
 5. **Max body size** — Limits incoming request bodies with `httpserver.<name>.max_body_bytes`
@@ -7525,9 +7498,7 @@ Every httpserver automatically includes these middleware, applied in order:
 10. **Concurrency** — Limits concurrent requests
 11. **Chaos** — Randomly introduces failures for resilience testing (disabled by default)
 
-With metric export enabled, the middleware emits the high-priority monotonic `Count` counters after a matched route's middleware chain unwinds. `http.server.requests` (`name`) and `http.server.routed.requests` (`name`, `route`, `request.method`) remain statusless and keep their existing zero defaults: one per configured server and per registered application route/method pair. The new `http.server.responses` and `http.server.routed.responses` counters retain the full numeric `response.status_code` and add bounded `response.status_class` values (`1xx` through `5xx`; default outside 100–599); they have no zero defaults. The request counters include matched requests, including those aborted by middleware; the response counters count matched responses, including middleware-aborted requests and matched `/health`. Unmatched paths emit none. The duration histogram keeps the full code without a class, while `http.server.rejected.requests` remains statusless. For `http.server.routed.responses`, CloudWatch also stores a class-projected series without `response.status_code`; Prometheus and OpenTelemetry export only the raw five-dimension counter. See the [metric schema](/docs/pr-5/reference/metric-schema/.md) for CloudWatch query and per-class cost guidance.
-
-These are canonical Gosoline metric names; the configured writer determines their exported names and units. The middleware is installed by default; metric export requires the application to wire `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`. See the [published HTTP server metrics reference](/docs/pr-5/reference/package-httpserver/.md) for the complete table; the SDK's separate [HTTP server implementation](/docs/pr-5/reference/package-gosoline-httpserver/.md) emits the same eight canonical names. For backend-specific name, unit, projection, and query semantics, see [Metric schema](/docs/pr-5/reference/metric-schema/.md). Chaos is the only opt-in built-in middleware.
+The server registers these middleware automatically. Chaos is opt-in, and [concurrent request limiting](/docs/pr-5/how-to/http-server/concurrency-and-connection-pressure/.md#limiting-concurrent-requests) requires a positive `concurrency.max_requests` value.
 
 ## Request body size limit[​](#request-body-size-limit "Direct link to Request body size limit")
 
@@ -8333,8 +8304,6 @@ Install the package:
 ```
 go get github.com/gosoline-project/httpserver@v0.6.5
 ```
-
-The documentation module pins HTTPServer's stable `v0.6.5` release.
 
 The entry point for any HTTP server is a `RouterFactory` — a function that receives a `*Router` and registers routes on it:
 
@@ -9599,14 +9568,14 @@ Set `max_connections: 0` (the default) to disable this limit.
 
 ### Metrics[​](#metrics "Direct link to Metrics")
 
-The server emits two gauge metrics with current-state samples at startup, every 10 seconds, on each request or connection state change, and during shutdown:
+The server emits two gauge metrics (sampled every 10 seconds and on every change):
 
-| Canonical metric                   | Description                                 |
+| Metric                             | Description                                 |
 | ---------------------------------- | ------------------------------------------- |
 | `http.server.active_request.count` | Number of requests currently being handled. |
 | `http.server.connection.count`     | Number of currently open TCP connections.   |
 
-Both gauges carry only the `name` attribute, set to the named server (for example, `default`). Unlike request-level metrics, they are not split by route, `request.method`, or `response.status_code`. The names in this table are canonical Gosoline names; metric writers render them according to the selected backend. See the [SDK HTTP server metrics reference](/docs/pr-5/reference/package-gosoline-httpserver/.md) and the [published HTTP server package reference](/docs/pr-5/reference/package-httpserver/.md) for the complete per-metric unit and dimension tables, and [Metric schema](/docs/pr-5/reference/metric-schema/.md) for writer conversion details.
+Both metrics carry the server name in the `name` attribute (for example, `default`).
 
 ## Connection lifecycle advisor[​](#connection-lifecycle-advisor "Direct link to Connection lifecycle advisor")
 
@@ -19553,7 +19522,7 @@ Metric namespaces are naming prefixes, not one-to-one component identifiers. The
 | `rpc.server`        | `sdk.grpcserver`                                                            | [gRPC server](/docs/pr-5/reference/package-grpcserver/.md)                              |
 | `smpl`              | `sdk.smpl` sampling                                                         | [Sampling](/docs/pr-5/how-to/sampling/use-sampling/.md)                                 |
 
-The SQLC page documents that package's use of the same canonical `db.client` connection metrics; it adds no separate SQLC metric names to this inventory. For broader workflow context, see the [streaming inputs and outputs guide](/docs/pr-5/how-to/streaming-applications/understand-inputs-and-outputs/.md), the [Kafka guide](/docs/pr-5/how-to/kafka/general/.md), the [AWS package reference](/docs/pr-5/reference/package-cloud_aws/.md), and the [SQL database overview](/docs/pr-5/how-to/databases-sql/.md). Those overview pages supplement, rather than replace, the component pages above.
+For broader workflow context, see the [AWS package reference](/docs/pr-5/reference/package-cloud_aws/.md), the [Kafka guide](/docs/pr-5/how-to/kafka/general/.md), the [SQL database overview](/docs/pr-5/how-to/databases-sql/.md), and the [streaming inputs and outputs guide](/docs/pr-5/how-to/streaming-applications/understand-inputs-and-outputs/.md). Those pages supplement the component pages above.
 
 The 80-name inventory below contains Gosoline-authored metrics only. `metric.schema_version` is metadata, not a metric; the upstream Prometheus handler metrics and Go/process collectors described on the [metric package page](/docs/pr-5/reference/package-metric/.md) are separate from these 80 names.
 
@@ -19672,7 +19641,7 @@ For Kinesis `consumed.messages`, a processing/checkpoint operation error suppres
 | `ddb.operations`                    | counter   | count         | `operation.name`, `model.id`, `error.type` | One after the wrapped DynamoDB save returns (`operation.name="save"`). Success uses `{{default}}`; failure uses `operation_failed`. High-priority zero defaults exist for both outcomes per model.                                |
 | `ddb.operation.duration`            | histogram | ms            | `operation.name`, `model.id`, `error.type` | Duration of a DynamoDB repository operation.                                                                                                                                                                                      |
 
-The SQLC client emits the same canonical `db.client.connections` driver-open Counter and `db.client.connection.count` used/idle pool Gauges described above; these are shared metric names, not separate legacy metrics. SQLC's connection-count Gauges are written immediately and then once per minute, including zero values, with no total/open state. See the [SQLC guide](/docs/pr-5/how-to/databases-sql/sqlc/.md) for the package-specific emission details and source pin.
+SQLC emits the same `db.client` metrics. See [SQLC connections in the database client reference](/docs/pr-5/reference/package-db/.md#sqlc-connections) for emission and export details.
 
 ### `mdlsub`[​](#mdlsub "Direct link to mdlsub")
 
@@ -20840,12 +20809,20 @@ The table lists names and units authored by Gosoline. The OpenTelemetry writer e
 | `db.client.connection.count` | Gauge      | `count`       | `connection.state`: `used`, `idle` | Samples `sql.DB.Stats().InUse` and `.Idle` immediately, then once per minute. Both state series are written, including zero values; there is no separate `open` or total-state series.           |
 | `db.client.connections`      | Counter    | `count`       | None                               | Adds one before each underlying driver `Open` call, including failed opens. It accumulates open attempts since process start; it is not a live connection count and is not decremented on close. |
 
+## SQLC connections[​](#sqlc-connections "Direct link to SQLC connections")
+
+In the standalone `sqlc` package, `NewDBFromSettings` installs the driver-open counter and starts the pool sampler after migrations succeed. `NewDBWithSettings` installs the counter but does not start the sampler.
+
+Both metrics are high priority. The counter uses `UnitCount`, and the gauge uses `UnitCountAverage`. See the [SQLC metric implementation](https://github.com/gosoline-project/sqlc/blob/89ede23e657a11d223f9b24f16dc42abfbb059cc/metrics.go).
+
+SQLC has no separate switch for these metrics. To export them, add `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`.
+
 ## Related references[​](#related-references "Direct link to Related references")
 
-* [Working with relational databases](/docs/pr-5/how-to/databases-sql/.md)
-* [SQL client and SQLC metrics](/docs/pr-5/how-to/databases-sql/sqlc/.md)
-* [SQL repository package](/docs/pr-5/reference/package-db-repo/.md)
 * [Metric schema](/docs/pr-5/reference/metric-schema/.md)
+* [SQL client guide](/docs/pr-5/how-to/databases-sql/sqlc/.md)
+* [SQL repository package](/docs/pr-5/reference/package-db-repo/.md)
+* [Working with relational databases](/docs/pr-5/how-to/databases-sql/.md)
 
 
 ---

@@ -15,9 +15,17 @@ The table lists names and units authored by Gosoline. The OpenTelemetry writer e
 | `db.client.connection.count` | Gauge      | `count`       | `connection.state`: `used`, `idle` | Samples `sql.DB.Stats().InUse` and `.Idle` immediately, then once per minute. Both state series are written, including zero values; there is no separate `open` or total-state series.           |
 | `db.client.connections`      | Counter    | `count`       | None                               | Adds one before each underlying driver `Open` call, including failed opens. It accumulates open attempts since process start; it is not a live connection count and is not decremented on close. |
 
+## SQLC connections[​](#sqlc-connections "Direct link to SQLC connections")
+
+In the standalone `sqlc` package, `NewDBFromSettings` installs the driver-open counter and starts the pool sampler after migrations succeed. `NewDBWithSettings` installs the counter but does not start the sampler.
+
+Both metrics are high priority. The counter uses `UnitCount`, and the gauge uses `UnitCountAverage`. See the [SQLC metric implementation](https://github.com/gosoline-project/sqlc/blob/89ede23e657a11d223f9b24f16dc42abfbb059cc/metrics.go).
+
+SQLC has no separate switch for these metrics. To export them, add `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`.
+
 ## Related references[​](#related-references "Direct link to Related references")
 
-* [Working with relational databases](/docs/pr-5/how-to/databases-sql/.md)
-* [SQL client and SQLC metrics](/docs/pr-5/how-to/databases-sql/sqlc/.md)
-* [SQL repository package](/docs/pr-5/reference/package-db-repo/.md)
 * [Metric schema](/docs/pr-5/reference/metric-schema/.md)
+* [SQL client guide](/docs/pr-5/how-to/databases-sql/sqlc/.md)
+* [SQL repository package](/docs/pr-5/reference/package-db-repo/.md)
+* [Working with relational databases](/docs/pr-5/how-to/databases-sql/.md)
