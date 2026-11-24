@@ -241,13 +241,19 @@ never forward request-provided identifiers or expressions to them.
 
 Migrate public filters from `column` to `field`; recursive `Fields` now contain `sqlh.JsonFilter`.
 `Type` remains `sqlc.JsonFilterType`. Public `orderBy` contains `{"field":"name","direction":"asc"}` objects.
-Every filter leaf and sort field is validated before callbacks/database work, including custom list operations.
+Every filter leaf and sort field is validated before Query/Count callbacks and database work. A custom `ListOperation`
+skips that validation and must validate pagination, filters, and sort fields itself.
 Unknown names, raw identifiers/expressions, and legacy `column` keys are rejected.
 SQLC's low-level filter and query-builder contract is unchanged.
+This is a breaking wire change: clients that send `column` keys, or names that differ from Go field names by more than
+case (such as `created_at`), fail. Keep the names clients send with
+`FieldMappings` keyed by them (for example `"created_at": "CreatedAt"`), and translate old `column` bodies before decoding.
 
 With `FieldMappings == nil`, eligible directly mapped scalar entity fields use exported Go names with anonymous-field
-promotion and Go shadowing rules, not output DTO or database names. Primitive scalars and time.Time (including pointers)
-are supported. Binding tags (`json`, `xml`, `form`, `yaml`, etc.) are ignored.
+promotion and Go shadowing rules, not output DTO or database names. Every persisted column is eligible
+except channel, function, interface, unsafe-pointer, and complex fields; `[]byte`, struct-typed columns such as
+`sql.NullString`, and collections implementing `driver.Valuer` or `sql.Scanner` are queryable. Exclude sensitive
+columns with `sqlh:"field:-"` or a complete `FieldMappings`. Binding tags (`json`, `xml`, `form`, `yaml`, etc.) are ignored.
 Use `sqlh:"field:alias"` only when a different automatic public name is needed, or `sqlh:"field:-"` to exclude a field.
 Migration warning: `json:"-"` no longer excludes fields from automatic queries. Add `sqlh:"field:-"` or an explicit
 complete map. JSON renames that differ from Go names by more than case need a SQLH alias or explicit mapping.
