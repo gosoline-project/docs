@@ -2,8 +2,6 @@
 title: Package log
 ---
 
-# log package
-
 The gosoline logger is based upon a simple interface that uses handlers internally to enable fully customizable log handling.
 
 ## Functions
@@ -58,7 +56,7 @@ localCtx := log.AppendContextFields(ctx, map[string]any{
 
 Appends fields to the existing **local** context fields, creating and returning a new context containing the merged fields.
 
-:::caution
+:::warning
 
 Any existing fields with the same key as any new field provided will be overwritten.
 
@@ -106,7 +104,7 @@ localCtx = log.MutateGlobalContextFields(globalCtx, map[string]any{
 })
 ```
 
-:::caution
+:::warning
 
 Global fields override local fields when they have the same name.
 
@@ -267,7 +265,7 @@ Multitool, which is able to write logs to everything which implements the `io.Wr
 | Setting          | Description                                                        | Default      |
 |------------------|--------------------------------------------------------------------|--------------|
 | level            | Levels of this and higher priority will get logged                 | info         |
-| channels         | Messages logged into these channels will be handled                | {}           |
+| channels         | Messages logged into these channels will be handled                | `{}`         |
 | formatter        | Which format should be used by this handler                        | console      |
 | timestamp_format | A golang time format string to control the format of the timestamp | 15:04:05.000 |
 | writer           | Which io.writer implementation to use                              | stdout       |

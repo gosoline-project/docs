@@ -1,12 +1,8 @@
 ---
-title: Package fixtures
+title: Gosoline Fixture Loader
+sidebar:
+  label: Package fixtures
 ---
-
-import CodeBlock from '@theme/CodeBlock';
-import FixtureExample from "!!raw-loader!../../examples/fixtures/simple/main.go";
-import NamedExample from "!!raw-loader!../../examples/fixtures/simple/named/main.go";
-
-# Gosoline Fixture Loader
 
 Define fixture data with `fixtures.NamedFixtures[T]`, pass it to a writer, and register fixture-set factories with the application.
 
@@ -61,13 +57,13 @@ Use `fixtures.NewNumberSequence` or `fixtures.NewNumberSequenceFrom` for sequent
 
 This example is read directly from the maintained source file:
 
-<CodeBlock showLineNumbers language="go" title="examples/fixtures/simple/main.go">{FixtureExample}</CodeBlock>
+<include lang="go" meta='title="examples/fixtures/simple/main.go" lineNumbers'>/_code/examples/fixtures/simple/main.go</include>
 
 ## Named Fixtures
 
 Named fixture collections let later fixtures refer to an already-created value with `GetValueByName`:
 
-<CodeBlock showLineNumbers language="go" title="examples/fixtures/simple/named/main.go">{NamedExample}</CodeBlock>
+<include lang="go" meta='title="examples/fixtures/simple/named/main.go" lineNumbers'>/_code/examples/fixtures/simple/named/main.go</include>
 
 ## Further Information
 
