@@ -225,6 +225,18 @@ httpserver:
 Handlers attach an HTTP status to expected client errors and add context to other errors. The default error middleware hides internal error details from clients.
 
 ```
+type invalidFileRequestError struct { cause error }
+
+
+
+func (e invalidFileRequestError) Error() string { return "invalid file request" }
+
+func (e invalidFileRequestError) StatusCode() int { return http.StatusBadRequest }
+
+func (e invalidFileRequestError) Unwrap() error { return e.cause }
+
+
+
 func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (ListFilesResponse, error) {
 
     items, err := h.files.ListFiles(ctx, input.Database, input.Table, input.Partitions)
@@ -233,7 +245,7 @@ func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (L
 
         if isBadRequest(err) {
 
-            return ListFilesResponse{}, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
+            return ListFilesResponse{}, invalidFileRequestError{cause: err}
 
         }
 
@@ -245,6 +257,8 @@ func (h *HandlerBrowse) ListFiles(ctx context.Context, input *ListFilesInput) (L
 
 }
 ```
+
+The message is safe to expose; private mode in newer httpserver versions redacts 400 details. `Unwrap` preserves the cause for `errors.Is` and `errors.As`.
 
 ## Configuration[​](#configuration "Direct link to Configuration")
 
@@ -299,6 +313,6 @@ Raise `max_body_bytes` for APIs that intentionally accept larger uploads, or set
 | Shared input types                                 | Multiple handlers accept the same URI params                 |
 | Mixed binding (`uri` + `json` + `form` + `header`) | Endpoints that accept path params + query/body/header values |
 | `BindSseN` for SSE                                 | Real-time streaming endpoints                                |
-| `nil, NewErrorWithStatus(status, err)`             | Client errors with specific status codes                     |
+| Application error implementing `StatusCode() int`  | Client errors with specific status codes                     |
 | `nil, error`                                       | Unexpected/internal errors (500)                             |
 | Compression exclusion for SSE                      | Always exclude SSE paths from gzip                           |

@@ -743,16 +743,28 @@ func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
 }
 ```
 
-For an expected client error with a specific status, return the zero result and `NewErrorWithStatus`:
+For an expected client error with a specific status, define an application error with `Error() string` and `StatusCode() int`. This example preserves the underlying error for `errors.Is` and `errors.As`, while returning a client-safe message:
 
 ```
+type userNotFoundError struct { cause error }
+
+
+
+func (e userNotFoundError) Error() string { return "user not found" }
+
+func (e userNotFoundError) StatusCode() int { return http.StatusNotFound }
+
+func (e userNotFoundError) Unwrap() error { return e.cause }
+
+
+
 func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
 
     user, err := h.store.Get(ctx, input.Id)
 
     if errors.Is(err, ErrUserNotFound) {
 
-        return User{}, httpserver.NewErrorWithStatus(http.StatusNotFound, err)
+        return User{}, userNotFoundError{cause: err}
 
     }
 
@@ -775,12 +787,12 @@ The callback type is `func(statusCode int, err error) any`. Error middleware cal
 
 Status selection follows this order:
 
-1. An `ErrorWithStatus`, such as `NewErrorWithStatus`, sets the status.
+1. An error in the chain implementing `StatusCode() int` sets the status.
 2. Otherwise, the first matching `WithErrorMapper` sets the status.
 3. Otherwise, validation errors use `400 Bad Request`.
 4. All other errors use `500 Internal Server Error`.
 
-The endpoint still returns its error through the normal `(output, error)` result. This callback returns the body to send to the client, not another Go error. If it returns a body value such as the `ErrorBody` struct below, the framework keeps the selected HTTP status. With private 5xx privacy, middleware passes `internal server error` to the callback.
+The endpoint still returns its error through the normal `(output, error)` result. This callback returns the body to send to the client, not another Go error. If it returns a body value such as the `ErrorBody` struct below, the framework keeps the selected HTTP status. With private privacy, middleware passes `internal server error` for 5xx errors; newer versions also pass `bad request` for 400 errors.
 
 Return a struct, map, or other serializable Go value that does not implement `httpserver.Response` to let the server choose the response format from the request's `Accept` header. The configured negotiator serializes that value and sets `Content-Type`. JSON is the default. XML requires a negotiator that includes `XMLRepresentation()` and a value that `encoding/xml` can encode, such as this struct:
 
@@ -818,7 +830,7 @@ httpserver.WithErrorHandler(func(statusCode int, err error) any {
 
 In `v0.6.4`, the default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
 
-The 5xx behavior is controlled by `httpserver.<name>.errors.privacy`. The default is `private`, which hides internal error details. Set it to `public` only when clients should receive the original internal error message:
+Error detail visibility is controlled by `httpserver.<name>.errors.privacy`. The default is `private`, which hides internal 5xx details; newer versions also redact 400 details. Set it to `public` only when clients should receive the original error message:
 
 ```
 httpserver:
@@ -830,11 +842,13 @@ httpserver:
       privacy: public
 ```
 
-If middleware attaches an error to the Gin context and needs a non-500 status code, wrap it with `NewErrorWithStatus`:
+If middleware attaches an error to the Gin context, it can use the same application error:
 
 ```
-ginCtx.Error(httpserver.NewErrorWithStatus(http.StatusBadRequest, err))
+ginCtx.Error(userNotFoundError{cause: err})
 ```
+
+When upgrading from a version that provided `NewErrorWithStatus`, replace it with an application-owned error as above. Keep messages for client errors safe to expose.
 
 ## 11. Migrate Middleware[​](#11-migrate-middleware "Direct link to 11. Migrate Middleware")
 
@@ -1286,17 +1300,17 @@ httpserver:
 
 Keep these points in mind while migrating:
 
-| Area               | Notes                                                                                                                                                                                                             |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Server name        | `RunDefaultServer` reads `httpserver.default`. `NewServer("admin", ...)` reads `httpserver.admin`.                                                                                                                |
-| Routes             | `/health` is still registered by the server. Unhealthy modules are reported as `"unhealthy"`; underlying error strings are logged but not exposed in the response.                                                |
-| Compression        | Exclude SSE endpoints from compression.                                                                                                                                                                           |
-| Request body limit | `max_body_bytes` defaults to `10485760` bytes (10 MiB). Set it to `0` to disable the limit or raise it for large upload endpoints. The limit is applied after request decompression.                              |
-| Binding errors     | `Bind` and `BindSse` binding or validation failures return `400 Bad Request`.                                                                                                                                     |
-| Error responses    | The default handler exposes 4xx error messages and returns `{"err":"internal server error"}` for 5xx responses. Set `httpserver.<name>.errors.privacy` to `public` only when 5xx error details should be exposed. |
-| CORS               | Move old `api_cors_*` keys to `httpserver.<name>.cors.*`. `allowed_origin_pattern` is matched against the full `Origin` value, so partial regex matches do not allow origins.                                     |
-| Profiling          | Profiling is still configured under `profiling` and binds to `127.0.0.1:<port>`.                                                                                                                                  |
-| Auth               | Auth config is scoped below `httpserver.<name>.auth`; old global auth keys must be moved below the server name.                                                                                                   |
+| Area               | Notes                                                                                                                                                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Server name        | `RunDefaultServer` reads `httpserver.default`. `NewServer("admin", ...)` reads `httpserver.admin`.                                                                                                                                                                        |
+| Routes             | `/health` is still registered by the server. Unhealthy modules are reported as `"unhealthy"`; underlying error strings are logged but not exposed in the response.                                                                                                        |
+| Compression        | Exclude SSE endpoints from compression.                                                                                                                                                                                                                                   |
+| Request body limit | `max_body_bytes` defaults to `10485760` bytes (10 MiB). Set it to `0` to disable the limit or raise it for large upload endpoints. The limit is applied after request decompression.                                                                                      |
+| Binding errors     | `Bind` and `BindSse` binding or validation failures return `400 Bad Request`.                                                                                                                                                                                             |
+| Error responses    | Private mode returns `{"err":"internal server error"}` for 5xx responses. Client-error details may be exposed, but newer versions redact 400 details in private mode. Set `httpserver.<name>.errors.privacy` to `public` only when exposing error details is intentional. |
+| CORS               | Move old `api_cors_*` keys to `httpserver.<name>.cors.*`. `allowed_origin_pattern` is matched against the full `Origin` value, so partial regex matches do not allow origins.                                                                                             |
+| Profiling          | Profiling is still configured under `profiling` and binds to `127.0.0.1:<port>`.                                                                                                                                                                                          |
+| Auth               | Auth config is scoped below `httpserver.<name>.auth`; old global auth keys must be moved below the server name.                                                                                                                                                           |
 
 ## 13. Migrate Tests[​](#13-migrate-tests "Direct link to 13. Migrate Tests")
 
@@ -1397,6 +1411,18 @@ In this style, each route has its own handler instance, even though all four rou
 ### New[​](#new-3 "Direct link to New")
 
 ```
+type userNotFoundError struct { cause error }
+
+
+
+func (e userNotFoundError) Error() string { return "user not found" }
+
+func (e userNotFoundError) StatusCode() int { return http.StatusNotFound }
+
+func (e userNotFoundError) Unwrap() error { return e.cause }
+
+
+
 func DefineRouter(ctx context.Context, config cfg.Config, logger log.Logger, router *httpserver.Router) error {
 
     router.Group("/api/users").HandleWith(httpserver.With(NewUserHandler, func(r *httpserver.Router, h *UserHandler) {
@@ -1461,7 +1487,7 @@ func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, e
 
     if errors.Is(err, ErrUserNotFound) {
 
-        return User{}, httpserver.NewErrorWithStatus(http.StatusNotFound, err)
+        return User{}, userNotFoundError{cause: err}
 
     }
 

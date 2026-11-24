@@ -173,13 +173,13 @@ httpserver:
       privacy: private
 ```
 
-| Field     | Type   | Default     | Description                                                                                                                          |
-| --------- | ------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `privacy` | string | `"private"` | Error detail policy for 5xx responses. Use `"private"` to hide internal details, or `"public"` to return the original error message. |
+| Field     | Type   | Default     | Description                                                                                                       |
+| --------- | ------ | ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| `privacy` | string | `"private"` | Error detail policy. Use `"private"` to redact error details, or `"public"` to return the original error message. |
 
-With the default `private` setting, internal 5xx errors return `{"err":"internal server error"}`. Errors below 500 wrapped with `NewErrorWithStatus` still expose their message to API clients.
+With the default `private` setting, internal 5xx errors return `{"err":"internal server error"}`. Client-error messages may be exposed, so use messages safe to disclose. In newer httpserver versions, private mode also redacts `400 Bad Request` details as `{"err":"bad request"}`.
 
-Set `privacy` to `public` only when exposing internal 5xx error messages is intentional:
+Set `privacy` to `public` only when exposing error details is intentional:
 
 ```
 httpserver:

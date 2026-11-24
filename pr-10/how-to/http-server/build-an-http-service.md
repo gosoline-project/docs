@@ -152,7 +152,7 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error
 
     if !ok {
 
-        return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
+        return nil, errUserNotFound
 
     }
 
@@ -579,16 +579,30 @@ func (h *Handler) Health(ctx context.Context) (map[string]string, error) {
 }
 ```
 
-For a client error with a specific status code, return a zero output and an error wrapped with `NewErrorWithStatus`:
+For an expected client error, define an application error with `Error() string` and `StatusCode() int`. Return only messages safe to expose to clients:
 
 ```
+type userNotFoundError struct{}
+
+
+
+func (userNotFoundError) Error() string { return "user not found" }
+
+func (userNotFoundError) StatusCode() int { return http.StatusNotFound }
+
+
+
+var errUserNotFound = userNotFoundError{}
+
+
+
 func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 
     user, ok := h.users[input.Id]
 
     if !ok {
 
-        return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
+        return nil, errUserNotFound
 
     }
 
@@ -597,12 +611,12 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error
 }
 ```
 
-The error middleware maps both types of errors to HTTP responses. Use `NewErrorWithStatus` for expected client errors and return unwrapped errors for unexpected failures.
+The error middleware finds the status even when the error is wrapped with `fmt.Errorf("context: %w", err)`. Return unexpected errors without a client status; the default private setting redacts their details.
 
-If middleware or lower-level code attaches an error to the Gin context and needs a specific status code, wrap it with `NewErrorWithStatus`:
+Middleware can attach the same domain error to the Gin context:
 
 ```
-ginCtx.Error(httpserver.NewErrorWithStatus(http.StatusBadRequest, err))
+ginCtx.Error(errUserNotFound)
 ```
 
 ## Complete example[​](#complete-example "Direct link to Complete example")
@@ -621,8 +635,6 @@ package main
 import (
 
 	"context"
-
-	"errors"
 
 	"fmt"
 
@@ -730,6 +742,30 @@ func (CreatedUserOutput) StatusCode() int {
 
 
 
+type userNotFoundError struct{}
+
+
+
+func (userNotFoundError) Error() string {
+
+	return "user not found"
+
+}
+
+
+
+func (userNotFoundError) StatusCode() int {
+
+	return http.StatusNotFound
+
+}
+
+
+
+var errUserNotFound = userNotFoundError{}
+
+
+
 type Handler struct {
 
 	users map[int]*User
@@ -814,7 +850,7 @@ func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error
 
 	if !ok {
 
-		return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
+		return nil, errUserNotFound
 
 	}
 

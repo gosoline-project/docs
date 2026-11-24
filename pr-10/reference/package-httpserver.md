@@ -248,29 +248,39 @@ httpserver.WithErrorHandler(func(statusCode int, err error) any {
 
 Pass this option to `NewServer` or `NewServerWithSettings`, or add it to `ServerDefinition.Options` for `RunServers`. The callback runs after middleware selects a status from the last recorded error.
 
-Status selection checks `ErrorWithStatus` first, then the first matching `WithErrorMapper`. Validation errors use `400 Bad Request`. All other errors use `500 Internal Server Error`.
+Status selection checks the error chain for an error implementing `StatusCode() int` first, then the first matching `WithErrorMapper`. Validation errors use `400 Bad Request`. All other errors use `500 Internal Server Error`.
 
-The callback returns the body to send to the client, not another Go error. The endpoint still returns its error through its normal `(output, error)` result. A returned struct or map keeps the selected HTTP status. Private 5xx privacy passes `internal server error` to the callback.
+The callback returns the body to send to the client, not another Go error. The endpoint still returns its error through its normal `(output, error)` result. A returned struct or map keeps the selected HTTP status. Private mode passes `internal server error` to the callback for 5xx errors; newer versions also pass `bad request` for 400 errors.
 
 A struct, map, or other serializable value that does not implement `httpserver.Response` uses the server's response negotiator. It selects a format from `Accept`, serializes the value, and sets `Content-Type`. JSON is the default. XML needs a negotiator that includes `XMLRepresentation()` and a value that `encoding/xml` can encode. In `v0.6.4`, error middleware falls back to JSON with the selected status if negotiation or encoding fails.
 
 An explicit `httpserver.Response` bypasses negotiation and sends its format regardless of `Accept`. It owns the status and headers, including `Content-Type`. It does not inherit the selected error status. For fixed JSON with that status, return `httpserver.NewJsonResponse(body, httpserver.WithStatusCode(statusCode))`.
 
-### [NewErrorWithStatus()](https://github.com/gosoline-project/httpserver/blob/main/error.go)[​](#newerrorwithstatus "Direct link to newerrorwithstatus")
+### Application errors with a status[​](#application-errors-with-a-status "Direct link to Application errors with a status")
 
-Return a zero output and a wrapped error to set an expected client-error status:
-
-```
-return nil, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
-```
-
-For a struct output, replace `nil` with that struct's zero value.
-
-Middleware can attach the same wrapped error to the Gin context:
+Define an application error with a client-safe message and a `StatusCode() int` method:
 
 ```
-ginCtx.Error(httpserver.NewErrorWithStatus(http.StatusBadRequest, err))
+type userNotFoundError struct{}
+
+
+
+func (userNotFoundError) Error() string { return "user not found" }
+
+func (userNotFoundError) StatusCode() int { return http.StatusNotFound }
+
+
+
+var errUserNotFound = userNotFoundError{}
+
+
+
+// In a handler returning (*User, error):
+
+return nil, errUserNotFound
 ```
+
+For a struct output, return that struct's zero value instead of `nil`. Wrapping with `%w` preserves status selection and `errors.Is` / `errors.As`; ensure the complete error message remains safe to expose for client errors. Middleware can attach the same error with `ginCtx.Error(errUserNotFound)`.
 
 ## Middleware[​](#middleware "Direct link to Middleware")
 
@@ -400,9 +410,9 @@ The origin pattern is anchored internally. For example, `https://example\.com` a
 
 ### ErrorsSettings[​](#errorssettings "Direct link to ErrorsSettings")
 
-| Field     | Type   | Default     | Description                                                                          |
-| --------- | ------ | ----------- | ------------------------------------------------------------------------------------ |
-| `privacy` | string | `"private"` | `"private"` hides internal error details for 5xx responses. `"public"` exposes them. |
+| Field     | Type   | Default     | Description                                                                                                                                       |
+| --------- | ------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `privacy` | string | `"private"` | Controls error detail visibility. Private mode hides 5xx details; newer versions also hide 400 details. Public mode exposes the original message. |
 
 ### RouterSettings[​](#routersettings "Direct link to RouterSettings")
 
