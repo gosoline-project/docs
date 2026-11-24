@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -56,6 +55,18 @@ func (CreatedUserOutput) StatusCode() int {
 	return http.StatusCreated
 }
 
+type userNotFoundError struct{}
+
+func (userNotFoundError) Error() string {
+	return "user not found"
+}
+
+func (userNotFoundError) StatusCode() int {
+	return http.StatusNotFound
+}
+
+var errUserNotFound = userNotFoundError{}
+
 type Handler struct {
 	users map[int]*User
 	next  int
@@ -98,7 +109,7 @@ func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (Creat
 func (h *Handler) GetUser(ctx context.Context, input *UserIdInput) (*User, error) {
 	user, ok := h.users[input.Id]
 	if !ok {
-		return nil, httpserver.NewErrorWithStatus(http.StatusNotFound, errors.New("user not found"))
+		return nil, errUserNotFound
 	}
 	return user, nil
 }
