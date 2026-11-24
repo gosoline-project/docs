@@ -295,7 +295,7 @@ The generated list endpoint accepts a body such as:
 
 ### Public Query Fields
 
-SQLH resolves filter and sort names against the entity schema, not the output mapper. With `FieldMappings == nil`, eligible directly mapped scalar fields use their exported Go names, with anonymous-field promotion and Go shadowing rules. Primitive scalars and `time.Time`, including pointers to them, are eligible; relations and nonpersisted fields are not automatically exposed. JSON, XML, form, YAML, and other binding tags do not affect query-field discovery.
+SQLH resolves filter and sort names against the entity schema, not the output mapper. With `FieldMappings == nil`, eligible directly mapped scalar fields use their exported Go names, with anonymous-field promotion and Go shadowing rules. Every persisted column is eligible except channel, function, interface, unsafe-pointer, and complex fields: `[]byte` and struct-typed columns such as `sql.NullString` are queryable, and other arrays, slices, and maps are queryable when they implement `driver.Valuer` or `sql.Scanner`. Relations and nonpersisted fields are not automatically exposed. Exclude sensitive columns with `sqlh:"field:-"` or set a complete `FieldMappings`. JSON, XML, form, YAML, and other binding tags do not affect query-field discovery.
 
 Use `sqlh:"field:alias"` on a scalar field to change its automatic public name, or `sqlh:"field:-"` to exclude it. For example, `StartDate time.Time` defaults to `StartDate`; adding `sqlh:"field:start_date"` exposes `start_date` instead. A field with `json:"-"` is still queryable unless excluded with `sqlh:"field:-"` or a complete explicit map.
 
@@ -318,7 +318,7 @@ definition.FieldMappings = map[string]string{
 
 Here `Owner` must be an SQLR `BelongsTo` or `HasOne` relation and `Name` a mapped scalar. SQLH adds a default `LEFT JOIN` when the filter or order needs that path. Without an explicit join, rows with no related entity remain eligible unless the filter excludes them. An explicit join from trusted backend code takes precedence, whether added before or after SQLH's default; its join type and ON conditions remain unchanged. Duplicate explicit joins remain invalid. To-many relations and deeper relation traversal are not supported query paths. Query-field declarations are validated when the handler is constructed; invalid paths fail startup.
 
-Before list callbacks or repository work, SQLH validates every filter leaf and sort field, including nested groups. Unknown public fields, raw database/table names, SQL expressions, and legacy `column` keys are rejected rather than passed through. A database name is accepted only if it was deliberately registered as a public name. Request validation also runs for custom list operations; it does not turn those operations into an authorization boundary.
+Before list callbacks or repository work, SQLH validates every filter leaf and sort field, including nested groups. Unknown public fields, raw database/table names, SQL expressions, and legacy `column` keys are rejected rather than passed through. A database name is accepted only when it is also a public name; because public names match case-insensitively, a column `email` on Go field `Email` is accepted without a mapping. A custom `ListOperation` replaces this whole pipeline, validation included: it receives the decoded input unvalidated and must validate pagination, filters, and sort fields itself. Custom `Query` and `Count` callbacks run after validation.
 
 SQLH returns a `ListOutput` value:
 

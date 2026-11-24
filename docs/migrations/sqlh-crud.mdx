@@ -224,7 +224,9 @@ Use the `ProjectListInput` type above for SQLH public-field filters, ordering, p
 
 A custom `ValidateQueryModifiers` method can return `nil` when no additional validation is required.
 
-Migrate public filters from `column` to `field` and ordering to `{"field":"name","direction":"asc"}` objects in `orderBy`. `sqlh.JsonFilter.Type` remains `sqlc.JsonFilterType`; nested `Fields` use `sqlh.JsonFilter` too. SQLH validates every leaf and sort field before callbacks or database work, including custom list operations. Unknown names, raw identifiers/expressions, and legacy `column` keys are rejected.
+Migrate public filters from `column` to `field` and ordering to `{"field":"name","direction":"asc"}` objects in `orderBy`. `sqlh.JsonFilter.Type` remains `sqlc.JsonFilterType`; nested `Fields` use `sqlh.JsonFilter` too. SQLH validates every leaf and sort field before `Query`/`Count` callbacks or database work. A custom `ListOperation` skips that validation and must validate its input itself. Unknown names, raw identifiers/expressions, and legacy `column` keys are rejected.
+
+**Breaking change for existing clients:** requests that still send `column` keys fail to decode, and automatic public names are Go field names, so names that differ by more than case, such as `created_at` for `CreatedAt`, no longer match. To keep the names clients already send, set `FieldMappings` keyed by them (`"created_at": "CreatedAt"`). To accept old `column` bodies, translate them before decoding as described for legacy filter dialects below.
 
 With `CrudDefinition.FieldMappings == nil`, eligible directly mapped scalar entity fields use exported Go names with anonymous-field promotion and Go shadowing rules, not output DTO names or database columns. Binding tags (`json`, `xml`, `form`, `yaml`, etc.) are ignored. Use `sqlh:"field:alias"` only when a different automatic public name is needed, or `sqlh:"field:-"` to exclude a field.
 
