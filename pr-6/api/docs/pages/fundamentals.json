@@ -1,0 +1,12 @@
+{
+  "contentType": "doc",
+  "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/fundamentals.json",
+  "lastModified": null,
+  "locale": "",
+  "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/fundamentals.md",
+  "route": "/fundamentals",
+  "title": "Fundamentals",
+  "url": "https://gosoline-project.github.io/docs/pr-6/fundamentals",
+  "description": "Learn the fundamental concepts and core principles of gosoline:",
+  "markdown": "---\ntitle: Fundamentals\ndescription: \"Learn the fundamental concepts and core principles of gosoline:\"\nsidebar:\n  hidden: true\n---\n"
+}

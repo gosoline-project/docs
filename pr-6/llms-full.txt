@@ -954,6 +954,13 @@ This combo is a good fit for Go services because it leans into Go’s strengths:
 
 ---
 
+# Fundamentals
+Source: https://gosoline-project.github.io/docs/pr-6/fundamentals
+
+
+
+---
+
 # The Application
 Source: https://gosoline-project.github.io/docs/pr-6/fundamentals/application
 
@@ -1226,6 +1233,13 @@ Use similar patterns across different services for consistency. For example, if 
 
 ---
 
+# Getting started
+Source: https://gosoline-project.github.io/docs/pr-6/getting-started
+
+
+
+---
+
 # Create a consumer
 Source: https://gosoline-project.github.io/docs/pr-6/getting-started/create-a-consumer
 
@@ -1355,22 +1369,15 @@ Next, you implemented some methods for the `Consumer`:
 
 ```go title=consumer.go
 // 1
-func NewConsumer(ctx context.Context, config cfg.Config, logger log.Logger) (stream.ConsumerCallback, error) {
+func NewConsumer(ctx context.Context, config cfg.Config, logger log.Logger) (stream.ConsumerCallback[Input], error) {
 	return &Consumer{
 		logger: logger,
 	}, nil
 }
 
 // 2
-func (c Consumer) GetModel(attributes map[string]any) any {
-	return &Input{}
-}
-
-// 3
-func (c Consumer) Consume(ctx context.Context, model any, attributes map[string]any) (bool, error) {
-	input := model.(*Input)
-
-	c.logger.WithContext(ctx).Info("got input with id %q and body %q", input.Id, input.Body)
+func (c Consumer) Consume(ctx context.Context, input Input, attributes map[string]string) (bool, error) {
+	c.logger.Info(ctx, "got input with id %q and body %q", input.Id, input.Body)
 
 	return true, nil
 }
@@ -1378,12 +1385,10 @@ func (c Consumer) Consume(ctx context.Context, model any, attributes map[string]
 
 Here, you implemented:
 
-1. A constructor for creating new `Consumer` objects. This implements the `stream.ConsumerCallbackFactory` type and is used to add the callback to your application.
-2. `GetModal()`, a method that returns the expected input model struct which is used to unmarshal the
-data.
-3. `Consume()`, a method that loads the model (`Input`) with data, logs the data, and returns `true` because it successfully handled the message. This is called for every incoming message.
+1. A constructor for creating new `Consumer` objects. It matches `stream.ConsumerCallbackFactory[Input]` and is used to add the callback to your application.
+2. `Consume()`, which receives the decoded `Input`, logs the data, and returns `true` because it successfully handled the message. This is called for every incoming message. Typed callbacks do not need `GetModel`; Gosoline derives the model from `Input`.
 
-Together, these methods implement the `ConsumerCallback` interface.
+The `Consume` method implements `stream.ConsumerCallback[Input]`.
 
 ## Implement `main.go`
 
@@ -1401,7 +1406,7 @@ func main() {
 }
 ```
 
-Here, you execute your consumer. `RunConsumer()` expects a parameter of the type `stream.ConsumerCallbackFactory` to create and run the consumer. `NewConsumer()` implements this interface.
+Here, you execute your consumer. `RunConsumer()` accepts a `stream.ConsumerCallbackFactory[Input]` to create and run the consumer. The model type is inferred from `NewConsumer`.
 
 ## Configure your consumer
 
@@ -1596,6 +1601,13 @@ Running the application will result in the following output:
 
 ---
 
+# Testing
+Source: https://gosoline-project.github.io/docs/pr-6/getting-started/testing
+
+
+
+---
+
 # Test your consumer
 Source: https://gosoline-project.github.io/docs/pr-6/getting-started/testing/test-your-consumer
 
@@ -1766,11 +1778,12 @@ First, import your dependencies:
 import (
 	"testing"
 
+	"github.com/justtrackio/gosoline/pkg/stream"
 	"github.com/justtrackio/gosoline/pkg/test/suite"
 )
 ```
 
-Here, you've imported the standard `testing` package as well as gosoline's `test/suite`.
+Here, you've imported the standard `testing` package, gosoline's `stream` encoding constants, and `test/suite`.
 
 ### Create a test suite
 
@@ -1845,7 +1858,9 @@ func (s *ConsumerTestSuite) TestSuccess() *suite.StreamTestCase {
 						Text:   "do it",
 						Status: "pending",
 					},					
-					ExpectedAttributes: map[string]string{},
+					ExpectedAttributes: map[string]string{
+						stream.AttributeEncoding: stream.EncodingJson.String(),
+					},
 				},
 			},
 		},
@@ -1932,6 +1947,13 @@ You're done! You created your first integration test with gosoline.
 Check out these resources to learn more about testing and creating consumers with gosoline:
 
 - [Create a consumer](/docs/pr-6/getting-started/create-a-consumer)
+
+---
+
+# How-to guides
+Source: https://gosoline-project.github.io/docs/pr-6/how-to
+
+
 
 ---
 
@@ -2028,7 +2050,7 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlc@v0.4.0
+go get github.com/gosoline-project/sqlc@v0.4.1
 ```
 
 Then import the package in your Go code:
@@ -2346,6 +2368,27 @@ query := sqlc.FromG[Experiment]("experiments").
 
 Use `ForUpdate()` when the read and the following write must run in the same transaction. A direct SQLC query locks only its selected rows. SQLR v0.9.1 also applies a repository query's `ForUpdate()` setting to its preloads.
 
+## JSON Ordering
+
+SQLC v0.4.1 adds `JsonOrder` for ordering supplied as JSON:
+
+```json
+{"column":"users.created_at","direction":"desc"}
+```
+
+Convert it to an expression before passing it to a query builder:
+
+```go
+order := sqlc.JsonOrder{Column: "users.created_at", Direction: "desc"}
+expression, err := order.ToExpression()
+if err != nil {
+    return err
+}
+query := sqlc.From("users").OrderBy(expression)
+```
+
+Columns must be simple or dot-qualified identifiers. SQL expressions, wildcards, and quoted identifiers are rejected. Direction accepts `asc` or `desc` without regard to case and defaults to `asc` when omitted. These checks validate syntax; applications can additionally restrict which columns callers may sort. See the [released implementation](https://github.com/gosoline-project/sqlc/blob/v0.4.1/json_order.go).
+
 ## UPDATE Operations
 
 Use `Update()` to create an UPDATE builder. Chain `Set()` for column values and `Where()` for conditions:
@@ -2559,14 +2602,14 @@ That transaction does not make external effects or non-transactional DDL atomic.
 
 ## Getting Started
 
-Install SQLH v0.8.0:
+Install SQLH:
 
 ```bash
-go get github.com/gosoline-project/sqlh@v0.8.0
+go get github.com/gosoline-project/sqlh@v0.8.2-0.20261027132918-7e9d41caf9c9
 ```
 
-SQLH v0.8.0 uses `httpserver` v0.6.4, `sqlc` v0.4.0, and `sqlr` v0.9.1. Use these versions for the examples.
-SQLH v0.8.0 requires Go 1.27.0 or newer.
+Use the dependency versions pinned in this documentation repository's `go.mod` for the executable examples.
+The examples require Go 1.27.0 or newer.
 
 Then import the package:
 
@@ -2630,8 +2673,8 @@ The following example uses one definition for create, update, patch, and output 
 ```go title="main.go"
 type Author struct {
   sqlr.Entity[int64]
-  Name  string `db:"name"`
-  Email string `db:"email"`
+  Name  string `db:"name" json:"name"`
+  Email string `db:"email" json:"email"`
 }
 ```
 
@@ -2772,6 +2815,14 @@ func NewAuthorCrud() httpserver.RegisterFactoryFunc {
     transformer.TransformPatchInputFromEntity,
     transformer.TransformOutput,
   )
+  // Complete allowlist: public names match case-insensitively; Go paths stay exact.
+  // No scalar field aliases are needed when mappings are explicit.
+  definition.FieldMappings = map[string]string{
+    "id":        "Id",
+    "name":      "Name",
+    "email":     "Email",
+    "createdAt": "CreatedAt",
+  }
 
   return sqlh.WithCrudHandlers(1, "author", sqlh.SimpleCrudDefinition(definition))
 }
@@ -2804,6 +2855,12 @@ func NewAuthorHandler() httpserver.HandlerFactory[AuthorCrudHandler] {
     transformer.TransformOutput,
   )
   definition.DeleteOutput = definition.Output
+  definition.FieldMappings = map[string]string{
+    "id":        "Id",
+    "name":      "Name",
+    "email":     "Email",
+    "createdAt": "CreatedAt",
+  }
 
   return sqlh.NewCrudHandler(sqlh.SimpleCrudDefinition(definition))
 }
@@ -3025,15 +3082,16 @@ A custom `PatchOperation` receives `*sqlh.PatchInput[Id]`. Read the parsed `sqlh
 
 ## List Inputs, Filters, and Counts
 
-The standard list input contains a JSON SQLC filter, page limit, page offset, and server-owned force filters:
+The standard list input contains a public-field filter, ordering, page limit, page offset, and server-owned force filters:
 
 ```go
 input := sqlh.ListInput{
-    Filter: sqlc.JsonFilter{
-        Type:   "eq",
-        Column: "status",
-        Value:  "active",
+    Filter: sqlh.JsonFilter{
+        Type:  sqlc.JsonFilterType("eq"),
+        Field: "name",
+        Value: "Ada",
     },
+    OrderBy: []sqlh.JsonOrder{{Field: "createdAt", Direction: "desc"}},
     Page: sqlh.ListPage{
         Limit:  50,
         Offset: 100,
@@ -3046,16 +3104,60 @@ The generated list endpoint accepts a body such as:
 ```json
 {
   "filter": {
-    "type": "eq",
-    "column": "status",
-    "value": "active"
+    "type": "and",
+    "fields": [
+      {"type": "eq", "field": "name", "value": "Ada"},
+      {"type": "or", "fields": [
+        {"type": "eq", "field": "email", "value": "ada@example.com"},
+        {"type": "eq", "field": "email", "value": "ada@example.org"}
+      ]}
+    ]
   },
+  "orderBy": [{"field": "createdAt", "direction": "desc"}],
   "page": {
     "limit": 50,
     "offset": 100
   }
 }
 ```
+
+`sqlh.JsonFilter` uses SQLC's filter operators and value grammar, including recursive `and`/`or` groups, but every leaf uses `field`, not `column`. Its `Type` remains `sqlc.JsonFilterType`. `sqlh.JsonOrder` also uses `field`. SQLC's low-level `sqlc.JsonFilter` and query builders still use trusted database identifiers; their contract has not changed.
+
+### Public Query Fields
+
+SQLH resolves filter and sort names against the entity schema, not the output mapper. With `FieldMappings == nil`, eligible directly mapped scalar fields use their exported Go names, with anonymous-field promotion and Go shadowing rules. Primitive scalars and `time.Time`, including pointers to them, are eligible; relations and nonpersisted fields are not automatically exposed. JSON, XML, form, YAML, and other binding tags do not affect query-field discovery.
+
+Use `sqlh:"field:alias"` on a scalar field to change its automatic public name, or `sqlh:"field:-"` to exclude it. For example, `StartDate time.Time` defaults to `StartDate`; adding `sqlh:"field:start_date"` exposes `start_date` instead. A field with `json:"-"` is still queryable unless excluded with `sqlh:"field:-"` or a complete explicit map.
+
+Public names match case-insensitively using Go's Unicode `strings.EqualFold` semantics: `StartDate` also accepts `startDate`, but `start_date` is a different name. There is no punctuation or naming-style normalization. Active public names that differ only by case folding cause a deterministic handler-construction error identifying the conflicting names and Go paths; excluded fields do not participate.
+
+Use `CrudDefinition.FieldMappings` to define an explicit **complete allowlist**, especially when a response DTO uses different names or only some entity fields should be queryable:
+
+```go title="main.go"
+// Complete allowlist: public names match case-insensitively; Go paths stay exact.
+// No scalar field aliases are needed when mappings are explicit.
+definition.FieldMappings = map[string]string{
+  "id":        "Id",
+  "name":      "Name",
+  "email":     "Email",
+  "createdAt": "CreatedAt",
+}
+```
+
+Keys are public API field names; values are exact Go entity field paths, not database columns. Only public-name lookup is case-insensitive; Go paths and database identifiers retain their exact spelling. This map exposes `createdAt` even though the example's output DTO uses `created_at`. A non-nil map replaces automatic discovery entirely, without merging Go names or `sqlh` aliases: fields omitted from it cannot be filtered or sorted, and an empty map permits no public query fields. An explicit entry may select a mapped scalar by its Go path even when its automatic name is aliased or excluded.
+
+For an entity with a supported direct to-one relation, explicitly expose a path such as:
+
+```go
+definition.FieldMappings = map[string]string{
+    "id":        "PublicID",
+    "ownerName": "Owner.Name",
+}
+```
+
+Here `Owner` must be an SQLR `BelongsTo` or `HasOne` relation and `Name` a mapped scalar. SQLH adds a default `LEFT JOIN` when the filter or order needs that path. Without an explicit join, rows with no related entity remain eligible unless the filter excludes them. An explicit join from trusted backend code takes precedence, whether added before or after SQLH's default; its join type and ON conditions remain unchanged. Duplicate explicit joins remain invalid. To-many relations and deeper relation traversal are not supported query paths. Query-field declarations are validated when the handler is constructed; invalid paths fail startup.
+
+Before list callbacks or repository work, SQLH validates every filter leaf and sort field, including nested groups. Unknown public fields, raw database/table names, SQL expressions, and legacy `column` keys are rejected rather than passed through. A database name is accepted only if it was deliberately registered as a public name. Request validation also runs for custom list operations; it does not turn those operations into an authorization boundary.
 
 SQLH returns a `ListOutput` value:
 
@@ -3066,7 +3168,13 @@ SQLH returns a `ListOutput` value:
 }
 ```
 
-The default list applies user filters, force filters, delete scope, and query modifiers to both the row and count builders. Only the row builder receives pagination. SQLR `Count` removes ordering, limit, offset, and locking, but preserves grouping and HAVING.
+The default row and count queries share the builder and scope, including public filters, trusted filters, force filters, and delete scope. The default count excludes row modifiers, ordering, and pagination. If modifiers change row cardinality, implement a custom count with the corresponding cardinality logic.
+
+### Ordering
+
+SQLH uses `[]sqlh.JsonOrder` for `orderBy`. Each item contains a public `field` name and an optional `direction` (`asc` or `desc`). Omitted directions default to ascending. SQLH resolves and validates public sort fields before default queries or custom query/count callbacks. Unknown fields, legacy `column` keys, and invalid directions produce validation errors.
+
+Use `CrudDefinition.FieldMappings` to restrict public query fields. `ListInputSource.ValidateQueryModifiers() error` provides additional input validation. Return `nil` when no additional validation is required. Optional `ApplyQueryModifiers` methods add trusted backend modifiers, not public ordering.
 
 ### Force Filters
 
@@ -3079,17 +3187,15 @@ input.AddForceFilter(func(qb *sqlr.QueryBuilderSelect) {
 ```
 
 SQLH applies force filters to list, count, identity, update, PATCH, and delete lookups.
-A force filter must only add restrictive `WHERE` conditions.
+A force filter must only add restrictive `WHERE` conditions. It is trusted backend SQL, separate from the public field resolver and its allowlist: use it for mandatory tenant/account restrictions, not to forward request-provided identifiers.
 
 ### Custom List Inputs
 
-SQLH v0.7.1 `InputQuery` contained only `filter`. SQLH v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`.
-If the old endpoint had no pagination, use a custom `ListInputSource` with only the old fields.
-Preserve the old unknown-field behavior and implement every required phase.
-Use no-op query-modifier, pagination, and pagination-validation methods when the old API had none.
+A custom `ListInputSource` can omit pagination or expose additional typed request fields. Preserve the endpoint's intended request shape, but do not accept legacy raw SQL identifiers as public query fields.
+Use no-op pagination and pagination-validation methods when the API has no pagination.
 Construct `CrudDefinition` with all type parameters because `NewCrudDefinition` fixes the input type to `sqlh.ListInput`.
 
-Embed `sqlh.ListInput` to retain native filters, pagination, and force filters. Override `ApplyFilters` to interpret additional request fields:
+Embed `sqlh.ListInput` to retain public filters, ordering, pagination, and force filters. Optional `ApplyFilters` is a trusted backend extension for additional typed fields; do not call the removed `ListInput.ApplyFilters` method:
 
 ```go
 type AuthorListInput struct {
@@ -3098,9 +3204,7 @@ type AuthorListInput struct {
 }
 
 func (i AuthorListInput) ApplyFilters(qb *sqlr.QueryBuilderSelect) error {
-    if err := i.ListInput.ApplyFilters(qb); err != nil {
-        return err
-    }
+    // SQLH has already resolved and validated the embedded public filter.
     if i.Name != "" {
         qb.Where(sqlc.Col("name").Eq(i.Name))
     }
@@ -3110,17 +3214,20 @@ func (i AuthorListInput) ApplyFilters(qb *sqlr.QueryBuilderSelect) error {
 
 A custom list input must implement `ListInputSource`:
 
-- `ApplyFilters` adds user filters and joins.
-- `ApplyQueryModifiers` adds grouping and ordering.
+- `GetFilter() sqlh.JsonFilter` returns the public filter tree.
+- `GetOrderBy() []sqlh.JsonOrder` returns public sort fields.
 - `ApplyPagination` adds the page limit and offset.
-- `ValidatePagination` validates the input.
+- `ValidatePagination` validates pagination.
+- `ValidateQueryModifiers() error` validates additional query modifiers. A no-op that returns `nil` is valid.
 - `GetForceFilters` exposes the embedded, server-owned filters.
 
+Embedding `sqlh.ListInput` supplies these methods. `ApplyFilters(*sqlr.QueryBuilderSelect) error` and `ApplyQueryModifiers(*sqlr.QueryBuilderSelect)` are optional trusted backend extensions, not native request filter/sort processors. The embedded list input no longer has either method. Never pass arbitrary request identifiers or SQL expressions to these extensions.
+
 Custom `Query` callbacks must apply `QueryPlan.ApplyBuilder`, check `ApplyScope`, then apply query modifiers and pagination.
-Custom `Count` callbacks must apply the builder and scope, return scope errors, and not apply query modifiers or pagination.
-The default count applies query modifiers but not pagination.
-SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING.
-Write a custom count when joins or grouping change the old total.
+Custom `Count` callbacks must apply the builder and scope, return scope errors, and omit row modifiers, ordering, and pagination.
+The default count shares the builder and scope, including public filters, trusted filters, force filters, and delete scope.
+It excludes row modifiers, ordering, and pagination.
+If modifiers change row cardinality, implement a custom count with the corresponding cardinality logic.
 
 `NewCrudDefinition` fixes its list input to `sqlh.ListInput`. Construct the definition explicitly for `AuthorListInput`. Use the entity value type `Author` for `E`: callback signatures already use `*E`.
 
@@ -3174,8 +3281,8 @@ Keep database mapping, relationship shape, HTTP input, and CRUD policy separate:
 |---|---|
 | `db:"column"` | Maps an entity field to a database column. Use `db:"-"` on non-column relation fields. |
 | `sqlr:"..."` | Defines relationships and schema-wide preload or synchronization defaults. |
-| `sqlh:"..."` | Adds operation-specific preload and synchronization paths to SQLH's default builders. |
-| `json:"field"` | Defines the request field name and helps SQLH derive PATCH association paths. |
+| `sqlh:"..."` | Defines automatic scalar query-field aliases/exclusions and operation-specific relation preload/synchronization paths. |
+| `json:"field"` | Defines JSON names and PATCH association paths on inputs, not public query-field names. |
 | `binding:"..."` | Defines request validation. Validate the merged PATCH input explicitly. |
 | `uri:"id" json:"-"` | Binds the route identity without accepting it from JSON. `InputById` supplies these tags. |
 
@@ -3220,7 +3327,7 @@ Separate directives with semicolons and phases with commas. There is no `patch` 
 | `preload` | `update` | Loads the relation before PUT/PATCH mapping and reloads it after the write. |
 | `sync` | `create`, `update`, `delete` | Adds association paths for persistence or owned-association cleanup. |
 
-SQLH traverses nested relation tags. Paths use Go field names, such as `Labels` or `Rules.Owner`, not column names or JSON names. Unknown directives, unsupported phases, and `sqlh` tags on scalar or embedded fields fail during handler construction.
+SQLH traverses nested relation tags. Paths use exact Go field names, such as `Labels` or `Rules.Owner`, not column names or JSON names. `preload` and `sync` require association fields; scalar fields instead support `field:alias` or `field:-` for automatic query discovery. Unknown directives, unsupported phases, empty or duplicate `field` directives, and directives on embedded fields fail during handler construction.
 
 ### Defaults and PATCH Selection
 
@@ -3376,7 +3483,7 @@ func (r *ReportingAuthorRepository) Close() error {
 }
 ```
 
-The repository wrapper retains its defaults for direct queries, but SQLH v0.8.0 prepares the list builder and copies it into the repository query, so those defaults alone do not affect the list route. The example also applies them through a custom `ListInputSource`: it adds the newest-first order as a query modifier and applies the 100-row fallback only when no page limit was requested. It embeds `sqlh.ListInput` to preserve native filters, force filters, and offsets. The default count does not apply pagination, so its total remains uncapped.
+The repository wrapper retains its trusted SQL defaults for direct queries, but SQLH prepares the list builder and copies it into the repository query, so those defaults alone do not affect the list route. The example also applies defaults through a custom `ListInputSource`: `GetOrderBy` returns a public `createdAt` sort only when the request has no ordering, and pagination applies the 100-row fallback only when no page limit was requested. It embeds `sqlh.ListInput` to supply `GetFilter`, force filters, and pagination validation, and its definition explicitly allowlists public query fields. Both client ordering and default ordering go through the same resolver; no raw SQL is accepted from the request. The default count does not apply pagination, so its total remains uncapped.
 
 ```go title="main.go"
 const (
@@ -3385,11 +3492,16 @@ const (
 )
 
 type reportingAuthorListInput struct {
+  // Promotes GetFilter, ValidatePagination, and GetForceFilters.
   sqlh.ListInput
 }
 
-func (i reportingAuthorListInput) ApplyQueryModifiers(qb *sqlr.QueryBuilderSelect) {
-  qb.OrderBy(reportingAuthorOrderBy)
+func (i reportingAuthorListInput) GetOrderBy() []sqlh.JsonOrder {
+  if len(i.OrderBy) > 0 {
+    return i.ListInput.GetOrderBy()
+  }
+
+  return []sqlh.JsonOrder{{Field: "createdAt", Direction: "desc"}}
 }
 
 func (i reportingAuthorListInput) ApplyPagination(qb *sqlr.QueryBuilderSelect) {
@@ -3418,6 +3530,13 @@ func main() {
           UpdateInput:          mapper.TransformUpdateInput,
           PatchInputFromEntity: mapper.TransformPatchInputFromEntity,
           Output:               mapper.TransformOutput,
+          // Complete allowlist overrides automatic Go names and scalar field tags.
+          FieldMappings: map[string]string{
+            "id":        "Id",
+            "name":      "Name",
+            "email":     "Email",
+            "createdAt": "CreatedAt",
+          },
         }
         router.HandleWith(sqlh.WithCrudHandlers(
           1,
@@ -3502,6 +3621,8 @@ Use these replacements:
 | Repository factory | `WithRepositoryTxFactory` returning `sqlr.RepositoryTx` |
 | Generic query list handler | `ListInput`, `ListOutput`, `Query`, and `Count` |
 | Implicit patch association behavior | `sqlh` relation tags and `PatchAssociationTriggers` |
+| Public `sqlc.JsonFilter.Column` / raw order expressions | `sqlh.JsonFilter.Field`, `sqlh.JsonOrder.Field`, and `CrudDefinition.FieldMappings` |
+| Native `ListInput.ApplyFilters` / `ApplyQueryModifiers` | `GetFilter` / `GetOrderBy`; SQLH validates and resolves the public names |
 
 Add parity tests before changing the implementation. Check routes, response bodies, status codes, authorization, association behavior, filters, pagination, and transaction rollback behavior.
 
@@ -3523,7 +3644,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlr@v0.9.1
+go get github.com/gosoline-project/sqlr@v0.9.2-0.20261027132740-484c58e94d7b
 ```
 
 Then import the package in your Go code:
@@ -4521,6 +4642,16 @@ func (s *BlogService) queryPostsWithAuthorJoin(ctx context.Context) ([]Post, err
 }
 ```
 
+`QueryBuilderSelect.DefaultJoin(joinType, relation, conditions...)` adds a fallback join. It supports `sqlc.JoinLeft` and `sqlc.JoinInner`, with optional ON conditions. Use it when framework code needs a relation but application code can define that join:
+
+```go
+qb.DefaultJoin(sqlc.JoinInner, "Author",
+    sqlr.Condition(sqlc.Col("Author", "name").Eq("Alice")),
+)
+```
+
+The first default for a relation wins, including its join type and ON conditions. An explicit `LeftJoin` or `InnerJoin` takes precedence, whether it is added before or after the default. It replaces the default's type and conditions. Repeated defaults add no extra join; duplicate explicit joins remain invalid.
+
 ### Joins on Read
 
 Joins can also be used with `Read()` to load relations alongside a single entity lookup:
@@ -4686,7 +4817,14 @@ Associations follow the normal `Create()` behavior described above. If your fixt
 
 The built-in `sqlr` fixture writer uses the `default` sqlc client name. If you define multiple fixture sets without embedding them as associations, make sure their factory order still respects your foreign-key dependencies.
 
-For more details about gosoline fixture loading, grouping, purge behavior, and named fixture references, see the [fixtures package reference](/docs/pr-6/reference/package-fixtures).
+For more details about gosoline fixture loading, grouping, and named fixture references, see the [fixtures package reference](/docs/pr-6/reference/package-fixtures).
+
+---
+
+# HTTP Server
+Source: https://gosoline-project.github.io/docs/pr-6/how-to/http-server
+
+
 
 ---
 
@@ -6215,7 +6353,7 @@ After signalling closure the advisor resets its tracking for that remote address
 | `max_request_count` | int | `0` | Maximum requests per connection before signalling close. `0` disables count-based closing. |
 
 :::note
-The `Connection: close` header works for both HTTP/1.1 and HTTP/2. For HTTP/1.1 the client closes and reopens the TCP connection. For HTTP/2 the client initiates a graceful stream reset.
+For HTTP/1.1, `Connection: close` tells the client to reconnect. Go's HTTP/2 server translates this setting into a `GOAWAY` frame and closes the connection after active streams finish.
 :::
 
 ## Combined configuration example
@@ -6320,7 +6458,7 @@ httpserver:
           - /api/events
         extension:
           - .png
-        pathRegex:
+        path_regex:
           - \.json$
 ```
 
@@ -6336,7 +6474,7 @@ httpserver:
 |---|---|---|
 | `extension` | string array | File extensions to exclude (e.g., `.png`). |
 | `path` | string array | Exact paths to exclude (e.g., `/api/events`). |
-| `pathRegex` | string array | Regex patterns to exclude (e.g., `\.json$`). |
+| `path_regex` | string array | Regex patterns to exclude (e.g., `\.json$`). |
 
 :::warning
 Always exclude SSE endpoints from compression. Gzip buffering will break real-time streaming. See [Stream with SSE](/docs/pr-6/how-to/http-server/stream-with-sse/) for details.
@@ -7735,7 +7873,7 @@ Here, you've:
 
 Once you've loaded your configurations, you can access them with type-specific getters. For example:
 
-```go title="main.go" lineNumbers {20-30}
+```go title="main.go" lineNumbers
 package main
 
 import (
@@ -8047,7 +8185,7 @@ Read more about appending and mutating context fields in our [log package refere
 
 Now that you have a function that can truncate todo text, use it when creating a todo:
 
-```go title="handler.go" {5-6,16}
+```go title="handler.go"
 func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
   h.mu.Lock()
   defer h.mu.Unlock()
@@ -8071,7 +8209,7 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*
 
 And when updating a todo:
 
-```go title="handler.go" {10-11}
+```go title="handler.go"
 func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
   h.mu.Lock()
   defer h.mu.Unlock()
@@ -8109,7 +8247,7 @@ If you run your service now, you'll see the results of your work. Gosoline has s
 
 First, add a logger to your `TodoHandler`:
 
-```go title="handler.go" {2}
+```go title="handler.go"
 type TodoHandler struct {
   logger log.Logger
   mu     sync.Mutex
@@ -8122,7 +8260,7 @@ Now, you can make use of this logger in any of the handler's methods.
 
 Next, when you initialize the handler, pass a logger:
 
-```go title="handler.go" {3}
+```go title="handler.go"
 func NewTodoHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*TodoHandler, error) {
   return &TodoHandler{
     logger: logger,
@@ -8431,7 +8569,7 @@ If you have an application, you can create a logger from your app's configuratio
 
 First, configure your logger in your configuration. For example, in a config file:
 
-```yml title="config.dist.yml" lineNumbers {10-23}
+```yml title="config.dist.yml" lineNumbers
 app:
   env: dev
   name: hello-world
@@ -8459,7 +8597,7 @@ log:
 
 Then, implement your logger alongside your application:
 
-```go title="main.go" lineNumbers {14,19,23}
+```go title="main.go" lineNumbers
 package main
 
 import (
@@ -8714,6 +8852,13 @@ smpl.AddStrategy("my-strategy", func(ctx context.Context, config cfg.Config) (sm
 
 ---
 
+# Streaming applications
+Source: https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications
+
+
+
+---
+
 # Create a consumer
 Source: https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/create-a-consumer
 
@@ -8877,7 +9022,52 @@ Configure concurrency on **the input**, using `stream.input.<name>.runner_count`
 
 Kafka and Kinesis ordered mode still allows concurrency across partitions or shards. With several unordered runners, records from the same partition or shard may execute concurrently.
 
-Callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
+Ordinary callbacks receive individual models. Transport fetch batches and producer-daemon batches do not create batch callbacks. SQS/SNS also support `acknowledgement_mode: batch`, which deletes successful messages after the receive batch completes; the default `individual` mode deletes each successful message immediately. Deletion failures are logged and consumption continues; those messages can be redelivered.
+
+### Batch callbacks in v0.68.0 and later
+
+For application-level batching, implement `stream.BatchConsumerCallback[M]` and use `application.RunBatchConsumer`:
+
+```go
+func (c *consumer) Consume(ctx context.Context, orders []OrderCreated, attributes []map[string]string) ([]bool, error) {
+    results := make([]bool, len(orders))
+    for i, order := range orders {
+        c.logger.Info(ctx, "received order %s with total %.2f", order.Id, order.Total)
+        results[i] = true
+    }
+    return results, nil
+}
+```
+
+The factory returns `stream.BatchConsumerCallback[OrderCreated]`. `RunBatchConsumers` accepts a `stream.BatchConsumerCallbackMap[M]`; untyped callbacks use `RunUntypedBatchConsumer` or `RunUntypedBatchConsumers`.
+
+Set collection limits on the consumer:
+
+```yaml
+stream:
+  consumer:
+    default:
+      input: orders
+      batch_size: 100
+      buffer_size: 100
+      idle_timeout: 5s
+```
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `batch_size` | `1` | Flush when the collected batch reaches this size. Aggregate envelopes can contribute several child records. |
+| `buffer_size` | `0` | Admission-channel capacity; `0` uses `batch_size`. |
+| `idle_timeout` | `10s` | Flush interval, restarted after each timed or size-triggered flush. |
+
+One collection loop calls the batch callback serially. Return one boolean per model; only false results request retry. A callback error is logged independently of the per-model results. Failed primary records use the configured retry handler; failed retry deliveries remain unacknowledged for redelivery.
+
+:::caution
+
+Batch consumers acknowledge primary messages when admitted to an **in-memory buffer**, before business processing succeeds. Enable retries when failed primary work must be persisted, and keep side effects idempotent. A crash before processing or retry persistence, exhausted retries, or an incomplete drain can require replay. This differs from the ordinary callback acknowledgement contract above.
+
+:::
+
+At input completion or shutdown, pending work is drained within the shared consumer grace deadline. See the [released runnable example](https://github.com/justtrackio/gosoline/tree/v0.68.3/examples/stream/batch-consumer), [callback API](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch_module_factory.go), and [batch implementation](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch.go) before choosing batching for an existing consumer.
 
 ## Graceful processing
 
@@ -9794,11 +9984,11 @@ httpserver:
 
 By default, this route responds with a `200 OK` status code if the application is considered healthy. 
 
-If you want to have more control over the module's health status, you can implement the `kernel.HealthChecked` interface for your application modules.
+If you want to have more control over the module's health status, you can implement the `kernel.HealthCheckedModule` interface for your application modules.
 
 ## Customize your health check
 
-To control how the health of your application is verified, you'll implement the `kernel.HealthChecked` interface:
+To control how the health of your application is verified, you'll implement the `kernel.HealthCheckedModule` interface:
 
 ```go
 package kernel
@@ -10012,7 +10202,14 @@ Note that the kernel waits the `wait_interval` and checks the health of the appl
 
 ---
 
-# App Identity and Naming Patterns
+# Migrations
+Source: https://gosoline-project.github.io/docs/pr-6/migrations
+
+
+
+---
+
+# Migrating to Identity and Naming Patterns
 Source: https://gosoline-project.github.io/docs/pr-6/migrations/app-identity-and-naming-patterns
 
 This guide details how to migrate your gosoline application to the new `Identity` system and dynamic resource naming.
@@ -10767,7 +10964,7 @@ This configuration ensures all resource names resolve identically to the old def
 
 ---
 
-# HTTP Server Package
+# Migrating to the Standalone HTTP Server Package
 Source: https://gosoline-project.github.io/docs/pr-6/migrations/httpserver-package
 
 This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.6.4`.
@@ -11829,7 +12026,7 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 
 If you want an AI agent to perform this migration, copy the prepared migration instructions and provide them as the task prompt. The instructions are intentionally operational and include discovery steps, migration order, API mappings, validation checks, and stop conditions.
 
-[Download the migration instructions](/docs/pr-6/downloads/httpserver-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
+[Download the migration instructions](/docs/pr-6/blume-assets/content/docs/migrations/src/httpserver-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
 
 ```text title="AI migration instructions"
 Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.6.4, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
@@ -12040,7 +12237,7 @@ Stop conditions:
 
 ---
 
-# SQLH CRUD
+# Migrating an Existing Service to SQLH CRUD
 Source: https://gosoline-project.github.io/docs/pr-6/migrations/sqlh-crud
 
 This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers.
@@ -12049,8 +12246,8 @@ Use it to preserve the service's public API and domain behavior.
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations.
 Do not replace domain rules with generic CRUD behavior.
 
-This guide targets SQLH v0.8.0, SQLR v0.9.1, SQLC v0.4.0, and httpserver v0.6.4.
-SQLH v0.8.0 declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
+This guide targets SQLH `v0.8.2-0.20261027132918-7e9d41caf9c9`, SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, SQLC v0.4.1, and httpserver v0.6.4.
+This SQLH version declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
 
 ## 1. Review the Current API
 
@@ -12092,7 +12289,7 @@ Use SQLR tags for relationship shape and schema defaults. `foreignKey:<column>` 
 
 Use `parentKey:<column>` and `relatedKey:<column>` for nonstandard many-to-many join-column names. Other relevant options are `primaryKey`, `autoCreateTime`, `autoUpdateTime`, `preload`, `sync:create,update,delete`, and `syncMode:many2many`. Separate SQLR options with semicolons. `syncMode:many2many` requires `sync:update` and a many-to-many relation.
 
-Use SQLH tags for CRUD-phase builders. Valid directives are `preload:create,read,query,update` and `sync:create,update,delete`; separate directives with semicolons and phases with commas. Relation paths use Go field names such as `Rules` or `Rules.Owner`, not database columns or JSON names. Unknown directives, phases, and scalar-field tags fail during handler setup.
+Use SQLH relation tags for CRUD-phase builders: `preload:create,read,query,update` and `sync:create,update,delete`. Separate directives with semicolons and phases with commas. Relation paths use exact Go field names such as `Rules` or `Rules.Owner`, not database columns or JSON names. Scalar fields support `sqlh:"field:alias"` or `sqlh:"field:-"` for automatic query naming or exclusion, not preload/sync. Unknown directives, unsupported phases, empty or duplicate `field` directives, and directives on embedded fields fail during handler setup.
 
 `sqlr:"...;preload"` is a schema-level auto-preload. `sqlh:"preload:<phases>"` adds phase-specific builders, and `preload:update` affects the update lookup and update write, not only post-write loading. SQLH parses nested relation tags recursively.
 
@@ -12251,21 +12448,39 @@ In SQLH v0.8.0, custom PATCH operations read the parsed document from `input.Doc
 
 ## 6. Preserve List Compatibility
 
-Use the `ProjectListInput` type above for native SQLC JSON filters, pagination, and force filters. Embedding `sqlh.ListInput` supplies standard implementations only. If `LegacyFilter` changes filter behavior, override `ApplyFilters` and any other needed phase.
-SQLH v0.7.1 `InputQuery` contained only `filter`; v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`.
-Do not add pagination if the old API did not expose it.
-Use a custom `ListInputSource` with the old fields, no-op modifier and pagination phases, and no-op pagination validation when those phases did not exist.
-Implement all required list-input methods and instantiate `CrudDefinition` with every type parameter; `NewCrudDefinition` fixes the input type to `sqlh.ListInput`.
-Preserve the old binder's behavior for unknown fields.
+Use the `ProjectListInput` type above for SQLH public-field filters, ordering, pagination, and force filters. Embedding `sqlh.ListInput` supplies the required `ListInputSource` methods:
+
+- `GetFilter() sqlh.JsonFilter`
+- `GetOrderBy() []sqlh.JsonOrder`
+- `ApplyPagination`
+- `ValidatePagination`
+- `ValidateQueryModifiers() error`
+- `GetForceFilters`
+
+A custom `ValidateQueryModifiers` method can return `nil` when no additional validation is required.
+
+Migrate public filters from `column` to `field` and ordering to `{"field":"name","direction":"asc"}` objects in `orderBy`. `sqlh.JsonFilter.Type` remains `sqlc.JsonFilterType`; nested `Fields` use `sqlh.JsonFilter` too. SQLH validates every leaf and sort field before callbacks or database work, including custom list operations. Unknown names, raw identifiers/expressions, and legacy `column` keys are rejected.
+
+With `CrudDefinition.FieldMappings == nil`, eligible directly mapped scalar entity fields use exported Go names with anonymous-field promotion and Go shadowing rules, not output DTO names or database columns. Binding tags (`json`, `xml`, `form`, `yaml`, etc.) are ignored. Use `sqlh:"field:alias"` only when a different automatic public name is needed, or `sqlh:"field:-"` to exclude a field.
+
+**Migration warning:** `json:"-"` no longer excludes a field from automatic query discovery. Add `sqlh:"field:-"` or select the complete public allowlist with `FieldMappings`. JSON renames that differ from Go names by more than case also need a SQLH alias or explicit mapping.
+
+Public names match case-insensitively with Go's Unicode `strings.EqualFold` semantics, without punctuation/style normalization: `createdAt` matches `CreatedAt`, not `created_at`. Go paths and database identifiers stay exact. Active public names that collide under case folding fail handler construction with the conflicting names and Go paths; excluded fields do not participate.
+
+Set `FieldMappings` to a complete public-name-to-Go-path allowlist, for example `map[string]string{"id": "PublicID", "ownerName": "Owner.Name"}`. Non-nil replaces automatic discovery without merging names or aliases; an empty map exposes none. Explicit entries can select a mapped scalar even if its automatic name is aliased or excluded. Explicit relation paths support one direct `BelongsTo` or `HasOne` hop to a scalar; SQLH adds a `LEFT JOIN`. To-many/deeper paths are unsupported, and invalid declarations fail handler construction.
+
+If `LegacyFilter` represents an additional typed field, optional `ApplyFilters` can add its trusted backend predicate. Optional `ApplyQueryModifiers` can add trusted grouping or ordering. These are not native public-query processors; do not delegate to removed `ListInput.ApplyFilters` or `ListInput.ApplyQueryModifiers` methods or forward request-provided SQL. Force filters remain separate trusted server-owned restrictions.
+
+Do not add pagination if the old API did not expose it. A custom `ListInputSource` can retain the intended fields, provide empty public-filter/order getters when absent, and use no-op pagination and pagination validation. Instantiate `CrudDefinition` with every type parameter; `NewCrudDefinition` fixes the input type to `sqlh.ListInput`. Preserve intended unknown-field behavior outside the public filter/order grammar.
 
 Custom `Query` and `Count` callbacks must call `QueryPlan.ApplyBuilder` and then `QueryPlan.ApplyScope`.
 Return a scope error before repository work.
 A custom `Query` then applies modifiers and pagination, in that order.
-A custom `Count` must not apply query modifiers or pagination.
-The default count applies query modifiers but not pagination.
-SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING.
-Implement a custom count when joins or grouping change the old total.
-Use the same filter, force-filter, and delete scope for rows and counts.
+A custom `Count` omits row modifiers, ordering, and pagination.
+The default count shares the builder and scope, including public filters, trusted filters, force filters, and delete scope.
+It excludes row modifiers, ordering, and pagination.
+If modifiers change row cardinality, implement a custom count with the corresponding cardinality logic.
+Keep the same builder and scope for rows and counts.
 
 `CrudHandler.List` and `CrudDefinition.ListOperation` always return `ListOutput[O]` with `Results` and `Total`. If the old API uses another outer envelope, call `handler.List` from a typed wrapper and map those fields, then register the wrapper manually:
 
@@ -12282,7 +12497,7 @@ func listLegacy(ctx context.Context, input *ProjectListInput) (LegacyListOutput,
 router.POST("/v1/projects", httpserver.Bind(listLegacy))
 ```
 
-Do not make `ListOperation` return another envelope. For a legacy filter dialect, detect it before decoding and reject unsafe mixed native and legacy forms. Translate known fields and operators to SQLC expressions.
+Do not make `ListOperation` return another envelope. For a legacy filter dialect, detect it before decoding and reject unsafe mixed native and legacy forms. Translate only known fields and operators to `sqlh.JsonFilter`/`sqlh.JsonOrder` public names so they pass through the same allowlist, rather than exposing database identifiers.
 
 Preserve required joins, grouping, ordering, pagination, and client-dependent `LIMIT 0` behavior. Reject unknown fields, operators, directions, and boolean values. Apply the same scope to row and count queries.
 
@@ -12349,10 +12564,10 @@ Regenerate Go types, mocks, OpenAPI files, and other derived artifacts from the 
 
 For the full operational procedure, copy the instructions below. The prompt is self-contained and includes pinned API semantics, tag rules, constructors, operation choices, acceptance checks, and stop conditions.
 
-[Download the migration instructions](/docs/pr-6/downloads/sqlh-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
+[Download the migration instructions](/docs/pr-6/blume-assets/content/docs/migrations/src/sqlh-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
 
 ````text title="AI migration instructions"
-Migrate this service's existing SQLH v0.7.x CRUD or custom handlers to the typed, transaction-aware SQLH v0.8.0 API.
+Migrate this service's existing SQLH v0.7.x CRUD or custom handlers to the typed, transaction-aware SQLH API pinned below.
 
 ## Mission and pinned API
 
@@ -12362,14 +12577,14 @@ Record `Content-Type`, `Accept`, and response negotiation behavior.
 
 Use these downloaded sources as the API contract:
 
-- `github.com/gosoline-project/sqlh` at `v0.8.0`
-- `github.com/gosoline-project/sqlr` at `v0.9.1`
-- `github.com/gosoline-project/sqlc` at `v0.4.0`
+- `github.com/gosoline-project/sqlh` at `v0.8.2-0.20261027132918-7e9d41caf9c9`
+- `github.com/gosoline-project/sqlr` at `v0.9.2-0.20261027132740-484c58e94d7b`
+- `github.com/gosoline-project/sqlc` at `v0.4.1`
 - `github.com/gosoline-project/httpserver` at `v0.6.4`
 - `github.com/justtrackio/gosoline` at `v0.63.5`
 
-SQLH v0.8.0 declares Go 1.27.0.
-Its `go.mod` requires SQLR v0.9.1, SQLC v0.4.0, httpserver v0.6.4, and Gosoline v0.63.5.
+The pinned SQLH version declares Go 1.27.0.
+Its `go.mod` requires SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, SQLC v0.4.1, httpserver v0.6.4, and Gosoline v0.63.5.
 Keep compatible newer versions selected by Go.
 Do not downgrade dependencies or change unrelated imports.
 
@@ -12434,10 +12649,11 @@ Use SQLR tags for relationship shape and schema defaults. `foreignKey:<column>` 
 
 Use `parentKey:<column>` and `relatedKey:<column>` for nonstandard many-to-many join-column names. Other relevant options are `primaryKey`, `autoCreateTime`, `autoUpdateTime`, `preload`, `sync:create,update,delete`, and `syncMode:many2many`. Separate SQLR options with semicolons. `syncMode:many2many` requires `sync:update` and a many-to-many relation.
 
-Use SQLH tags for CRUD-phase builders. Valid directives are `preload:create,read,query,update` and
-`sync:create,update,delete`; separate directives with semicolons and phases with commas. SQLH tags belong only on association
-fields, and relation paths use Go field names such as `Rules` or `Rules.Owner`, not database columns or JSON names. Unknown
-directives, phases, and scalar-field tags fail during handler setup.
+Use SQLH relation tags for CRUD-phase builders: `preload:create,read,query,update` and `sync:create,update,delete`.
+Separate directives with semicolons and phases with commas. Relation paths use exact Go field names such as `Rules`
+or `Rules.Owner`, not database columns or JSON names. Scalar fields support `sqlh:"field:alias"` or `sqlh:"field:-"`
+for automatic query naming or exclusion, not preload/sync. Unknown directives, unsupported phases, empty or duplicate
+`field` directives, and directives on embedded fields fail during handler setup.
 
 `sqlr:"...;preload"` is a schema-level auto-preload. `sqlh:"preload:<phases>"` adds phase-specific builders, and
 `preload:update` affects the pre-update identity lookup and update write preload, not only post-write loading. SQLH parses
@@ -12584,25 +12800,49 @@ In SQLH v0.8.0, access the parsed `PatchDocument` through `input.Document`, not 
 
 ### 5. Preserve list filters and counts
 
-Use the `ProjectListInput` pattern above for native SQLC JSON filters, pagination, and force filters. Embedding
-`sqlh.ListInput` supplies standard implementations only. If `LegacyFilter` changes filter behavior, override `ApplyFilters`
-and any other needed phase. A custom list input must implement `ApplyFilters`, `ApplyQueryModifiers`, `ApplyPagination`,
-`ValidatePagination`, and `GetForceFilters`.
+Use the `ProjectListInput` pattern above for SQLH public-field filters, ordering, pagination, and force filters.
+Embedding `sqlh.ListInput` supplies the required `ListInputSource` methods: `GetFilter() sqlh.JsonFilter`,
+`GetOrderBy() []sqlh.JsonOrder`, `ApplyPagination`, `ValidatePagination`, `ValidateQueryModifiers() error`, and `GetForceFilters`.
+A custom `ValidateQueryModifiers` method can return `nil` when no additional validation is required.
+Native `ListInput.ApplyFilters` and `ListInput.ApplyQueryModifiers` methods no longer exist.
+Optional custom methods with those names are trusted backend extensions for additional typed predicates or modifiers;
+never forward request-provided identifiers or expressions to them.
 
-`ApplyFilters` handles user filters.
-Keep server-owned force filters in the embedded carrier because SQLH applies them through the shared query scope.
+Migrate public filters from `column` to `field`; recursive `Fields` now contain `sqlh.JsonFilter`.
+`Type` remains `sqlc.JsonFilterType`. Public `orderBy` contains `{"field":"name","direction":"asc"}` objects.
+Every filter leaf and sort field is validated before callbacks/database work, including custom list operations.
+Unknown names, raw identifiers/expressions, and legacy `column` keys are rejected.
+SQLC's low-level filter and query-builder contract is unchanged.
+
+With `FieldMappings == nil`, eligible directly mapped scalar entity fields use exported Go names with anonymous-field
+promotion and Go shadowing rules, not output DTO or database names. Primitive scalars and time.Time (including pointers)
+are supported. Binding tags (`json`, `xml`, `form`, `yaml`, etc.) are ignored.
+Use `sqlh:"field:alias"` only when a different automatic public name is needed, or `sqlh:"field:-"` to exclude a field.
+Migration warning: `json:"-"` no longer excludes fields from automatic queries. Add `sqlh:"field:-"` or an explicit
+complete map. JSON renames that differ from Go names by more than case need a SQLH alias or explicit mapping.
+Public names match case-insensitively with Go's Unicode strings.EqualFold semantics, not punctuation/style normalization:
+`createdAt` matches `CreatedAt`, not `created_at`. Go paths and database identifiers remain exact.
+Active public names that collide under case folding fail handler construction with conflicting names and Go paths;
+excluded fields do not participate.
+Set `CrudDefinition.FieldMappings` to a complete public-name-to-Go-path allowlist, for example
+`map[string]string{"id": "PublicID", "ownerName": "Owner.Name"}`. Non-nil replaces automatic discovery without merging
+names or aliases; empty exposes none. Explicit entries can select a mapped scalar whose automatic name is aliased/excluded.
+Explicit paths support one direct BelongsTo/HasOne hop to a mapped scalar and add a LEFT JOIN when needed.
+To-many and deeper relation paths are unsupported; invalid declarations fail handler construction.
+
+Keep server-owned force filters separate in the embedded carrier; they remain trusted restrictive predicates
+applied through the shared query scope, not public query fields.
 Custom `Query` and `Count` callbacks must call `QueryPlan.ApplyBuilder` and then `QueryPlan.ApplyScope`.
 Return a scope error before repository work.
 Custom `Query` then applies query modifiers and pagination, in that order.
-Custom `Count` must not apply query modifiers or pagination.
-The default count applies query modifiers but not pagination.
-SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING.
-Implement a custom count when joins or grouping change the old total.
-Use the same user-filter, force-filter, and delete scope for rows and counts.
-SQLH v0.7.1 `InputQuery` contained only `filter`; v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`.
-Treat this as an API change when the old route did not expose pagination.
-To preserve the old input and unknown-field behavior, use a custom `ListInputSource` with only the old fields.
-Implement every required phase, with no-op query-modifier and pagination phases and no-op pagination validation when absent.
+Custom `Count` omits row modifiers, ordering, and pagination.
+The default count shares the builder and scope, including public filters, trusted filters, force filters, and delete scope.
+It excludes row modifiers, ordering, and pagination.
+If modifiers change row cardinality, implement a custom count with the corresponding cardinality logic.
+Keep the same builder and scope for rows and counts.
+Do not add pagination if the old route did not expose it. A custom `ListInputSource` can retain the intended fields,
+provide empty public-filter/order getters when absent, and use no-op pagination and pagination validation.
+Preserve intended unknown-field behavior outside the public filter/order grammar.
 Instantiate `CrudDefinition` with all type parameters because `NewCrudDefinition` fixes the input type to `sqlh.ListInput`.
 
 `CrudHandler.List` and `ListOperation` always return `ListOutput[O]` with `Results` and `Total`. For another legacy envelope,
@@ -12624,9 +12864,10 @@ router.POST("/v1/projects", httpserver.Bind(listLegacy))
 Do not make `ListOperation` return a different envelope. For a legacy filter dialect, detect it before decoding and reject
 unsafe mixed native and legacy forms.
 
-Translate known fields and operators to SQLC expressions. Preserve required joins, grouping, ordering, pagination, and
-client-dependent `LIMIT 0` behavior. Reject unknown fields, operators, directions, and boolean values. Apply the same scope to
-row and count queries.
+Translate known legacy fields and operators to `sqlh.JsonFilter`/`sqlh.JsonOrder` public names so they use the same
+allowlist; do not expose database identifiers. Preserve required joins, grouping, ordering, pagination, and
+client-dependent `LIMIT 0` behavior. Reject unknown fields, operators, directions, and boolean values.
+Apply the same scope to row and count queries.
 
 ### 6. Keep routes, delete responses, and identity scope
 
@@ -12738,10 +12979,12 @@ Stop when the migration needs unrelated refactoring.
 
 ---
 
-# Stream Consumer Lifecycle
+# Migrating to the Callback-Based Stream Consumer Lifecycle
 Source: https://gosoline-project.github.io/docs/pr-6/migrations/stream-consumer-lifecycle
 
 This guide covers the breaking stream changes introduced in Gosoline **v0.66.0** by commit [`04b54462`](https://github.com/justtrackio/gosoline/commit/04b54462dfb9cfa789577d3972d6098cd7d69860), **stream: unify input processing and shutdown**. Follow this guide when upgrading from an earlier release to v0.66.0 or later.
+
+Choose the target release before applying the API changes below. **v0.68.0 restored batch consumers and shared base-consumer construction**; the batch removal in v0.66.0 is not the current API. See [batch callbacks](/docs/pr-6/how-to/streaming-applications/create-a-consumer#batch-callbacks-in-v0680-and-later) when upgrading directly to v0.68.0 or later.
 
 Previously, inputs delivered messages through `Input.Data()`, and the consumer controlled callback concurrency and acknowledgement. Inputs now invoke a processing callback directly and own acknowledgement, offset commits, or checkpoints. The consumer supplies a shared shutdown processing deadline for its primary and retry inputs.
 
@@ -12758,7 +13001,7 @@ Classify these findings:
 | Consumer `consume_grace_time` | Rename to consumer `grace_time`, then review the shared deadline. |
 | Consumer `runner_count` | Move the desired concurrency to the referenced input, after reviewing existing input settings and retry concurrency. |
 | Consumer `acknowledge_grace_time` | Remove; use transport-specific cleanup settings as described below. |
-| Batch consumer APIs or `batch_size` | Choose record-at-a-time processing or application-owned batching. |
+| Batch consumer APIs or `batch_size` | Check the target release: migrate away for v0.66–v0.67, or review restored batch consumers in v0.68.0 and later. |
 | Kafka connection `is_read_only` | Select replacement behavior before removing the setting. |
 | File input `blocking` | Remove and review completion at end of file. |
 | Custom `Input`, `Data`, `Ack`, or `AckBatch` usage | Review the integration API changes before migrating. |
@@ -12943,11 +13186,13 @@ The acknowledgement boolean remains significant in application callbacks:
 
 For Kafka and Kinesis, returning false does not hold the original record's offset or checkpoint back. For SQS retry messages, returning false leaves the retry message available for native redelivery.
 
-## 8. Replace Removed Batch Consumers
+## 8. Review Batch Consumers
 
-Batch callbacks, factories, runners, mocks, and `batch_size` configuration are removed. Discover `RunBatchConsumer`, `RunBatchConsumers`, `RunUntypedBatchConsumer`, `RunUntypedBatchConsumers`, `BatchConsumerCallback`, `UntypedBatchConsumerCallback`, their runnable variants, and batch consumer constructors/factories.
+Batch callbacks, factories, runners, mocks, and `batch_size` configuration were removed in **v0.66.0** and restored in **v0.68.0**. Discover `RunBatchConsumer`, `RunBatchConsumers`, `RunUntypedBatchConsumer`, `RunUntypedBatchConsumers`, `BatchConsumerCallback`, `UntypedBatchConsumerCallback`, their runnable variants, and batch consumer constructors/factories.
 
-There is no automatic replacement. Choose one path for each consumer:
+For **v0.68.0 and later**, use the [current batch API](/docs/pr-6/how-to/streaming-applications/create-a-consumer#batch-callbacks-in-v0680-and-later). Review `batch_size`, `buffer_size`, `idle_timeout`, per-record boolean results, retries, and shutdown draining. Primary messages acknowledge admission to memory before processing; crashes or failed retry persistence can require replay. Do not mechanically restore an old batch consumer without reviewing these semantics.
+
+For a target in **v0.66–v0.67**, choose one replacement path for each consumer:
 
 1. **Record-at-a-time processing:** use normal typed or untyped callbacks and the corresponding non-batch runner or module factory. Confirm the former batch operation is correct and economically acceptable for each record.
 2. **Application-owned batching:** own buffering, flush timing, partial failures, shutdown flushing, idempotency, and how each record's callback result corresponds to the batch result.
@@ -12958,7 +13203,7 @@ Runnable callback `Run` contexts are cancelled only after both inputs have retur
 
 ## 9. Review Aggregate Messages
 
-Aggregate envelopes are separate from the removed batch consumer APIs. Their acknowledgement behavior also changes:
+Aggregate envelopes are separate from application-level batch callbacks. For ordinary record consumers, their acknowledgement behavior also changes:
 
 | `aggregate_message_mode` | Old behavior | New callback result for the envelope |
 |---|---|---|
@@ -13014,7 +13259,7 @@ Custom inputs and direct transport integrations require a separate API review:
 | Processing drain | `exec.WithDrainContext` / `DrainContextFrom` carry the caller-owned drain signal. Inputs must preserve that shared processing cancellation contract. |
 | Direct Kafka consumer | `Run` receives a per-record context-aware callback returning bool; handler/channel plumbing and read-only arguments are removed. Constructors and readers also change. |
 | Direct Kinesis consumer | `Run` receives a context-aware raw-record handler returning error; channel-handler and `Done` plumbing are removed. Ordinary handler failures are not a success-only checkpoint barrier. |
-| Low-level consumer tests | Base-consumer APIs are removed; `NewUntypedConsumerWithInterfaces` receives dependencies directly, including a retry input. |
+| Low-level consumer tests | v0.66–v0.67 pass dependencies directly to `NewUntypedConsumerWithInterfaces`. v0.68.0 and later construct a shared base with `NewConsumerBaseWithInterfaces`, then pass it and the callback to `NewUntypedConsumerWithInterfaces`; batch construction returns `(*BatchConsumer, error)`. |
 
 Read the exact constructor signatures in the target Gosoline version and regenerate affected mocks. Config defaults are applied through configuration unmarshalling, not automatically to Go settings literals: explicitly initialize runner counts, processing modes, and cleanup durations in direct integrations. In particular, zero Kinesis runners are not a supported configuration and can stall processing or skip handlers depending on the mode.
 
@@ -13028,7 +13273,7 @@ The application migration instructions below flag these integrations for separat
 - Choose Kafka/Kinesis ordering explicitly and review retry behavior, decoding failures, and retry-publication failures.
 - Configure transport cleanup separately: SQS/SNS acknowledgement allowance, Kafka commit allowance, or Kinesis `release_delay`.
 - Review SQS/SNS deletion mode, visibility timeout, redrive policy, and idempotency.
-- Resolve each removed batch consumer and review aggregate-envelope semantics independently.
+- Resolve each batch consumer against the target release and review aggregate-envelope semantics independently.
 - Replace former Kafka read-only behavior deliberately.
 - Remove file `blocking` and verify completion at end of file.
 - Review callback cancellation, runnable-callback flushing, kernel timeout, and deployment shutdown budget.
@@ -13039,7 +13284,7 @@ The application migration instructions below flag these integrations for separat
 
 Copy the prepared instructions to give an AI agent an operational migration task. They include discovery, configuration mappings, behavior decisions, validation, and stop conditions.
 
-[Download the migration instructions](/docs/pr-6/downloads/stream-consumer-lifecycle-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
+[Download the migration instructions](/docs/pr-6/blume-assets/content/docs/migrations/src/stream-consumer-lifecycle-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
 
 ```text title="AI migration instructions"
 Migrate this application to the callback-based stream lifecycle introduced in Gosoline v0.66.0 by commit 04b54462dfb9cfa789577d3972d6098cd7d69860 (stream: unify input processing and shutdown). Use Gosoline v0.66.0 or later. Preserve intended ordering, retries, side effects, batching, acknowledgement, and deployment behavior.
@@ -13056,7 +13301,7 @@ Discovery:
 1. Find every stream.consumer.<name> and resolve its input to stream.input.<input-name>. Include model subscribers and configuration generated by postprocessors.
 2. Find every retry handler and its settings under stream.consumer.<name>.retry. Record queue IDs, after/delay settings, maximum attempts, redrive policy, and dead-letter behavior.
 3. Search YAML, Helm values, Terraform templates, environment-variable mappings, test fixtures, and Go settings literals for consume_grace_time, acknowledge_grace_time, consumer runner_count, batch_size, file blocking, and Kafka connection is_read_only.
-4. Find removed batch runners RunBatchConsumer, RunBatchConsumers, RunUntypedBatchConsumer, and RunUntypedBatchConsumers, batch callback interfaces and runnable variants, and batch constructors/module factories.
+4. Find batch runners RunBatchConsumer, RunBatchConsumers, RunUntypedBatchConsumer, and RunUntypedBatchConsumers, batch callback interfaces and runnable variants, and batch constructors/module factories. Check their availability in the target release.
 5. Find custom stream.Input implementations, Input.Data calls, AcknowledgeableInput, Ack/AckBatch, base-consumer APIs, low-level consumer constructors, and generated input/transport mocks.
 6. Find direct Kafka and Kinesis consumers, readers, handlers, channel adapters, and settings literals.
 7. Find aggregate_message_mode, callbacks returning false or true with an error, non-ignorable GetModel errors, decoding failures, and retry-publication failure handling.
@@ -13068,8 +13313,8 @@ Classify findings before editing. Produce a per-consumer decision list covering 
 
 Migration order:
 
-1. Confirm the target Gosoline dependency is v0.66.0 or later and contains the lifecycle change.
-2. Resolve removed batch consumers and Kafka read-only behavior.
+1. Confirm the exact target Gosoline dependency is v0.66.0 or later and contains the lifecycle change. Batch APIs and shared consumer-base construction returned in v0.68.0; do not apply removal instructions to later releases.
+2. Review batch consumers against the target version and resolve Kafka read-only behavior.
 3. Migrate consumer settings and primary-input concurrency.
 4. Review independent retry concurrency and transport-specific ordering/acknowledgement.
 5. Review aggregate semantics, callback cancellation, and runnable-callback flushing.
@@ -13134,10 +13379,13 @@ Retry and callback rules:
 - Consume returning true with an error logs the error but does not request retry. Returning false requests native redelivery or enabled consumer retry publication, depending on transport.
 - Do not claim that retry.enabled guarantees redelivery of all failures. Inspect decode/model failures and failed publication separately.
 
-Removed batch consumer rules:
+Batch consumer rules by target release:
 
-- Remove batch callbacks, runnable batch variants, factories/runners/mocks, and batch_size only after choosing replacement behavior.
-- Record-at-a-time replacement is acceptable only when the former batch operation is correct and economically acceptable for each record. Use the normal typed or untyped callback and corresponding non-batch runner/module factory.
+- v0.68.0 and later restore BatchConsumerCallback[M], UntypedBatchConsumerCallback, their runnable variants, application batch runners, and batch_size. Check the target release's exact factories and constructors.
+- For restored batch consumers, review consumer batch_size (default 1), buffer_size (0 uses batch_size), and idle_timeout (default 10s). One collection loop calls callbacks serially; return one boolean per model.
+- Restored batch consumers acknowledge primary messages on admission to memory, before processing. Failed primary work uses configured retries; failed retry deliveries remain unacknowledged. Crashes before processing/retry persistence, exhausted retries, or incomplete drains can require replay. Review idempotency and recovery before adopting this contract.
+- For targets v0.66-v0.67 only, remove batch callbacks, runnable batch variants, factories/runners/mocks, and batch_size after choosing replacement behavior.
+- When replacing a batch consumer for v0.66-v0.67, record-at-a-time processing is acceptable only when the former batch operation is correct and economically acceptable for each record. Use the normal typed or untyped callback and corresponding non-batch runner/module factory.
 - Application-owned batching must define buffering, flush timing, partial failures, shutdown flush, idempotency, and per-message retry/acknowledgement results.
 - Do not return success just because a message entered an in-memory buffer when acknowledgement must follow durable processing.
 - Runnable callback Run contexts are cancelled only after both inputs return, including processing/cleanup. A flush required to finish Consume must not wait for that cancellation.
@@ -13165,7 +13413,7 @@ Integration and compatibility review:
 - exec.WithDrainContext / DrainContextFrom convey caller-owned processing cancellation; preserve that shared drain contract.
 - Direct Kafka Run uses a context-aware per-record callback returning bool. Constructors/readers change; handler/channel and read-only plumbing is removed.
 - Direct Kinesis Run uses a context-aware raw-record handler returning error. Handler/channel/Done plumbing is removed; ordinary handler failure is not a success-only checkpoint barrier.
-- Base-consumer APIs are removed. NewUntypedConsumerWithInterfaces takes dependencies directly, including a retry input (normally noop if unused). Regenerate affected mocks from the new interfaces.
+- v0.66-v0.67 remove base-consumer APIs: NewUntypedConsumerWithInterfaces takes dependencies directly, including a retry input (normally noop if unused). v0.68.0 and later use NewConsumerBaseWithInterfaces for the shared base, then NewUntypedConsumerWithInterfaces(base, callback); NewUntypedBatchConsumerWithInterfaces(base, callback, settings) returns (*BatchConsumer, error). Regenerate mocks from the target release's interfaces.
 - Check target-version signatures rather than guessing argument replacements. Go settings literals do not automatically receive config defaults; initialize runner counts, processing modes, and cleanup durations explicitly. Zero Kinesis runners can stall processing or skip handlers depending on mode.
 - Consumed Kafka keys use the KafkaKey stream attribute. Original-record metadata and related helpers are removed; update affected code/tests.
 
@@ -13181,7 +13429,7 @@ Shutdown and observability:
 
 Validation:
 
-- Confirm all obsolete consumer keys, batch APIs/config, file blocking, and Kafka is_read_only have been addressed across every environment and fixture.
+- Confirm obsolete consumer keys, target-version batch API changes, file blocking, and Kafka is_read_only have been addressed across every environment and fixture.
 - Confirm each consumer has explicit primary/retry concurrency, ordering, recovery, aggregate, and cleanup decisions.
 - Run repository-standard formatting/build/tests with required fixture/integration tags. Fix compile failures first; preserve behavior rather than weakening assertions.
 - Exercise combined primary/retry work, ordered/unordered processing, callback failure and retry-publication failure, deletion modes, active-work shutdown, file exhaustion, and aggregate partial failure where applicable.
@@ -13209,6 +13457,13 @@ Stop conditions:
 
 Ask for the missing decision; do not silently change behavior to make the migration compile.
 ```
+
+---
+
+# Reference
+Source: https://gosoline-project.github.io/docs/pr-6/reference
+
+
 
 ---
 
@@ -13510,6 +13765,28 @@ YAML is currently the only supported configuration filetype.
 
 :::
 
+### GetSettings() and GetDefaults()
+
+Available in Gosoline **v0.68.3** and later, these generic helpers return a settings value together with an error:
+
+```go
+type Settings struct {
+    Port int `cfg:"port" default:"8080" validate:"min=1,max=65535"`
+}
+
+settings, err := cfg.GetSettings[Settings](config, "server")
+if err != nil {
+    return err
+}
+
+defaults, err := cfg.GetDefaults[Settings](config)
+if err != nil {
+    return err
+}
+```
+
+`GetSettings` delegates to `config.UnmarshalKey`, including configured values, environment overrides, defaults, and validation. `GetDefaults` delegates to `config.UnmarshalDefaults`; it reads defaults without loading configured values. Both accept additional `cfg.UnmarshalDefaults` arguments. See the [released implementations](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/cfg/config.go).
+
 ## Methods
 
 ### [GetInt()](https://github.com/justtrackio/gosoline/blob/v0.63.7/pkg/cfg/config.go#L129)
@@ -13558,17 +13835,19 @@ if err := config.Option(options...); err != nil {
     panic(err)
 }
 
-// Prints 8080
-fmt.Println(config.GetString("port"))
-
-os.Setenv("PORT", "8081")
-
-// Prints 8081
 port, err := config.GetString("port")
 if err != nil {
     panic(err)
 }
-fmt.Println(port)
+fmt.Println(port) // Prints 8080
+
+os.Setenv("PORT", "8081")
+
+port, err = config.GetString("port")
+if err != nil {
+    panic(err)
+}
+fmt.Println(port) // Prints 8081
 ```
 
 :::
@@ -13625,7 +13904,7 @@ Source: https://gosoline-project.github.io/docs/pr-6/reference/package-cloud_aws
 The AWS SDK v2 based services use the following default settings for region
 and endpoint, meaning you get those values for every requested client if you
 don't specify anything else for the client.
-```json
+```yaml
 cloud:
   aws:
     defaults:
@@ -13636,8 +13915,9 @@ cloud:
 ### General service config
 AWS service clients are created and configured by name. The pattern here is:
 ```go
-func ProvideClient(ctx context.Context, config cfg.Config, logger log.Logger, name string, optFns ...func(options *awsCfg.LoadOptions) error) (*serviceX.Client, error)
+func ProvideClient(ctx context.Context, config cfg.Config, logger log.Logger, name string, optFns ...ClientOption) (*serviceX.Client, error)
 ```
+`ClientOption` belongs to the selected service package and configures that service's `ClientConfig`, including its AWS SDK load options.
 The resulting client can be configured by:
 ```yaml
 cloud:
@@ -13653,8 +13933,8 @@ cloud:
                         max_elapsed_time: 10m0s
                         max_interval: 10s
                     credentials:
-                        access_key_id: justtrack
-                        secret_access_key: justtrack
+                        access_key_id: ""
+                        secret_access_key: ""
                         session_token: ""
                     credentials_cache:
                         expiry_window: 5m
@@ -13669,7 +13949,7 @@ cloud:
 | Setting                                     | Description                                                                       | Default                       |
 | ------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------- |
 | assume_role                                 | If defined, this role will be used to gain access                                 | ""                            |
-| backoff.cancel_delay                        | If the request get canceled, how long should the cancel delayed                   | 1s                            |
+| backoff.cancel_delay                        | If the request gets canceled, how long cancellation should be delayed             | 0s                            |
 | backoff.initial_interval                    | The initial duration to wait before retrying the request on error                 | 50ms                          |
 | backoff.max_attempts                        | How many attempts should be done                                                  | 10 (0 means retry forever)    |
 | backoff.max_interval                        | Max duration between 2 calls when retrying                                        | 10s                           |
@@ -13688,7 +13968,10 @@ import(
     gosoCloudwatch "github.com/justtrackio/gosoline/pkg/cloud/aws/cloudwatch"
 )
 
-cloudwatchClient := gosoCloudwatch.ProvideClient(ctx, config, logger , "default")
+cloudwatchClient, err := gosoCloudwatch.ProvideClient(ctx, config, logger, "default")
+if err != nil {
+    return err
+}
 ```
 to get the default cloudwatch client. You don't have to provide any config
 if you want to go with the default settings. The default settings are:
@@ -13706,8 +13989,8 @@ cloud:
                         max_elapsed_time: 10m0s
                         max_interval: 10s
                     credentials:
-                        access_key_id: justtrack
-                        secret_access_key: justtrack
+                        access_key_id: ""
+                        secret_access_key: ""
                         session_token: ""
                     credentials_cache:
                         expiry_window: 5m
@@ -13720,6 +14003,8 @@ cloud:
 
 ```
 These are the default values which are used if you don't provide any config by yourself.
+
+In ordinary builds, empty credentials leave credential resolution to the AWS SDK's default chain. The `integration` build tag supplies test credentials instead. Set `endpoint: ""` when using AWS endpoints rather than LocalStack. See the [released client settings](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/cloud/aws/awsv2.go) and [credential selection](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/cloud/aws/credentials.go).
 
 ### Different Client Names
 You can specify different client names to customize specific fields for a
@@ -13780,14 +14065,14 @@ Then, the dynamodb client `clientWithoutEnvInName` will use:
 - **`region`**: `eu-central-1` (from `cloud.aws.dynamodb.clients.default` since `region` is not explicitly set for `clientWithoutEnvInName`).
 - **`naming.table_pattern`**: `{app.tags.group}-{name}` (from `cloud.aws.dynamodb.clients.clientWithoutEnvInName`).
 - **`credentials`**: `default-access-key` and `default-secret` (from `cloud.aws.defaults`).
-- **`backoff.type`**: `infinite` (from `cloud.aws.defaults.clientWithoutEnvInName`).
+- **`backoff.type`**: `infinite` (from `cloud.aws.defaults.clients.clientWithoutEnvInName`).
 
 The sqs client `clientWithoutEnvInName` will use:
 
 - **`region`**: `eu-west-2` (from `cloud.aws.defaults.clients.default` since `region` is not explicitly set for `clientWithoutEnvInName`).
 - **`naming.queue_pattern`**: `{app.tags.group}-{queueId}` (from `cloud.aws.sqs.clients.clientWithoutEnvInName`).
 - **`credentials`**: `default-access-key` and `default-secret` (from `cloud.aws.defaults`).
-- **`backoff.type`**: `infinite` (from `cloud.aws.defaults.clientWithoutEnvInName`).
+- **`backoff.type`**: `infinite` (from `cloud.aws.defaults.clients.clientWithoutEnvInName`).
 
 ### Full reference
 ```yaml
@@ -13840,8 +14125,7 @@ cloud:
       clients:
         default:
           usePathStyle: false
-          credentials:
-            endpoint: "https://s3.eu-central-1.amazonaws.com"
+          endpoint: "https://s3.eu-central-1.amazonaws.com"
     sqs:
       clients:
         default:
@@ -14331,146 +14615,114 @@ The `Dollar` format uses `$` as a placeholder.
 
 ---
 
-# Package fixtures
+# Gosoline Fixture Loader
 Source: https://gosoline-project.github.io/docs/pr-6/reference/package-fixtures
 
-While using *gosoline* you are able to define fixtures directly in code.
+Define fixture data with `fixtures.NamedFixtures[T]`, pass it to a writer, and register fixture-set factories with the application.
 
 ## Usage
-* Enable fixture loading in your `config.dist.yml` File
-```
-fixtures:
-    enabled: true
-```
-* Make sure to use a custom build tag named `fixtures`
 
-* Define your fixtures in code while using one of the built in `FixtureWriter`s and defining a slice of
-`[]fixtures.FixtureSet{}` or use `fixtures.FixtureSetFactory` or `fixtures.FixtureSetsFactory` depending on your use-case.
-For more details check the `/examples/fixtures` Directory or read the short example below.
-
-* The `fixtures.FixtureSet` interface allows you to define any custom implementation for writing fixture sets to their
-destination and take control of purging prior writing too. You can however use the `fixures.simpleFixtureSet` via the
-`fixtures.NewSimpleFixtureSet` factory func to use a simple yet effective and prebuilt solution. This is the simpleFixtureSet
-struct definition:
-```
-type simpleFixtureSet[T any] struct {
-	Enabled  bool
-	Purge    bool
-	Writer   FixtureWriter
-	Fixtures NamedFixtures[T]
-}
-```
-You can easily define multiple fixtures for different destinations in one file, enable/disable them or even enable/disable
-purging for each `fixtures.FixtureSet` via the `fixtures.WithEnabled` and `fixtures.WithPurge` `fixtures.FixtureSetOption`
-for the `fixtures.NewSimpleFixtureSet` func.
-
-* Currently there are 7 different FixtureWriter implementations for loading fixtures:
-<table>
-    <tr>
-        <td>Implementation</td>
-        <td>Direct creation</td>
-        <td>Factory for use with fixtures.NewFixtureSetsFactory</td>
-    </tr>
-    <tr>
-        <td>Blob stores (AWS S3)</td>
-        <td>fixtures.NewBlobFixtureWriter`</td>
-        <td>fixtures.BlobFixtureSetFactory</td>
-    </tr>
-    <tr>
-        <td>AWS DynamoDB</td>
-        <td>fixtures.NewDynamoDbFixtureWriter`</td>
-        <td>fixtures.DynamoDbFixtureSetFactory</td>
-    </tr>
-    <tr>
-        <td>KvStore backed by AWS DynamoDB</td>
-        <td>fixtures.DynamoDbKvStoreFixtureWriterFactory`</td>
-        <td>fixtures.DynamoDbKvStoreFixtureSetFactory</td>
-    </tr>
-    <tr>
-        <td>MySQL (backed by gosoline ORM implementation)</td>
-        <td>fixtures.MysqlOrmFixtureWriterFactory`</td>
-        <td>fixtures.MysqlOrmFixtureSetFactory</td>
-    </tr>
-    <tr>
-        <td>MySQL (plain columns/values)</td>
-        <td>fixtures.MysqlPlainFixtureWriterFactory`</td>
-        <td>fixtures.MysqlPlainFixtureSetFactory</td>
-    </tr>
-    <tr>
-        <td>MySQL (sqlx named prepared statements)</td>
-        <td>fixtures.NewMysqlSqlxFixtureWriter`</td>
-        <td>fixtures.MysqlSqlxFixtureSetFactory</td>
-    </tr>
-    <tr>
-        <td>Redis</td>
-        <td>fixtures.NewRedisFixtureWriter`</td>
-        <td>fixtures.RedisFixtureSetFactory</td>
-    </tr>
-    <tr>
-        <td>KvStore backed by Redis</td>
-        <td>fixtures.NewRedisKvStoreFixtureWriter`</td>
-        <td>fixtures.RedisKvStoreFixtureSetFactory</td>
-    </tr>
-</table>
-
-## Quick Usage
-* During the creation of your Application make sure to pass the `WithFixtureSetsFactory` option and provide the group name
-and a fixture sets factory as arguments of type `fixtures.WithFixtureSetsFactory`. The `default` group is enabled by default.
-
-[embedmd]:# (../../examples/fixtures/simple/main.go /func main/ /}/)
-```go
-func main() {
-	application.Run(
-		application.WithConfigFile("config.dist.yml", "yml"),
-		application.WithFixtureSetFactory("default", fixtureSetsFactory),
-		application.WithModuleFactory("main", func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.Module, error) {
-			return &mod{}, nil
-		}),
-	)
-}
-```
-
-For blob stores (when using the `BlobFixtureWriterFactory`) you need a configuration entry added:
+Enable fixture loading in `config.dist.yml`:
 
 ```yaml
-blob:
-  blobconfig:
-    bucket: s3-fixtures-bucket
+fixtures:
+  enabled: true
+  groups: [default]
 ```
 
-## ID Generation
-You can also generate a locally unique identifier for your fixtures via `fixtures.AutoNumbered`.
+Build or run the application with the `fixtures` build tag. Without that tag, the fixture loader is a no-op. Only the configured groups are loaded; `default` is the default group.
 
-## Example with available fixture writers:
-[embedmd]:# (../../examples/fixtures/simple/main.go /func main/ $)
+`fixtures.FixtureSetFactory` creates one set. `fixtures.FixtureSetsFactory` creates several sets and receives the group name:
+
 ```go
-func main() {
-	application.Run(
-		application.WithConfigFile("config.dist.yml", "yml"),
-		application.WithFixtureSetFactory("default", fixtureSetsFactory),
-		application.WithModuleFactory("main", func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.Module, error) {
-			return &mod{}, nil
-		}),
-	)
+type FixtureSetFactory func(context.Context, cfg.Config, log.Logger) (fixtures.FixtureSet, error)
+type FixtureSetsFactory func(context.Context, cfg.Config, log.Logger, string) ([]fixtures.FixtureSet, error)
+```
+
+Use `fixtures.NewFixtureSetsFactory` to combine single-set factories. Register the resulting factory with `application.WithFixtureSetFactory("default", factory)`.
+
+`fixtures.NewSimpleFixtureSet(data, writer, options...)` implements the `fixtures.FixtureSet` interface. `fixtures.WithEnabled(false)` skips a set. The old `fixtures.WithPurge` option and the `Purge` field no longer exist; cleanup behavior belongs to the selected writer or an application-owned set.
+
+Fixture writers live in the package for their destination:
+
+| Destination | Constructor | Single-set factory |
+|---|---|---|
+| Blob store | `blob.NewBlobFixtureWriter` | `blob.BlobFixtureSetFactory` |
+| DynamoDB | `ddb.NewDynamoDbFixtureWriter` | `ddb.DynamoDbFixtureSetFactory` |
+| DynamoDB key-value store | `kvstore.NewDynamoDbKvStoreFixtureWriter` | `kvstore.DynamoDbKvStoreFixtureSetFactory` |
+| Configured key-value store | `kvstore.NewConfigurableKvStoreFixtureWriter` | `kvstore.ConfigurableKvStoreFixtureSetFactory` |
+| MySQL ORM | `db_repo.NewMysqlOrmFixtureWriter` | `db_repo.MysqlOrmFixtureSetFactory` |
+| MySQL columns and values | `db.NewMysqlPlainFixtureWriter` | `db.MysqlPlainFixtureSetFactory` |
+| MySQL named SQL statements | `db.NewMysqlSqlxFixtureWriter` | `db.MysqlSqlxFixtureSetFactory` |
+| Redis | `redis.NewRedisFixtureWriter` | `redis.RedisFixtureSetFactory` |
+| Redis key-value store | `kvstore.NewRedisKvStoreFixtureWriter` | `kvstore.RedisKvStoreFixtureSetFactory` |
+
+The import for `db_repo` is `github.com/justtrackio/gosoline/pkg/db-repo`. Constructors, metadata, and write behavior differ by destination; inspect the [released writer implementations](https://github.com/justtrackio/gosoline/tree/v0.68.3/pkg) before choosing one.
+
+## Quick Usage
+
+The following example registers a `fixtures.FixtureSetsFactory` under the `default` group. Configure its backing services and blob fixture files before running it with `go run -tags fixtures .` from the example directory.
+
+## ID Generation
+
+Use `fixtures.NewNumberSequence` or `fixtures.NewNumberSequenceFrom` for sequential identifiers. The older `NewAutoNumbered` and `NewAutoNumberedFrom` names remain deprecated aliases. Use `fixtures.NewUuidSequence` or `fixtures.NewByteSequence` when a deterministic seeded UUID or byte sequence is needed.
+
+## Example with available fixture writers
+
+This example is read directly from the maintained source file:
+
+```go title="examples/fixtures/simple/main.go" lineNumbers
+//go:build fixtures
+
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/justtrackio/gosoline/pkg/application"
+	"github.com/justtrackio/gosoline/pkg/blob"
+	"github.com/justtrackio/gosoline/pkg/cfg"
+	"github.com/justtrackio/gosoline/pkg/db"
+	"github.com/justtrackio/gosoline/pkg/db-repo"
+	"github.com/justtrackio/gosoline/pkg/ddb"
+	"github.com/justtrackio/gosoline/pkg/fixtures"
+	"github.com/justtrackio/gosoline/pkg/kernel"
+	"github.com/justtrackio/gosoline/pkg/kvstore"
+	"github.com/justtrackio/gosoline/pkg/log"
+	"github.com/justtrackio/gosoline/pkg/mdl"
+	"github.com/justtrackio/gosoline/pkg/redis"
+)
+
+type DynamoDbExampleModel struct {
+	Name  string `ddb:"key=hash"`
+	Value string `ddb:"global=hash"`
 }
 
-var autoNumbered = fixtures.NewAutoNumberedFrom(2)
+type OrmFixtureExample struct {
+	db_repo.Model
+	Name *string
+}
+
+var autoNumbered = fixtures.NewNumberSequenceFrom(2)
 
 func mysqlOrmFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (fixtures.FixtureSet, error) {
 	mysqlMetadata := &db_repo.Metadata{
 		ModelId: mdl.ModelId{
 			Name: "orm_fixture_example",
 		},
+		TableName: "orm_fixture_examples",
 	}
-	mysqlOrmWriter, err := fixtures.NewMysqlOrmFixtureWriter(ctx, config, logger, mysqlMetadata)
+	mysqlOrmWriter, err := db_repo.NewMysqlOrmFixtureWriter(ctx, config, logger, mysqlMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mysql orm writer: %w", err)
 	}
 
-	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[OrmFixtureExample]{
-		&fixtures.NamedFixture[OrmFixtureExample]{
+	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*OrmFixtureExample]{
+		&fixtures.NamedFixture[*OrmFixtureExample]{
 			Name: "foo",
-			Value: OrmFixtureExample{
+			Value: &OrmFixtureExample{
 				Model: db_repo.Model{
 					Id: autoNumbered.GetNext(),
 				},
@@ -14481,7 +14733,7 @@ func mysqlOrmFixtureSet(ctx context.Context, config cfg.Config, logger log.Logge
 }
 
 func mysqlPlainFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (fixtures.FixtureSet, error) {
-	mysqlPlainWriter, err := fixtures.NewMysqlPlainFixtureWriter(ctx, config, logger, &fixtures.MysqlPlainMetaData{
+	mysqlPlainWriter, err := db.NewMysqlPlainFixtureWriter(ctx, config, logger, &db.MysqlPlainMetaData{
 		TableName: "plain_fixture_example",
 		Columns:   []string{"id", "name"},
 	})
@@ -14489,34 +14741,36 @@ func mysqlPlainFixtureSet(ctx context.Context, config cfg.Config, logger log.Log
 		return nil, fmt.Errorf("failed to initialize mysql plain writer: %w", err)
 	}
 
-	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[fixtures.MysqlPlainFixtureValues]{
+	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[db.MysqlPlainFixtureValues]{
 		{
 			Name:  "foo2",
-			Value: fixtures.MysqlPlainFixtureValues{1, "testName1"},
+			Value: db.MysqlPlainFixtureValues{1, "testName1"},
 		},
 		{
 			Name:  "foo3",
-			Value: fixtures.MysqlPlainFixtureValues{2, "testName2"},
+			Value: db.MysqlPlainFixtureValues{2, "testName2"},
 		},
 	}, mysqlPlainWriter), nil
 }
 
 func dynamodbKvstoreFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (fixtures.FixtureSet, error) {
-	dynamoDbKvStoreWriter, err := fixtures.NewDynamoDbKvStoreFixtureWriter[DynamoDbExampleModel](ctx, config, logger, &mdl.ModelId{
-		Project:     "gosoline",
-		Environment: "dev",
-		Family:      "example",
-		Application: "fixture-loader",
+	dynamoDbKvStoreWriter, err := kvstore.NewDynamoDbKvStoreFixtureWriter[DynamoDbExampleModel](ctx, config, logger, &mdl.ModelId{
 		Name:        "exampleModel",
+		Env:         "dev",
+		Application: "fixture-loader",
+		Tags: map[string]string{
+			"project": "gosoline",
+			"family":  "example",
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize dynamodb kvstore writer: %w", err)
 	}
 
-	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*fixtures.KvStoreFixture]{
+	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*kvstore.KvStoreFixture]{
 		{
 			Name: "kv_somekey",
-			Value: &fixtures.KvStoreFixture{
+			Value: &kvstore.KvStoreFixture{
 				Key:   "SomeKey",
 				Value: DynamoDbExampleModel{Name: "Some Name", Value: "Some Value"},
 			},
@@ -14525,15 +14779,15 @@ func dynamodbKvstoreFixtureSet(ctx context.Context, config cfg.Config, logger lo
 }
 
 func redisFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (fixtures.FixtureSet, error) {
-	redisWriter, err := fixtures.NewRedisFixtureWriter(ctx, config, logger, "default", fixtures.RedisOpSet)
+	redisWriter, err := redis.NewRedisFixtureWriter(ctx, config, logger, "default", redis.RedisOpSet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize redis writer: %w", err)
 	}
 
-	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*fixtures.RedisFixture]{
+	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*redis.RedisFixture]{
 		{
 			Name: "redis_example",
-			Value: &fixtures.RedisFixture{
+			Value: &redis.RedisFixture{
 				Key:    "example-key",
 				Value:  "bar",
 				Expiry: 1 * time.Hour,
@@ -14543,13 +14797,15 @@ func redisFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) 
 }
 
 func dynamodbFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (fixtures.FixtureSet, error) {
-	dynamodbWriter, err := fixtures.NewDynamoDbFixtureWriter(ctx, config, logger, &ddb.Settings{
+	dynamodbWriter, err := ddb.NewDynamoDbFixtureWriter(ctx, config, logger, &ddb.Settings{
 		ModelId: mdl.ModelId{
-			Project:     "gosoline",
-			Environment: "dev",
-			Family:      "example",
-			Application: "fixture-loader",
 			Name:        "exampleModel",
+			Env:         "dev",
+			Application: "fixture-loader",
+			Tags: map[string]string{
+				"project": "gosoline",
+				"family":  "example",
+			},
 		},
 		Main: ddb.MainSettings{
 			Model: DynamoDbExampleModel{},
@@ -14576,18 +14832,17 @@ func dynamodbFixtureSet(ctx context.Context, config cfg.Config, logger log.Logge
 }
 
 func blobFixtureSet(ctx context.Context, config cfg.Config, logger log.Logger) (fixtures.FixtureSet, error) {
-	blobWriter, err := fixtures.NewBlobFixtureWriter(ctx, config, logger, &fixtures.BlobFixturesSettings{
-		ConfigName: "test",
-		BasePath:   "../../test/test_data/s3_fixtures_test_data",
-	})
+	fileReaderFactory := blob.NewFileReader("../../../test/fixtures/blob/test_data/fixtures_test_data")
+
+	blobWriter, err := blob.NewBlobFixtureWriter(ctx, config, logger, fileReaderFactory, "test")
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize blob writer: %w", err)
 	}
 
-	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*fixtures.BlobFixture]{}, blobWriter), nil
+	return fixtures.NewSimpleFixtureSet(fixtures.NamedFixtures[*blob.BlobFixture]{}, blobWriter), nil
 }
 
-func fixtureSetsFactory(ctx context.Context, config cfg.Config, logger log.Logger) ([]fixtures.FixtureSet, error) {
+func fixtureSetsFactory(ctx context.Context, config cfg.Config, logger log.Logger, group string) ([]fixtures.FixtureSet, error) {
 	mysqlOrmFs, err := mysqlOrmFixtureSet(ctx, config, logger)
 	if err != nil {
 		return nil, err
@@ -14627,13 +14882,51 @@ func fixtureSetsFactory(ctx context.Context, config cfg.Config, logger log.Logge
 		blobFs,
 	}, nil
 }
+
+type mod struct {
+	kernel.ForegroundModule
+}
+
+func (m *mod) Run(ctx context.Context) error {
+	<-ctx.Done()
+
+	return nil
+}
+
+func main() {
+	app := application.Default(
+		application.WithConfigFile("config.dist.yml", "yml"),
+		application.WithFixtureSetFactory("default", fixtureSetsFactory),
+		application.WithModuleFactory("main", func(ctx context.Context, config cfg.Config, logger log.Logger) (kernel.Module, error) {
+			return &mod{}, nil
+		}),
+	)
+
+	app.Run()
+}
 ```
 
 ## Named Fixtures
-With named fixtures you can create some fixtures and in future fixtures refer to the already created ones, e.g. for referencing (auto numbered) IDs:
 
-[embedmd]:# (../../examples/fixtures/simple/named/main.go /func main/ $)
-```go
+Named fixture collections let later fixtures refer to an already-created value with `GetValueByName`:
+
+```go title="examples/fixtures/simple/named/main.go" lineNumbers
+//go:build fixtures
+
+package main
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/justtrackio/gosoline/pkg/application"
+	"github.com/justtrackio/gosoline/pkg/cfg"
+	"github.com/justtrackio/gosoline/pkg/db-repo"
+	"github.com/justtrackio/gosoline/pkg/fixtures"
+	"github.com/justtrackio/gosoline/pkg/log"
+	"github.com/justtrackio/gosoline/pkg/mdl"
+)
+
 type DynamoDbExampleModel struct {
 	Name  string `ddb:"key=hash"`
 	Value string `ddb:"global=hash"`
@@ -14672,13 +14965,13 @@ func main() {
 	fx := namedFixtures.GetValueByName("test")
 	_ = fx.Value
 }
-}
 ```
 
 ## Further Information
-* Existing fixtures will be updated instead of created.
-* When purge is enabled only the destination of the fixtures will be purged, not everything. That means for example while loading MySQL Fixtures with purge only the tables will be purged not the whole database.
-* If you want to use the MySQL ORM based implementation make sure that your fixture struct embeds `db_repo.Model`
+
+- Writers control insert, update, and cleanup behavior; do not assume all writers upsert or purge their destinations.
+- MySQL ORM fixture models embed `db_repo.Model`.
+- See the [released fixture interfaces and factory helper](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/fixtures/types.go) and [simple set options](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/fixtures/fixture_set_options.go).
 
 ---
 
@@ -14825,6 +15118,8 @@ The handler factory must have this signature:
 ```go
 func NewMyHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*MyHandler, error)
 ```
+
+Since httpserver v0.6.4, handlers registered through `With` that implement `io.Closer` are closed after the server stops serving requests. Implement `Close() error` as blocking, idempotent cleanup. See the [released registration contract](https://github.com/gosoline-project/httpserver/blob/v0.6.4/with.go).
 
 ## Request binding
 
@@ -15043,7 +15338,7 @@ Config key: `httpserver.<name>`
 |---|---|---|
 | `extension` | string array | File extensions to exclude. |
 | `path` | string array | Exact paths to exclude. |
-| `pathRegex` | string array | Regex patterns to exclude. |
+| `path_regex` | string array | Regex patterns to exclude. |
 
 ### CorsSettings
 

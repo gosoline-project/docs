@@ -1,7 +1,8 @@
 ---
-sidebar:
-  order: 0
 title: Working with Relational Databases
+sidebar:
+  label: Relational databases
+  hidden: true
 ---
 
 The gosoline framework provides three layered packages for working with relational databases, each building on top of the previous one:

@@ -1,0 +1,12 @@
+{
+  "contentType": "doc",
+  "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/getting-started/testing.json",
+  "lastModified": null,
+  "locale": "",
+  "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/getting-started/testing.md",
+  "route": "/getting-started/testing",
+  "title": "Testing",
+  "url": "https://gosoline-project.github.io/docs/pr-6/getting-started/testing",
+  "description": "Testing is an important responsibility for developing working code. With these tutorials, you'll write your first tests with gosoline:",
+  "markdown": "---\ntitle: Testing\ndescription: \"Testing is an important responsibility for developing working code. With these tutorials, you'll write your first tests with gosoline:\"\nsidebar:\n  hidden: true\n---\n"
+}

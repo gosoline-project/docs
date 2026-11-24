@@ -1,7 +1,8 @@
 ---
 sidebar:
+  label: App Identity and Naming Patterns
   order: 1
-title: App Identity and Naming Patterns
+title: Migrating to Identity and Naming Patterns
 ---
 
 This guide details how to migrate your gosoline application to the new `Identity` system and dynamic resource naming.

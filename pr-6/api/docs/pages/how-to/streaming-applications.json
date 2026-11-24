@@ -1,0 +1,12 @@
+{
+  "contentType": "doc",
+  "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/streaming-applications.json",
+  "lastModified": null,
+  "locale": "",
+  "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications.md",
+  "route": "/how-to/streaming-applications",
+  "title": "Streaming applications",
+  "url": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications",
+  "description": "Learn how to build streaming applications with gosoline inputs, outputs, producers, consumers, and producer daemons.",
+  "markdown": "---\ntitle: Streaming applications\ndescription: \"Learn how to build streaming applications with gosoline inputs, outputs, producers, consumers, and producer daemons.\"\nsidebar:\n  hidden: true\n---\n"
+}

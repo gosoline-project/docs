@@ -1,7 +1,8 @@
 ---
 sidebar:
+  label: SQLH CRUD
   order: 3
-title: SQLH CRUD
+title: Migrating an Existing Service to SQLH CRUD
 ---
 
 This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers.
@@ -10,8 +11,8 @@ Use it to preserve the service's public API and domain behavior.
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations.
 Do not replace domain rules with generic CRUD behavior.
 
-This guide targets SQLH v0.8.0, SQLR v0.9.1, SQLC v0.4.0, and httpserver v0.6.4.
-SQLH v0.8.0 declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
+This guide targets SQLH `v0.8.2-0.20261027132918-7e9d41caf9c9`, SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, SQLC v0.4.1, and httpserver v0.6.4.
+This SQLH version declares Go 1.27.0 and depends on Gosoline v0.63.5; a compatible newer Gosoline version can remain selected.
 
 ## 1. Review the Current API
 
@@ -53,7 +54,7 @@ Use SQLR tags for relationship shape and schema defaults. `foreignKey:<column>` 
 
 Use `parentKey:<column>` and `relatedKey:<column>` for nonstandard many-to-many join-column names. Other relevant options are `primaryKey`, `autoCreateTime`, `autoUpdateTime`, `preload`, `sync:create,update,delete`, and `syncMode:many2many`. Separate SQLR options with semicolons. `syncMode:many2many` requires `sync:update` and a many-to-many relation.
 
-Use SQLH tags for CRUD-phase builders. Valid directives are `preload:create,read,query,update` and `sync:create,update,delete`; separate directives with semicolons and phases with commas. Relation paths use Go field names such as `Rules` or `Rules.Owner`, not database columns or JSON names. Unknown directives, phases, and scalar-field tags fail during handler setup.
+Use SQLH relation tags for CRUD-phase builders: `preload:create,read,query,update` and `sync:create,update,delete`. Separate directives with semicolons and phases with commas. Relation paths use exact Go field names such as `Rules` or `Rules.Owner`, not database columns or JSON names. Scalar fields support `sqlh:"field:alias"` or `sqlh:"field:-"` for automatic query naming or exclusion, not preload/sync. Unknown directives, unsupported phases, empty or duplicate `field` directives, and directives on embedded fields fail during handler setup.
 
 `sqlr:"...;preload"` is a schema-level auto-preload. `sqlh:"preload:<phases>"` adds phase-specific builders, and `preload:update` affects the update lookup and update write, not only post-write loading. SQLH parses nested relation tags recursively.
 
@@ -212,21 +213,39 @@ In SQLH v0.8.0, custom PATCH operations read the parsed document from `input.Doc
 
 ## 6. Preserve List Compatibility
 
-Use the `ProjectListInput` type above for native SQLC JSON filters, pagination, and force filters. Embedding `sqlh.ListInput` supplies standard implementations only. If `LegacyFilter` changes filter behavior, override `ApplyFilters` and any other needed phase.
-SQLH v0.7.1 `InputQuery` contained only `filter`; v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`.
-Do not add pagination if the old API did not expose it.
-Use a custom `ListInputSource` with the old fields, no-op modifier and pagination phases, and no-op pagination validation when those phases did not exist.
-Implement all required list-input methods and instantiate `CrudDefinition` with every type parameter; `NewCrudDefinition` fixes the input type to `sqlh.ListInput`.
-Preserve the old binder's behavior for unknown fields.
+Use the `ProjectListInput` type above for SQLH public-field filters, ordering, pagination, and force filters. Embedding `sqlh.ListInput` supplies the required `ListInputSource` methods:
+
+- `GetFilter() sqlh.JsonFilter`
+- `GetOrderBy() []sqlh.JsonOrder`
+- `ApplyPagination`
+- `ValidatePagination`
+- `ValidateQueryModifiers() error`
+- `GetForceFilters`
+
+A custom `ValidateQueryModifiers` method can return `nil` when no additional validation is required.
+
+Migrate public filters from `column` to `field` and ordering to `{"field":"name","direction":"asc"}` objects in `orderBy`. `sqlh.JsonFilter.Type` remains `sqlc.JsonFilterType`; nested `Fields` use `sqlh.JsonFilter` too. SQLH validates every leaf and sort field before callbacks or database work, including custom list operations. Unknown names, raw identifiers/expressions, and legacy `column` keys are rejected.
+
+With `CrudDefinition.FieldMappings == nil`, eligible directly mapped scalar entity fields use exported Go names with anonymous-field promotion and Go shadowing rules, not output DTO names or database columns. Binding tags (`json`, `xml`, `form`, `yaml`, etc.) are ignored. Use `sqlh:"field:alias"` only when a different automatic public name is needed, or `sqlh:"field:-"` to exclude a field.
+
+**Migration warning:** `json:"-"` no longer excludes a field from automatic query discovery. Add `sqlh:"field:-"` or select the complete public allowlist with `FieldMappings`. JSON renames that differ from Go names by more than case also need a SQLH alias or explicit mapping.
+
+Public names match case-insensitively with Go's Unicode `strings.EqualFold` semantics, without punctuation/style normalization: `createdAt` matches `CreatedAt`, not `created_at`. Go paths and database identifiers stay exact. Active public names that collide under case folding fail handler construction with the conflicting names and Go paths; excluded fields do not participate.
+
+Set `FieldMappings` to a complete public-name-to-Go-path allowlist, for example `map[string]string{"id": "PublicID", "ownerName": "Owner.Name"}`. Non-nil replaces automatic discovery without merging names or aliases; an empty map exposes none. Explicit entries can select a mapped scalar even if its automatic name is aliased or excluded. Explicit relation paths support one direct `BelongsTo` or `HasOne` hop to a scalar; SQLH adds a `LEFT JOIN`. To-many/deeper paths are unsupported, and invalid declarations fail handler construction.
+
+If `LegacyFilter` represents an additional typed field, optional `ApplyFilters` can add its trusted backend predicate. Optional `ApplyQueryModifiers` can add trusted grouping or ordering. These are not native public-query processors; do not delegate to removed `ListInput.ApplyFilters` or `ListInput.ApplyQueryModifiers` methods or forward request-provided SQL. Force filters remain separate trusted server-owned restrictions.
+
+Do not add pagination if the old API did not expose it. A custom `ListInputSource` can retain the intended fields, provide empty public-filter/order getters when absent, and use no-op pagination and pagination validation. Instantiate `CrudDefinition` with every type parameter; `NewCrudDefinition` fixes the input type to `sqlh.ListInput`. Preserve intended unknown-field behavior outside the public filter/order grammar.
 
 Custom `Query` and `Count` callbacks must call `QueryPlan.ApplyBuilder` and then `QueryPlan.ApplyScope`.
 Return a scope error before repository work.
 A custom `Query` then applies modifiers and pagination, in that order.
-A custom `Count` must not apply query modifiers or pagination.
-The default count applies query modifiers but not pagination.
-SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING.
-Implement a custom count when joins or grouping change the old total.
-Use the same filter, force-filter, and delete scope for rows and counts.
+A custom `Count` omits row modifiers, ordering, and pagination.
+The default count shares the builder and scope, including public filters, trusted filters, force filters, and delete scope.
+It excludes row modifiers, ordering, and pagination.
+If modifiers change row cardinality, implement a custom count with the corresponding cardinality logic.
+Keep the same builder and scope for rows and counts.
 
 `CrudHandler.List` and `CrudDefinition.ListOperation` always return `ListOutput[O]` with `Results` and `Total`. If the old API uses another outer envelope, call `handler.List` from a typed wrapper and map those fields, then register the wrapper manually:
 
@@ -243,7 +262,7 @@ func listLegacy(ctx context.Context, input *ProjectListInput) (LegacyListOutput,
 router.POST("/v1/projects", httpserver.Bind(listLegacy))
 ```
 
-Do not make `ListOperation` return another envelope. For a legacy filter dialect, detect it before decoding and reject unsafe mixed native and legacy forms. Translate known fields and operators to SQLC expressions.
+Do not make `ListOperation` return another envelope. For a legacy filter dialect, detect it before decoding and reject unsafe mixed native and legacy forms. Translate only known fields and operators to `sqlh.JsonFilter`/`sqlh.JsonOrder` public names so they pass through the same allowlist, rather than exposing database identifiers.
 
 Preserve required joins, grouping, ordering, pagination, and client-dependent `LIMIT 0` behavior. Reject unknown fields, operators, directions, and boolean values. Apply the same scope to row and count queries.
 
@@ -310,10 +329,10 @@ Regenerate Go types, mocks, OpenAPI files, and other derived artifacts from the 
 
 For the full operational procedure, copy the instructions below. The prompt is self-contained and includes pinned API semantics, tag rules, constructors, operation choices, acceptance checks, and stop conditions.
 
-[Download the migration instructions](/docs/pr-6/downloads/sqlh-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
+[Download the migration instructions](/docs/pr-6/blume-assets/content/docs/migrations/src/sqlh-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
 
 ````text title="AI migration instructions"
-Migrate this service's existing SQLH v0.7.x CRUD or custom handlers to the typed, transaction-aware SQLH v0.8.0 API.
+Migrate this service's existing SQLH v0.7.x CRUD or custom handlers to the typed, transaction-aware SQLH API pinned below.
 
 ## Mission and pinned API
 
@@ -323,14 +342,14 @@ Record `Content-Type`, `Accept`, and response negotiation behavior.
 
 Use these downloaded sources as the API contract:
 
-- `github.com/gosoline-project/sqlh` at `v0.8.0`
-- `github.com/gosoline-project/sqlr` at `v0.9.1`
-- `github.com/gosoline-project/sqlc` at `v0.4.0`
+- `github.com/gosoline-project/sqlh` at `v0.8.2-0.20261027132918-7e9d41caf9c9`
+- `github.com/gosoline-project/sqlr` at `v0.9.2-0.20261027132740-484c58e94d7b`
+- `github.com/gosoline-project/sqlc` at `v0.4.1`
 - `github.com/gosoline-project/httpserver` at `v0.6.4`
 - `github.com/justtrackio/gosoline` at `v0.63.5`
 
-SQLH v0.8.0 declares Go 1.27.0.
-Its `go.mod` requires SQLR v0.9.1, SQLC v0.4.0, httpserver v0.6.4, and Gosoline v0.63.5.
+The pinned SQLH version declares Go 1.27.0.
+Its `go.mod` requires SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, SQLC v0.4.1, httpserver v0.6.4, and Gosoline v0.63.5.
 Keep compatible newer versions selected by Go.
 Do not downgrade dependencies or change unrelated imports.
 
@@ -395,10 +414,11 @@ Use SQLR tags for relationship shape and schema defaults. `foreignKey:<column>` 
 
 Use `parentKey:<column>` and `relatedKey:<column>` for nonstandard many-to-many join-column names. Other relevant options are `primaryKey`, `autoCreateTime`, `autoUpdateTime`, `preload`, `sync:create,update,delete`, and `syncMode:many2many`. Separate SQLR options with semicolons. `syncMode:many2many` requires `sync:update` and a many-to-many relation.
 
-Use SQLH tags for CRUD-phase builders. Valid directives are `preload:create,read,query,update` and
-`sync:create,update,delete`; separate directives with semicolons and phases with commas. SQLH tags belong only on association
-fields, and relation paths use Go field names such as `Rules` or `Rules.Owner`, not database columns or JSON names. Unknown
-directives, phases, and scalar-field tags fail during handler setup.
+Use SQLH relation tags for CRUD-phase builders: `preload:create,read,query,update` and `sync:create,update,delete`.
+Separate directives with semicolons and phases with commas. Relation paths use exact Go field names such as `Rules`
+or `Rules.Owner`, not database columns or JSON names. Scalar fields support `sqlh:"field:alias"` or `sqlh:"field:-"`
+for automatic query naming or exclusion, not preload/sync. Unknown directives, unsupported phases, empty or duplicate
+`field` directives, and directives on embedded fields fail during handler setup.
 
 `sqlr:"...;preload"` is a schema-level auto-preload. `sqlh:"preload:<phases>"` adds phase-specific builders, and
 `preload:update` affects the pre-update identity lookup and update write preload, not only post-write loading. SQLH parses
@@ -545,25 +565,49 @@ In SQLH v0.8.0, access the parsed `PatchDocument` through `input.Document`, not 
 
 ### 5. Preserve list filters and counts
 
-Use the `ProjectListInput` pattern above for native SQLC JSON filters, pagination, and force filters. Embedding
-`sqlh.ListInput` supplies standard implementations only. If `LegacyFilter` changes filter behavior, override `ApplyFilters`
-and any other needed phase. A custom list input must implement `ApplyFilters`, `ApplyQueryModifiers`, `ApplyPagination`,
-`ValidatePagination`, and `GetForceFilters`.
+Use the `ProjectListInput` pattern above for SQLH public-field filters, ordering, pagination, and force filters.
+Embedding `sqlh.ListInput` supplies the required `ListInputSource` methods: `GetFilter() sqlh.JsonFilter`,
+`GetOrderBy() []sqlh.JsonOrder`, `ApplyPagination`, `ValidatePagination`, `ValidateQueryModifiers() error`, and `GetForceFilters`.
+A custom `ValidateQueryModifiers` method can return `nil` when no additional validation is required.
+Native `ListInput.ApplyFilters` and `ListInput.ApplyQueryModifiers` methods no longer exist.
+Optional custom methods with those names are trusted backend extensions for additional typed predicates or modifiers;
+never forward request-provided identifiers or expressions to them.
 
-`ApplyFilters` handles user filters.
-Keep server-owned force filters in the embedded carrier because SQLH applies them through the shared query scope.
+Migrate public filters from `column` to `field`; recursive `Fields` now contain `sqlh.JsonFilter`.
+`Type` remains `sqlc.JsonFilterType`. Public `orderBy` contains `{"field":"name","direction":"asc"}` objects.
+Every filter leaf and sort field is validated before callbacks/database work, including custom list operations.
+Unknown names, raw identifiers/expressions, and legacy `column` keys are rejected.
+SQLC's low-level filter and query-builder contract is unchanged.
+
+With `FieldMappings == nil`, eligible directly mapped scalar entity fields use exported Go names with anonymous-field
+promotion and Go shadowing rules, not output DTO or database names. Primitive scalars and time.Time (including pointers)
+are supported. Binding tags (`json`, `xml`, `form`, `yaml`, etc.) are ignored.
+Use `sqlh:"field:alias"` only when a different automatic public name is needed, or `sqlh:"field:-"` to exclude a field.
+Migration warning: `json:"-"` no longer excludes fields from automatic queries. Add `sqlh:"field:-"` or an explicit
+complete map. JSON renames that differ from Go names by more than case need a SQLH alias or explicit mapping.
+Public names match case-insensitively with Go's Unicode strings.EqualFold semantics, not punctuation/style normalization:
+`createdAt` matches `CreatedAt`, not `created_at`. Go paths and database identifiers remain exact.
+Active public names that collide under case folding fail handler construction with conflicting names and Go paths;
+excluded fields do not participate.
+Set `CrudDefinition.FieldMappings` to a complete public-name-to-Go-path allowlist, for example
+`map[string]string{"id": "PublicID", "ownerName": "Owner.Name"}`. Non-nil replaces automatic discovery without merging
+names or aliases; empty exposes none. Explicit entries can select a mapped scalar whose automatic name is aliased/excluded.
+Explicit paths support one direct BelongsTo/HasOne hop to a mapped scalar and add a LEFT JOIN when needed.
+To-many and deeper relation paths are unsupported; invalid declarations fail handler construction.
+
+Keep server-owned force filters separate in the embedded carrier; they remain trusted restrictive predicates
+applied through the shared query scope, not public query fields.
 Custom `Query` and `Count` callbacks must call `QueryPlan.ApplyBuilder` and then `QueryPlan.ApplyScope`.
 Return a scope error before repository work.
 Custom `Query` then applies query modifiers and pagination, in that order.
-Custom `Count` must not apply query modifiers or pagination.
-The default count applies query modifiers but not pagination.
-SQLR `Count` removes ordering, limit, offset, and locking while preserving grouping and HAVING.
-Implement a custom count when joins or grouping change the old total.
-Use the same user-filter, force-filter, and delete scope for rows and counts.
-SQLH v0.7.1 `InputQuery` contained only `filter`; v0.8.0 `ListInput` also accepts `page.limit` and `page.offset`.
-Treat this as an API change when the old route did not expose pagination.
-To preserve the old input and unknown-field behavior, use a custom `ListInputSource` with only the old fields.
-Implement every required phase, with no-op query-modifier and pagination phases and no-op pagination validation when absent.
+Custom `Count` omits row modifiers, ordering, and pagination.
+The default count shares the builder and scope, including public filters, trusted filters, force filters, and delete scope.
+It excludes row modifiers, ordering, and pagination.
+If modifiers change row cardinality, implement a custom count with the corresponding cardinality logic.
+Keep the same builder and scope for rows and counts.
+Do not add pagination if the old route did not expose it. A custom `ListInputSource` can retain the intended fields,
+provide empty public-filter/order getters when absent, and use no-op pagination and pagination validation.
+Preserve intended unknown-field behavior outside the public filter/order grammar.
 Instantiate `CrudDefinition` with all type parameters because `NewCrudDefinition` fixes the input type to `sqlh.ListInput`.
 
 `CrudHandler.List` and `ListOperation` always return `ListOutput[O]` with `Results` and `Total`. For another legacy envelope,
@@ -585,9 +629,10 @@ router.POST("/v1/projects", httpserver.Bind(listLegacy))
 Do not make `ListOperation` return a different envelope. For a legacy filter dialect, detect it before decoding and reject
 unsafe mixed native and legacy forms.
 
-Translate known fields and operators to SQLC expressions. Preserve required joins, grouping, ordering, pagination, and
-client-dependent `LIMIT 0` behavior. Reject unknown fields, operators, directions, and boolean values. Apply the same scope to
-row and count queries.
+Translate known legacy fields and operators to `sqlh.JsonFilter`/`sqlh.JsonOrder` public names so they use the same
+allowlist; do not expose database identifiers. Preserve required joins, grouping, ordering, pagination, and
+client-dependent `LIMIT 0` behavior. Reject unknown fields, operators, directions, and boolean values.
+Apply the same scope to row and count queries.
 
 ### 6. Keep routes, delete responses, and identity scope
 

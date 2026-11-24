@@ -125,15 +125,15 @@
             },
             {
               "kind": "page",
-              "label": "Chaos middleware",
-              "pageId": "filesystem:how-to/http-server/chaos-middleware.mdx",
-              "route": "/how-to/http-server/chaos-middleware"
-            },
-            {
-              "kind": "page",
               "label": "Real-world example",
               "pageId": "filesystem:how-to/http-server/real-world-example.mdx",
               "route": "/how-to/http-server/real-world-example"
+            },
+            {
+              "kind": "page",
+              "label": "Chaos middleware",
+              "pageId": "filesystem:how-to/http-server/chaos-middleware.mdx",
+              "route": "/how-to/http-server/chaos-middleware"
             }
           ],
           "directory": "card",
@@ -178,12 +178,6 @@
         },
         {
           "children": [
-            {
-              "kind": "page",
-              "label": "Working with Relational Databases",
-              "pageId": "filesystem:how-to/databases-sql/index.mdx",
-              "route": "/how-to/databases-sql"
-            },
             {
               "kind": "page",
               "label": "sqlc - SQL Client",

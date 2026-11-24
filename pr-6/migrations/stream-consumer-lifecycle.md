@@ -1,10 +1,13 @@
 ---
 sidebar:
+  label: Stream Consumer Lifecycle
   order: 4
-title: Stream Consumer Lifecycle
+title: Migrating to the Callback-Based Stream Consumer Lifecycle
 ---
 
 This guide covers the breaking stream changes introduced in Gosoline **v0.66.0** by commit [`04b54462`](https://github.com/justtrackio/gosoline/commit/04b54462dfb9cfa789577d3972d6098cd7d69860), **stream: unify input processing and shutdown**. Follow this guide when upgrading from an earlier release to v0.66.0 or later.
+
+Choose the target release before applying the API changes below. **v0.68.0 restored batch consumers and shared base-consumer construction**; the batch removal in v0.66.0 is not the current API. See [batch callbacks](/docs/pr-6/how-to/streaming-applications/create-a-consumer#batch-callbacks-in-v0680-and-later) when upgrading directly to v0.68.0 or later.
 
 Previously, inputs delivered messages through `Input.Data()`, and the consumer controlled callback concurrency and acknowledgement. Inputs now invoke a processing callback directly and own acknowledgement, offset commits, or checkpoints. The consumer supplies a shared shutdown processing deadline for its primary and retry inputs.
 
@@ -21,7 +24,7 @@ Classify these findings:
 | Consumer `consume_grace_time` | Rename to consumer `grace_time`, then review the shared deadline. |
 | Consumer `runner_count` | Move the desired concurrency to the referenced input, after reviewing existing input settings and retry concurrency. |
 | Consumer `acknowledge_grace_time` | Remove; use transport-specific cleanup settings as described below. |
-| Batch consumer APIs or `batch_size` | Choose record-at-a-time processing or application-owned batching. |
+| Batch consumer APIs or `batch_size` | Check the target release: migrate away for v0.66–v0.67, or review restored batch consumers in v0.68.0 and later. |
 | Kafka connection `is_read_only` | Select replacement behavior before removing the setting. |
 | File input `blocking` | Remove and review completion at end of file. |
 | Custom `Input`, `Data`, `Ack`, or `AckBatch` usage | Review the integration API changes before migrating. |
@@ -206,11 +209,13 @@ The acknowledgement boolean remains significant in application callbacks:
 
 For Kafka and Kinesis, returning false does not hold the original record's offset or checkpoint back. For SQS retry messages, returning false leaves the retry message available for native redelivery.
 
-## 8. Replace Removed Batch Consumers
+## 8. Review Batch Consumers
 
-Batch callbacks, factories, runners, mocks, and `batch_size` configuration are removed. Discover `RunBatchConsumer`, `RunBatchConsumers`, `RunUntypedBatchConsumer`, `RunUntypedBatchConsumers`, `BatchConsumerCallback`, `UntypedBatchConsumerCallback`, their runnable variants, and batch consumer constructors/factories.
+Batch callbacks, factories, runners, mocks, and `batch_size` configuration were removed in **v0.66.0** and restored in **v0.68.0**. Discover `RunBatchConsumer`, `RunBatchConsumers`, `RunUntypedBatchConsumer`, `RunUntypedBatchConsumers`, `BatchConsumerCallback`, `UntypedBatchConsumerCallback`, their runnable variants, and batch consumer constructors/factories.
 
-There is no automatic replacement. Choose one path for each consumer:
+For **v0.68.0 and later**, use the [current batch API](/docs/pr-6/how-to/streaming-applications/create-a-consumer#batch-callbacks-in-v0680-and-later). Review `batch_size`, `buffer_size`, `idle_timeout`, per-record boolean results, retries, and shutdown draining. Primary messages acknowledge admission to memory before processing; crashes or failed retry persistence can require replay. Do not mechanically restore an old batch consumer without reviewing these semantics.
+
+For a target in **v0.66–v0.67**, choose one replacement path for each consumer:
 
 1. **Record-at-a-time processing:** use normal typed or untyped callbacks and the corresponding non-batch runner or module factory. Confirm the former batch operation is correct and economically acceptable for each record.
 2. **Application-owned batching:** own buffering, flush timing, partial failures, shutdown flushing, idempotency, and how each record's callback result corresponds to the batch result.
@@ -221,7 +226,7 @@ Runnable callback `Run` contexts are cancelled only after both inputs have retur
 
 ## 9. Review Aggregate Messages
 
-Aggregate envelopes are separate from the removed batch consumer APIs. Their acknowledgement behavior also changes:
+Aggregate envelopes are separate from application-level batch callbacks. For ordinary record consumers, their acknowledgement behavior also changes:
 
 | `aggregate_message_mode` | Old behavior | New callback result for the envelope |
 |---|---|---|
@@ -277,7 +282,7 @@ Custom inputs and direct transport integrations require a separate API review:
 | Processing drain | `exec.WithDrainContext` / `DrainContextFrom` carry the caller-owned drain signal. Inputs must preserve that shared processing cancellation contract. |
 | Direct Kafka consumer | `Run` receives a per-record context-aware callback returning bool; handler/channel plumbing and read-only arguments are removed. Constructors and readers also change. |
 | Direct Kinesis consumer | `Run` receives a context-aware raw-record handler returning error; channel-handler and `Done` plumbing are removed. Ordinary handler failures are not a success-only checkpoint barrier. |
-| Low-level consumer tests | Base-consumer APIs are removed; `NewUntypedConsumerWithInterfaces` receives dependencies directly, including a retry input. |
+| Low-level consumer tests | v0.66–v0.67 pass dependencies directly to `NewUntypedConsumerWithInterfaces`. v0.68.0 and later construct a shared base with `NewConsumerBaseWithInterfaces`, then pass it and the callback to `NewUntypedConsumerWithInterfaces`; batch construction returns `(*BatchConsumer, error)`. |
 
 Read the exact constructor signatures in the target Gosoline version and regenerate affected mocks. Config defaults are applied through configuration unmarshalling, not automatically to Go settings literals: explicitly initialize runner counts, processing modes, and cleanup durations in direct integrations. In particular, zero Kinesis runners are not a supported configuration and can stall processing or skip handlers depending on the mode.
 
@@ -291,7 +296,7 @@ The application migration instructions below flag these integrations for separat
 - Choose Kafka/Kinesis ordering explicitly and review retry behavior, decoding failures, and retry-publication failures.
 - Configure transport cleanup separately: SQS/SNS acknowledgement allowance, Kafka commit allowance, or Kinesis `release_delay`.
 - Review SQS/SNS deletion mode, visibility timeout, redrive policy, and idempotency.
-- Resolve each removed batch consumer and review aggregate-envelope semantics independently.
+- Resolve each batch consumer against the target release and review aggregate-envelope semantics independently.
 - Replace former Kafka read-only behavior deliberately.
 - Remove file `blocking` and verify completion at end of file.
 - Review callback cancellation, runnable-callback flushing, kernel timeout, and deployment shutdown budget.
@@ -302,7 +307,7 @@ The application migration instructions below flag these integrations for separat
 
 Copy the prepared instructions to give an AI agent an operational migration task. They include discovery, configuration mappings, behavior decisions, validation, and stop conditions.
 
-[Download the migration instructions](/docs/pr-6/downloads/stream-consumer-lifecycle-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
+[Download the migration instructions](/docs/pr-6/blume-assets/content/docs/migrations/src/stream-consumer-lifecycle-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
 
 ```text title="AI migration instructions"
 Migrate this application to the callback-based stream lifecycle introduced in Gosoline v0.66.0 by commit 04b54462dfb9cfa789577d3972d6098cd7d69860 (stream: unify input processing and shutdown). Use Gosoline v0.66.0 or later. Preserve intended ordering, retries, side effects, batching, acknowledgement, and deployment behavior.
@@ -319,7 +324,7 @@ Discovery:
 1. Find every stream.consumer.<name> and resolve its input to stream.input.<input-name>. Include model subscribers and configuration generated by postprocessors.
 2. Find every retry handler and its settings under stream.consumer.<name>.retry. Record queue IDs, after/delay settings, maximum attempts, redrive policy, and dead-letter behavior.
 3. Search YAML, Helm values, Terraform templates, environment-variable mappings, test fixtures, and Go settings literals for consume_grace_time, acknowledge_grace_time, consumer runner_count, batch_size, file blocking, and Kafka connection is_read_only.
-4. Find removed batch runners RunBatchConsumer, RunBatchConsumers, RunUntypedBatchConsumer, and RunUntypedBatchConsumers, batch callback interfaces and runnable variants, and batch constructors/module factories.
+4. Find batch runners RunBatchConsumer, RunBatchConsumers, RunUntypedBatchConsumer, and RunUntypedBatchConsumers, batch callback interfaces and runnable variants, and batch constructors/module factories. Check their availability in the target release.
 5. Find custom stream.Input implementations, Input.Data calls, AcknowledgeableInput, Ack/AckBatch, base-consumer APIs, low-level consumer constructors, and generated input/transport mocks.
 6. Find direct Kafka and Kinesis consumers, readers, handlers, channel adapters, and settings literals.
 7. Find aggregate_message_mode, callbacks returning false or true with an error, non-ignorable GetModel errors, decoding failures, and retry-publication failure handling.
@@ -331,8 +336,8 @@ Classify findings before editing. Produce a per-consumer decision list covering 
 
 Migration order:
 
-1. Confirm the target Gosoline dependency is v0.66.0 or later and contains the lifecycle change.
-2. Resolve removed batch consumers and Kafka read-only behavior.
+1. Confirm the exact target Gosoline dependency is v0.66.0 or later and contains the lifecycle change. Batch APIs and shared consumer-base construction returned in v0.68.0; do not apply removal instructions to later releases.
+2. Review batch consumers against the target version and resolve Kafka read-only behavior.
 3. Migrate consumer settings and primary-input concurrency.
 4. Review independent retry concurrency and transport-specific ordering/acknowledgement.
 5. Review aggregate semantics, callback cancellation, and runnable-callback flushing.
@@ -397,10 +402,13 @@ Retry and callback rules:
 - Consume returning true with an error logs the error but does not request retry. Returning false requests native redelivery or enabled consumer retry publication, depending on transport.
 - Do not claim that retry.enabled guarantees redelivery of all failures. Inspect decode/model failures and failed publication separately.
 
-Removed batch consumer rules:
+Batch consumer rules by target release:
 
-- Remove batch callbacks, runnable batch variants, factories/runners/mocks, and batch_size only after choosing replacement behavior.
-- Record-at-a-time replacement is acceptable only when the former batch operation is correct and economically acceptable for each record. Use the normal typed or untyped callback and corresponding non-batch runner/module factory.
+- v0.68.0 and later restore BatchConsumerCallback[M], UntypedBatchConsumerCallback, their runnable variants, application batch runners, and batch_size. Check the target release's exact factories and constructors.
+- For restored batch consumers, review consumer batch_size (default 1), buffer_size (0 uses batch_size), and idle_timeout (default 10s). One collection loop calls callbacks serially; return one boolean per model.
+- Restored batch consumers acknowledge primary messages on admission to memory, before processing. Failed primary work uses configured retries; failed retry deliveries remain unacknowledged. Crashes before processing/retry persistence, exhausted retries, or incomplete drains can require replay. Review idempotency and recovery before adopting this contract.
+- For targets v0.66-v0.67 only, remove batch callbacks, runnable batch variants, factories/runners/mocks, and batch_size after choosing replacement behavior.
+- When replacing a batch consumer for v0.66-v0.67, record-at-a-time processing is acceptable only when the former batch operation is correct and economically acceptable for each record. Use the normal typed or untyped callback and corresponding non-batch runner/module factory.
 - Application-owned batching must define buffering, flush timing, partial failures, shutdown flush, idempotency, and per-message retry/acknowledgement results.
 - Do not return success just because a message entered an in-memory buffer when acknowledgement must follow durable processing.
 - Runnable callback Run contexts are cancelled only after both inputs return, including processing/cleanup. A flush required to finish Consume must not wait for that cancellation.
@@ -428,7 +436,7 @@ Integration and compatibility review:
 - exec.WithDrainContext / DrainContextFrom convey caller-owned processing cancellation; preserve that shared drain contract.
 - Direct Kafka Run uses a context-aware per-record callback returning bool. Constructors/readers change; handler/channel and read-only plumbing is removed.
 - Direct Kinesis Run uses a context-aware raw-record handler returning error. Handler/channel/Done plumbing is removed; ordinary handler failure is not a success-only checkpoint barrier.
-- Base-consumer APIs are removed. NewUntypedConsumerWithInterfaces takes dependencies directly, including a retry input (normally noop if unused). Regenerate affected mocks from the new interfaces.
+- v0.66-v0.67 remove base-consumer APIs: NewUntypedConsumerWithInterfaces takes dependencies directly, including a retry input (normally noop if unused). v0.68.0 and later use NewConsumerBaseWithInterfaces for the shared base, then NewUntypedConsumerWithInterfaces(base, callback); NewUntypedBatchConsumerWithInterfaces(base, callback, settings) returns (*BatchConsumer, error). Regenerate mocks from the target release's interfaces.
 - Check target-version signatures rather than guessing argument replacements. Go settings literals do not automatically receive config defaults; initialize runner counts, processing modes, and cleanup durations explicitly. Zero Kinesis runners can stall processing or skip handlers depending on mode.
 - Consumed Kafka keys use the KafkaKey stream attribute. Original-record metadata and related helpers are removed; update affected code/tests.
 
@@ -444,7 +452,7 @@ Shutdown and observability:
 
 Validation:
 
-- Confirm all obsolete consumer keys, batch APIs/config, file blocking, and Kafka is_read_only have been addressed across every environment and fixture.
+- Confirm obsolete consumer keys, target-version batch API changes, file blocking, and Kafka is_read_only have been addressed across every environment and fixture.
 - Confirm each consumer has explicit primary/retry concurrency, ordering, recovery, aggregate, and cleanup decisions.
 - Run repository-standard formatting/build/tests with required fixture/integration tags. Fix compile failures first; preserve behavior rather than weakening assertions.
 - Exercise combined primary/retry work, ordered/unordered processing, callback failure and retry-publication failure, deletion modes, active-work shutdown, file exhaustion, and aggregate partial failure where applicable.

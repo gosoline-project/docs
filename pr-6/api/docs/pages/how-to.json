@@ -1,0 +1,12 @@
+{
+  "contentType": "doc",
+  "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to.json",
+  "lastModified": null,
+  "locale": "",
+  "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to.md",
+  "route": "/how-to",
+  "title": "How-to guides",
+  "url": "https://gosoline-project.github.io/docs/pr-6/how-to",
+  "description": "Here, you'll learn how to do common tasks with gosoline:",
+  "markdown": "---\ntitle: How-to guides\ndescription: \"Here, you'll learn how to do common tasks with gosoline:\"\nsidebar:\n  hidden: true\n---\n"
+}

@@ -1,6 +1,6 @@
 {
-  "count": 51,
-  "generator": "blume@2.1.3",
+  "count": 59,
+  "generator": "blume@2.2.7",
   "pages": [
     {
       "contentType": "doc",
@@ -80,6 +80,17 @@
     },
     {
       "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/fundamentals.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/fundamentals.md",
+      "route": "/fundamentals",
+      "title": "Fundamentals",
+      "url": "https://gosoline-project.github.io/docs/pr-6/fundamentals",
+      "description": "Learn the fundamental concepts and core principles of gosoline:"
+    },
+    {
+      "contentType": "doc",
       "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/fundamentals/application.json",
       "lastModified": null,
       "locale": "",
@@ -97,6 +108,17 @@
       "route": "/fundamentals/naming-patterns",
       "title": "Naming Patterns",
       "url": "https://gosoline-project.github.io/docs/pr-6/fundamentals/naming-patterns"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/getting-started.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/getting-started.md",
+      "route": "/getting-started",
+      "title": "Getting started",
+      "url": "https://gosoline-project.github.io/docs/pr-6/getting-started",
+      "description": "Here, you'll find tutorials to help you get started quickly with gosoline:"
     },
     {
       "contentType": "doc",
@@ -120,6 +142,17 @@
     },
     {
       "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/getting-started/testing.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/getting-started/testing.md",
+      "route": "/getting-started/testing",
+      "title": "Testing",
+      "url": "https://gosoline-project.github.io/docs/pr-6/getting-started/testing",
+      "description": "Testing is an important responsibility for developing working code. With these tutorials, you'll write your first tests with gosoline:"
+    },
+    {
+      "contentType": "doc",
       "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/getting-started/testing/test-your-consumer.json",
       "lastModified": null,
       "locale": "",
@@ -127,6 +160,17 @@
       "route": "/getting-started/testing/test-your-consumer",
       "title": "Test your consumer",
       "url": "https://gosoline-project.github.io/docs/pr-6/getting-started/testing/test-your-consumer"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to.md",
+      "route": "/how-to",
+      "title": "How-to guides",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to",
+      "description": "Here, you'll learn how to do common tasks with gosoline:"
     },
     {
       "contentType": "doc",
@@ -167,6 +211,17 @@
       "route": "/how-to/databases-sql/sqlr",
       "title": "sqlr - SQL Repository",
       "url": "https://gosoline-project.github.io/docs/pr-6/how-to/databases-sql/sqlr"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/http-server.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server.md",
+      "route": "/how-to/http-server",
+      "title": "HTTP Server",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server",
+      "description": "Learn how to build HTTP services with the gosoline httpserver package."
     },
     {
       "contentType": "doc",
@@ -340,6 +395,17 @@
     },
     {
       "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/streaming-applications.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications.md",
+      "route": "/how-to/streaming-applications",
+      "title": "Streaming applications",
+      "url": "https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications",
+      "description": "Learn how to build streaming applications with gosoline inputs, outputs, producers, consumers, and producer daemons."
+    },
+    {
+      "contentType": "doc",
       "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/streaming-applications/create-a-consumer.json",
       "lastModified": null,
       "locale": "",
@@ -400,12 +466,23 @@
     },
     {
       "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/migrations.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/migrations.md",
+      "route": "/migrations",
+      "title": "Migrations",
+      "url": "https://gosoline-project.github.io/docs/pr-6/migrations",
+      "description": "Guides for migrating between gosoline versions:"
+    },
+    {
+      "contentType": "doc",
       "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/migrations/app-identity-and-naming-patterns.json",
       "lastModified": null,
       "locale": "",
       "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/migrations/app-identity-and-naming-patterns.md",
       "route": "/migrations/app-identity-and-naming-patterns",
-      "title": "App Identity and Naming Patterns",
+      "title": "Migrating to Identity and Naming Patterns",
       "url": "https://gosoline-project.github.io/docs/pr-6/migrations/app-identity-and-naming-patterns"
     },
     {
@@ -415,7 +492,7 @@
       "locale": "",
       "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/migrations/httpserver-package.md",
       "route": "/migrations/httpserver-package",
-      "title": "HTTP Server Package",
+      "title": "Migrating to the Standalone HTTP Server Package",
       "url": "https://gosoline-project.github.io/docs/pr-6/migrations/httpserver-package"
     },
     {
@@ -425,7 +502,7 @@
       "locale": "",
       "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/migrations/sqlh-crud.md",
       "route": "/migrations/sqlh-crud",
-      "title": "SQLH CRUD",
+      "title": "Migrating an Existing Service to SQLH CRUD",
       "url": "https://gosoline-project.github.io/docs/pr-6/migrations/sqlh-crud"
     },
     {
@@ -435,8 +512,19 @@
       "locale": "",
       "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/migrations/stream-consumer-lifecycle.md",
       "route": "/migrations/stream-consumer-lifecycle",
-      "title": "Stream Consumer Lifecycle",
+      "title": "Migrating to the Callback-Based Stream Consumer Lifecycle",
       "url": "https://gosoline-project.github.io/docs/pr-6/migrations/stream-consumer-lifecycle"
+    },
+    {
+      "contentType": "doc",
+      "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/reference.json",
+      "lastModified": null,
+      "locale": "",
+      "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/reference.md",
+      "route": "/reference",
+      "title": "Reference",
+      "url": "https://gosoline-project.github.io/docs/pr-6/reference",
+      "description": "Here, you can look up implementation details about gosoline:"
     },
     {
       "contentType": "doc",
@@ -485,7 +573,7 @@
       "locale": "",
       "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/reference/package-fixtures.md",
       "route": "/reference/package-fixtures",
-      "title": "Package fixtures",
+      "title": "Gosoline Fixture Loader",
       "url": "https://gosoline-project.github.io/docs/pr-6/reference/package-fixtures"
     },
     {

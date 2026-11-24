@@ -63,7 +63,7 @@ Read more about appending and mutating context fields in our [log package refere
 
 Now that you have a function that can truncate todo text, use it when creating a todo:
 
-```go title="handler.go" {5-6,16}
+```go title="handler.go"
 func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*Todo, error) {
   h.mu.Lock()
   defer h.mu.Unlock()
@@ -87,7 +87,7 @@ func (h *TodoHandler) CreateTodo(ctx context.Context, input *CreateTodoInput) (*
 
 And when updating a todo:
 
-```go title="handler.go" {10-11}
+```go title="handler.go"
 func (h *TodoHandler) UpdateTodo(ctx context.Context, input *UpdateTodoInput) (*Todo, error) {
   h.mu.Lock()
   defer h.mu.Unlock()
@@ -125,7 +125,7 @@ If you run your service now, you'll see the results of your work. Gosoline has s
 
 First, add a logger to your `TodoHandler`:
 
-```go title="handler.go" {2}
+```go title="handler.go"
 type TodoHandler struct {
   logger log.Logger
   mu     sync.Mutex
@@ -138,7 +138,7 @@ Now, you can make use of this logger in any of the handler's methods.
 
 Next, when you initialize the handler, pass a logger:
 
-```go title="handler.go" {3}
+```go title="handler.go"
 func NewTodoHandler(ctx context.Context, config cfg.Config, logger log.Logger) (*TodoHandler, error) {
   return &TodoHandler{
     logger: logger,

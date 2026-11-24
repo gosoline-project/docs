@@ -118,5 +118,290 @@
     "from": "/docs/pr-6/category/migrations.mdx",
     "status": 301,
     "to": "/docs/pr-6/migrations.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/archive",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/archive.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/archive.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/authors",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/authors.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/authors.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/breaking-changes",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/breaking-changes.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/breaking-changes.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/configuration",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/configuration.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/configuration.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/framework",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/framework.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/framework.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/gosoline",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/gosoline.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/gosoline.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/httpserver",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/httpserver.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/httpserver.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/identity",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/identity.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/identity.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/kafka",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/kafka.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/kafka.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/lifecycle",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/lifecycle.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/lifecycle.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/logging",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/logging.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/logging.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/migration",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/migration.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/migration.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/modularization",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/modularization.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/modularization.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/naming",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/naming.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/naming.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/observability",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/observability.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/observability.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/sampling",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/sampling.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/sampling.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/streaming",
+    "status": 301,
+    "to": "/docs/pr-6/blog"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/streaming.md",
+    "status": 301,
+    "to": "/docs/pr-6/blog.md"
+  },
+  {
+    "from": "/docs/pr-6/blog/tags/streaming.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/blog.mdx"
+  },
+  {
+    "from": "/docs/pr-6/search",
+    "status": 301,
+    "to": "/docs/pr-6"
+  },
+  {
+    "from": "/docs/pr-6/search.md",
+    "status": 301,
+    "to": "/docs/pr-6/index.md"
+  },
+  {
+    "from": "/docs/pr-6/search.mdx",
+    "status": 301,
+    "to": "/docs/pr-6/index.mdx"
   }
 ]

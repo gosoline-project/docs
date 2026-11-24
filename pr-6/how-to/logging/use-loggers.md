@@ -59,7 +59,7 @@ If you have an application, you can create a logger from your app's configuratio
 
 First, configure your logger in your configuration. For example, in a config file:
 
-```yml title="config.dist.yml" lineNumbers {10-23}
+```yml title="config.dist.yml" lineNumbers
 app:
   env: dev
   name: hello-world
@@ -87,7 +87,7 @@ log:
 
 Then, implement your logger alongside your application:
 
-```go title="main.go" lineNumbers {14,19,23}
+```go title="main.go" lineNumbers
 package main
 
 import (

@@ -18,7 +18,7 @@
     ]
   },
   "description": "Documentation and articles for the Gosoline Go application framework.",
-  "generator": "blume@2.1.3",
+  "generator": "blume@2.2.7",
   "name": "Gosoline Docs",
   "site": "https://gosoline-project.github.io",
   "contentUsage": {

@@ -22,26 +22,31 @@ This skill points you at the Gosoline Docs, at https://gosoline-project.github.i
 
 ### Fundamentals
 
+- [Fundamentals](https://gosoline-project.github.io/docs/pr-6/fundamentals.md): Learn the fundamental concepts and core principles of gosoline:
 - [The Application](https://gosoline-project.github.io/docs/pr-6/fundamentals/application.md)
 - [Naming Patterns](https://gosoline-project.github.io/docs/pr-6/fundamentals/naming-patterns.md)
 
 ### Getting started
 
+- [Getting started](https://gosoline-project.github.io/docs/pr-6/getting-started.md): Here, you'll find tutorials to help you get started quickly with gosoline:
 - [Create a consumer](https://gosoline-project.github.io/docs/pr-6/getting-started/create-a-consumer.md)
 - [Create an application](https://gosoline-project.github.io/docs/pr-6/getting-started/create-an-application.md)
 
 #### Testing
 
+- [Testing](https://gosoline-project.github.io/docs/pr-6/getting-started/testing.md): Testing is an important responsibility for developing working code. With these tutorials, you'll write your first tests with gosoline:
 - [Test your consumer](https://gosoline-project.github.io/docs/pr-6/getting-started/testing/test-your-consumer.md)
 
 ### How-to guides
 
+- [How-to guides](https://gosoline-project.github.io/docs/pr-6/how-to.md): Here, you'll learn how to do common tasks with gosoline:
 - [Load configurations](https://gosoline-project.github.io/docs/pr-6/how-to/load-configs.md)
 - [Build a CLI tool](https://gosoline-project.github.io/docs/pr-6/how-to/use-cli.md)
 - [Implement health checks](https://gosoline-project.github.io/docs/pr-6/how-to/write-health-checks.md)
 
 #### HTTP Server
 
+- [HTTP Server](https://gosoline-project.github.io/docs/pr-6/how-to/http-server.md): Learn how to build HTTP services with the gosoline httpserver package.
 - [Build an HTTP service](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/build-an-http-service.md)
 - [Stream with Server-Sent Events](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/stream-with-sse.md)
 - [Serve a frontend](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/serve-a-frontend.md)
@@ -49,8 +54,8 @@ This skill points you at the Gosoline Docs, at https://gosoline-project.github.i
 - [Add middleware](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/add-middleware.md)
 - [Authenticate requests](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/authentication.md)
 - [Concurrency and connection pressure](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/concurrency-and-connection-pressure.md)
-- [Chaos middleware](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/chaos-middleware.md)
 - [Real-world example](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/real-world-example.md)
+- [Chaos middleware](https://gosoline-project.github.io/docs/pr-6/how-to/http-server/chaos-middleware.md)
 
 #### Logging
 
@@ -68,6 +73,7 @@ This skill points you at the Gosoline Docs, at https://gosoline-project.github.i
 
 #### Streaming applications
 
+- [Streaming applications](https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications.md): Learn how to build streaming applications with gosoline inputs, outputs, producers, consumers, and producer daemons.
 - [Understand inputs and outputs](https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/understand-inputs-and-outputs.md)
 - [Create a producer](https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/create-a-producer.md)
 - [Create a consumer](https://gosoline-project.github.io/docs/pr-6/how-to/streaming-applications/create-a-consumer.md)
@@ -84,21 +90,23 @@ This skill points you at the Gosoline Docs, at https://gosoline-project.github.i
 
 ### Reference
 
+- [Reference](https://gosoline-project.github.io/docs/pr-6/reference.md): Here, you can look up implementation details about gosoline:
 - [Naming patterns](https://gosoline-project.github.io/docs/pr-6/reference/naming-patterns.md)
 - [Package cfg](https://gosoline-project.github.io/docs/pr-6/reference/package-cfg.md)
 - [Package cloud/aws](https://gosoline-project.github.io/docs/pr-6/reference/package-cloud_aws.md)
 - [Package dbx](https://gosoline-project.github.io/docs/pr-6/reference/package-dbx.md)
-- [Package fixtures](https://gosoline-project.github.io/docs/pr-6/reference/package-fixtures.md)
+- [Gosoline Fixture Loader](https://gosoline-project.github.io/docs/pr-6/reference/package-fixtures.md)
 - [Package httpserver](https://gosoline-project.github.io/docs/pr-6/reference/package-httpserver.md)
 - [Package log](https://gosoline-project.github.io/docs/pr-6/reference/package-log.md)
 - [Package test](https://gosoline-project.github.io/docs/pr-6/reference/package-test.md)
 
 ### Migrations
 
-- [App Identity and Naming Patterns](https://gosoline-project.github.io/docs/pr-6/migrations/app-identity-and-naming-patterns.md)
-- [HTTP Server Package](https://gosoline-project.github.io/docs/pr-6/migrations/httpserver-package.md)
-- [SQLH CRUD](https://gosoline-project.github.io/docs/pr-6/migrations/sqlh-crud.md)
-- [Stream Consumer Lifecycle](https://gosoline-project.github.io/docs/pr-6/migrations/stream-consumer-lifecycle.md)
+- [Migrations](https://gosoline-project.github.io/docs/pr-6/migrations.md): Guides for migrating between gosoline versions:
+- [Migrating to Identity and Naming Patterns](https://gosoline-project.github.io/docs/pr-6/migrations/app-identity-and-naming-patterns.md)
+- [Migrating to the Standalone HTTP Server Package](https://gosoline-project.github.io/docs/pr-6/migrations/httpserver-package.md)
+- [Migrating an Existing Service to SQLH CRUD](https://gosoline-project.github.io/docs/pr-6/migrations/sqlh-crud.md)
+- [Migrating to the Callback-Based Stream Consumer Lifecycle](https://gosoline-project.github.io/docs/pr-6/migrations/stream-consumer-lifecycle.md)
 
 ### Blog
 

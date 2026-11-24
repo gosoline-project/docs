@@ -119,6 +119,291 @@
       "destination": "/docs/pr-6/migrations.mdx",
       "source": "/docs/pr-6/category/migrations.mdx",
       "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/archive",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/archive.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/archive.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/authors",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/authors.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/authors.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/breaking-changes",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/breaking-changes.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/breaking-changes.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/configuration",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/configuration.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/configuration.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/framework",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/framework.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/framework.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/gosoline",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/gosoline.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/gosoline.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/httpserver",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/httpserver.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/httpserver.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/identity",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/identity.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/identity.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/kafka",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/kafka.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/kafka.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/lifecycle",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/lifecycle.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/lifecycle.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/logging",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/logging.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/logging.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/migration",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/migration.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/migration.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/modularization",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/modularization.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/modularization.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/naming",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/naming.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/naming.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/observability",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/observability.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/observability.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/sampling",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/sampling.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/sampling.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog",
+      "source": "/docs/pr-6/blog/tags/streaming",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.md",
+      "source": "/docs/pr-6/blog/tags/streaming.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/blog.mdx",
+      "source": "/docs/pr-6/blog/tags/streaming.mdx",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6",
+      "source": "/docs/pr-6/search",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/index.md",
+      "source": "/docs/pr-6/search.md",
+      "statusCode": 301
+    },
+    {
+      "destination": "/docs/pr-6/index.mdx",
+      "source": "/docs/pr-6/search.mdx",
+      "statusCode": 301
     }
   ],
   "headers": [

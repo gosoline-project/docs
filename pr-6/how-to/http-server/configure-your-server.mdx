@@ -80,7 +80,7 @@ httpserver:
           - /api/events
         extension:
           - .png
-        pathRegex:
+        path_regex:
           - \.json$
 ```
 
@@ -96,7 +96,7 @@ httpserver:
 |---|---|---|
 | `extension` | string array | File extensions to exclude (e.g., `.png`). |
 | `path` | string array | Exact paths to exclude (e.g., `/api/events`). |
-| `pathRegex` | string array | Regex patterns to exclude (e.g., `\.json$`). |
+| `path_regex` | string array | Regex patterns to exclude (e.g., `\.json$`). |
 
 :::warning
 Always exclude SSE endpoints from compression. Gzip buffering will break real-time streaming. See [Stream with SSE](/docs/pr-6/how-to/http-server/stream-with-sse/) for details.

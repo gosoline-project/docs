@@ -11,7 +11,7 @@ The `sqlr` package provides a generic, type-safe repository layer built on top o
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlr@v0.9.1
+go get github.com/gosoline-project/sqlr@v0.9.2-0.20261027132740-484c58e94d7b
 ```
 
 Then import the package in your Go code:
@@ -1009,6 +1009,16 @@ func (s *BlogService) queryPostsWithAuthorJoin(ctx context.Context) ([]Post, err
 }
 ```
 
+`QueryBuilderSelect.DefaultJoin(joinType, relation, conditions...)` adds a fallback join. It supports `sqlc.JoinLeft` and `sqlc.JoinInner`, with optional ON conditions. Use it when framework code needs a relation but application code can define that join:
+
+```go
+qb.DefaultJoin(sqlc.JoinInner, "Author",
+    sqlr.Condition(sqlc.Col("Author", "name").Eq("Alice")),
+)
+```
+
+The first default for a relation wins, including its join type and ON conditions. An explicit `LeftJoin` or `InnerJoin` takes precedence, whether it is added before or after the default. It replaces the default's type and conditions. Repeated defaults add no extra join; duplicate explicit joins remain invalid.
+
 ### Joins on Read
 
 Joins can also be used with `Read()` to load relations alongside a single entity lookup:
@@ -1174,4 +1184,4 @@ Associations follow the normal `Create()` behavior described above. If your fixt
 
 The built-in `sqlr` fixture writer uses the `default` sqlc client name. If you define multiple fixture sets without embedding them as associations, make sure their factory order still respects your foreign-key dependencies.
 
-For more details about gosoline fixture loading, grouping, purge behavior, and named fixture references, see the [fixtures package reference](/docs/pr-6/reference/package-fixtures).
+For more details about gosoline fixture loading, grouping, and named fixture references, see the [fixtures package reference](/docs/pr-6/reference/package-fixtures).

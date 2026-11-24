@@ -1,0 +1,12 @@
+{
+  "contentType": "doc",
+  "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/how-to/http-server.json",
+  "lastModified": null,
+  "locale": "",
+  "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server.md",
+  "route": "/how-to/http-server",
+  "title": "HTTP Server",
+  "url": "https://gosoline-project.github.io/docs/pr-6/how-to/http-server",
+  "description": "Learn how to build HTTP services with the gosoline httpserver package.",
+  "markdown": "---\ntitle: HTTP Server\ndescription: \"Learn how to build HTTP services with the gosoline httpserver package.\"\nsidebar:\n  hidden: true\n---\n"
+}

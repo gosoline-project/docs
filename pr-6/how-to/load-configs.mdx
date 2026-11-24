@@ -174,7 +174,7 @@ Here, you've:
 
 Once you've loaded your configurations, you can access them with type-specific getters. For example:
 
-```go title="main.go" lineNumbers {20-30}
+```go title="main.go" lineNumbers
 package main
 
 import (

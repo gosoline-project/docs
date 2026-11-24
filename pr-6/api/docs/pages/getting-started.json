@@ -1,0 +1,12 @@
+{
+  "contentType": "doc",
+  "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/getting-started.json",
+  "lastModified": null,
+  "locale": "",
+  "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/getting-started.md",
+  "route": "/getting-started",
+  "title": "Getting started",
+  "url": "https://gosoline-project.github.io/docs/pr-6/getting-started",
+  "description": "Here, you'll find tutorials to help you get started quickly with gosoline:",
+  "markdown": "---\ntitle: Getting started\ndescription: \"Here, you'll find tutorials to help you get started quickly with gosoline:\"\nsidebar:\n  hidden: true\n---\n"
+}

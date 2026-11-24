@@ -1,7 +1,8 @@
 ---
 sidebar:
+  label: HTTP Server Package
   order: 2
-title: HTTP Server Package
+title: Migrating to the Standalone HTTP Server Package
 ---
 
 This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module at `v0.6.4`.
@@ -1063,7 +1064,7 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 
 If you want an AI agent to perform this migration, copy the prepared migration instructions and provide them as the task prompt. The instructions are intentionally operational and include discovery steps, migration order, API mappings, validation checks, and stop conditions.
 
-[Download the migration instructions](/docs/pr-6/downloads/httpserver-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
+[Download the migration instructions](/docs/pr-6/blume-assets/content/docs/migrations/src/httpserver-migration-agent-instructions.txt). Use the code block’s copy button to copy the full prompt.
 
 ```text title="AI migration instructions"
 Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.6.4, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.

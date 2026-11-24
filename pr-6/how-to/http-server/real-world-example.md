@@ -1,6 +1,6 @@
 ---
 sidebar:
-  order: 9
+  order: 8
 title: Real-world example
 ---
 

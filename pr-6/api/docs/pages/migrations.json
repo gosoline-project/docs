@@ -1,0 +1,12 @@
+{
+  "contentType": "doc",
+  "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/migrations.json",
+  "lastModified": null,
+  "locale": "",
+  "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/migrations.md",
+  "route": "/migrations",
+  "title": "Migrations",
+  "url": "https://gosoline-project.github.io/docs/pr-6/migrations",
+  "description": "Guides for migrating between gosoline versions:",
+  "markdown": "---\ntitle: Migrations\ndescription: \"Guides for migrating between gosoline versions:\"\nsidebar:\n  hidden: true\n---\n"
+}

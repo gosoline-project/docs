@@ -1,0 +1,12 @@
+{
+  "contentType": "doc",
+  "json": "https://gosoline-project.github.io/docs/pr-6/api/docs/pages/reference.json",
+  "lastModified": null,
+  "locale": "",
+  "markdownUrl": "https://gosoline-project.github.io/docs/pr-6/reference.md",
+  "route": "/reference",
+  "title": "Reference",
+  "url": "https://gosoline-project.github.io/docs/pr-6/reference",
+  "description": "Here, you can look up implementation details about gosoline:",
+  "markdown": "---\ntitle: Reference\ndescription: \"Here, you can look up implementation details about gosoline:\"\nsidebar:\n  hidden: true\n---\n"
+}
