@@ -30,8 +30,8 @@ The SQLR fixture integration example additionally needs Docker and the
 `integration fixtures` build tags. The HTTP build-service example can be run directly
 from `docs/how-to/http-server/src/build-service` with `go run .`.
 
-The dependency update keeps the existing example APIs and uses the Gosoline security
-revision compatible with OpenTelemetry log v0.21 and stable SDK/exporters v1.45.
+The examples' root module selects OpenTelemetry log exporters v0.23.0 and
+stable API, SDK, and exporters v1.47.0.
 AWS S3 uses the SDK's current request-checksum and response-validation defaults;
 custom S3-compatible endpoints must support them. The dependency graph includes
 an advisory for unmaintained OpenPGP code, so these examples are not a
