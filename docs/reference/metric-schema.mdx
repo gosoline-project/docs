@@ -5,11 +5,16 @@ title: Metric schema
 # Metric schema
 
 This reference lists the metric names, instrument types, units, and dimensions Gosoline records.
-Gosoline follows [OpenTelemetry semantic conventions](https://github.com/justtrackio/gosoline/blob/v0.69.0/pkg/metric/SEMCONV.md) where applicable, but uses its own names. For example, the OpenTelemetry writer exports
+Gosoline follows [OpenTelemetry semantic conventions](https://github.com/justtrackio/gosoline/blob/167371af967763037120fc7aaed3e3e4da3cd9ce/pkg/metric/SEMCONV.md) where applicable, but uses its own names. For example, the OpenTelemetry writer exports
 `http.server.request.duration` as `gosoline.http.server.request.duration`.
 
-This reference covers [Gosoline v0.69.0](https://github.com/justtrackio/gosoline/releases/tag/v0.69.0)
+The release baselines are [Gosoline v0.69.0](https://github.com/justtrackio/gosoline/releases/tag/v0.69.0)
 and the standalone [HTTPServer v0.6.5](https://github.com/gosoline-project/httpserver/releases/tag/v0.6.5).
+The behavior after metric-default removal described here is pinned to
+[Gosoline `v0.69.6-0.20261126111349-167371af9677`](https://github.com/justtrackio/gosoline/commit/167371af967763037120fc7aaed3e3e4da3cd9ce)
+([PR #1459](https://github.com/justtrackio/gosoline/pull/1459)) and
+[HTTPServer `v0.6.9-0.20261126111541-f0cbce27a933`](https://github.com/gosoline-project/httpserver/commit/f0cbce27a93385597893ed22573278ebe7cd8a04)
+([PR #16](https://github.com/gosoline-project/httpserver/pull/16)).
 
 ## Schema version
 
@@ -37,14 +42,11 @@ Each writer renders that canonical name for its backend:
 | Namespace-less counter `my.custom.metric` | `MyCustomMetric` | `gosoline_my_custom_metric_total` | `my.custom.metric` |
 
 The first row's duration is authored in milliseconds; Prometheus and OTEL values are scaled to seconds,
-and both names show the seconds base unit. The Prometheus histogram exposition adds its normal sample
-suffixes to the base name. Prometheus dimension keys also replace dots with underscores, so the HTTP
+using the `_seconds` suffix in the Prometheus name and the instrument unit `s` in OpenTelemetry.
+The Prometheus histogram exposition adds its normal sample suffixes to the base name. Prometheus dimension keys also replace dots with underscores, so the HTTP
 `request.method`, `route`, and `response.status_code` attributes become `request_method`, `route`, and
 `response_status_code` labels. The default-dimension marker `{{default}}` is rendered as an empty
 Prometheus label value.
-Prometheus matches registered defaults against canonical metric names and dimensions before translating
-dotted dimension keys and `{{default}}` into label form, preserving the selected priority, unit, and
-instrument kind.
 
 The Prometheus writer uses the fixed `gosoline` prefix. Put application identity on scrape-target
 labels rather than in metric names.
@@ -71,6 +73,31 @@ For a namespace-less custom name, CloudWatch converts canonical separators in th
 prefix, converts dots in the leaf to underscores, and appends the unit/counter suffix (the example is a
 counter). OpenTelemetry normalizes the leaf and exports it without a `gosoline.` prefix.
 
+## Migrating from metric defaults
+
+Writers no longer create synthetic samples at startup or on an empty flush. A missing series means
+no sample has been observed for that metric and attribute set. An actual zero-valued measurement is
+still valid. `NewWriter(namespace string)` supplies a namespace for datums whose namespace is empty;
+it does not register or amend metric definitions.
+
+Set the intended `Unit` and `Priority` on each datum. Framework metrics set `Kind` explicitly. For
+custom metrics with no `Kind`, Prometheus and OpenTelemetry infer a counter for `UnitCount`, a
+histogram for seconds, milliseconds, or microseconds, and a gauge for all other units. If a custom
+metric relied on a registered kind or bucket profile that differs from the inferred behavior, set
+the required kind or bucket bounds on the datum.
+
+Aggregated CloudWatch averages now use only observed values, so they can change even during periods
+with data. For example, a scheduler batch of 10 tasks that previously averaged to 5 with a synthetic
+zero now reports 10. Review thresholds and historical comparisons for metrics that included seeded
+zeros. Review `TreatMissingData` on CloudWatch alarms for the server-wide HTTP rejection series.
+Treating missing data as breaching can make an idle server trigger an alarm. Use a separate liveness
+signal if the alarm must also detect loss of telemetry.
+
+In Prometheus, the first scrape of a new counter series can already be greater than zero. With no
+earlier sample, `rate()` and `increase()` cannot count those initial events. Filling missing
+dashboard values with zero does not restore the baseline. Review alerts that must detect a single
+event on a new series.
+
 ## Units and descriptions
 
 The inventory's unit is the unit the emitter authors. Gosoline durations are generally recorded in
@@ -90,7 +117,7 @@ interchangeable.
 
 ## Standard duration histogram boundaries
 
-The released Gosoline SDK [`v0.69.0`](https://github.com/justtrackio/gosoline/releases/tag/v0.69.0) applies the applicable family recommendations below to duration histograms covered by an OpenTelemetry semantic convention. The canonical [`pkg/metric/SEMCONV.md`](https://github.com/justtrackio/gosoline/blob/v0.69.0/pkg/metric/SEMCONV.md) explains Gosoline's own metric grammar, the bucket profiles, and the generic histogram defaults; Gosoline keeps its own metric names, attributes, and measurement boundaries. Explicit bounds are authored in the datum's unit, and the Prometheus and OTEL writers scale explicit observations and bounds to the exported base unit, using explicit-bucket aggregation as described by the [OTEL Metrics SDK](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation).
+The Gosoline SDK applies the family recommendations below to duration histograms covered by an OpenTelemetry semantic convention. The canonical [`pkg/metric/SEMCONV.md`](https://github.com/justtrackio/gosoline/blob/167371af967763037120fc7aaed3e3e4da3cd9ce/pkg/metric/SEMCONV.md) explains Gosoline's metric grammar, bucket profiles, and generic histogram defaults. Explicit bounds are authored in the datum's unit. Prometheus and OpenTelemetry scale observations and explicit bounds to the exported base unit; see [explicit bucket histogram aggregation](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation).
 
 | Measurement family | Gosoline histograms | Authored boundaries | Exported boundaries (s) | Primary recommendation |
 |---|---|---|---|---|
@@ -231,9 +258,10 @@ The broker connection/throttle metrics carry `client.type`, `client.name`, and `
 | `kafka.fetched.batch.size` | counter | bytes | `client.type`, `client.name`, `topic.name`, `partition.id` | Adds uncompressed bytes from `UncompressedBytes` in `OnFetchBatchRead`. |
 | `kafka.fetched.batch.compressed.size` | counter | bytes | `client.type`, `client.name`, `topic.name`, `partition.id` | Adds compressed bytes from `CompressedBytes` in `OnFetchBatchRead`. |
 
-The six wire-volume counters are high priority and have no zero defaults. Use them for record or
-byte totals and the batch histograms for per-batch distributions. `sent.messages` and
-`consumed.messages` measure activity at the producer and consumer, not on the wire.
+The six wire-volume counters are high priority. Use them for record or byte totals and the batch
+histograms for per-batch distributions; the histograms' `_count` and `_sum` are not substitutes for
+record or byte totals. `sent.messages` and `consumed.messages` measure activity at the producer and
+consumer, not on the wire.
 
 `kafka.MetricPair` emits only topic-and-partition series. For a topic total in CloudWatch, aggregate
 the partition series.
@@ -271,7 +299,7 @@ CloudWatch stream-level views, see the [shard-reader projection contract](/refer
 | Canonical metric | Type | Authored unit | Dimensions | Description / actual measurement |
 |---|---|---|---|---|
 | `kvstore.reads` | counter | count | `model.id`, `store.type`, `hit` | Read operations against a key-value store, by whether the store served them itself. |
-| `kvstore.attempted.reads` | counter | count | `model.id`, `store.type` | Requested read items before delegation: `Contains` and `Get` add one; `GetBatch` adds the key count after successful conversion and before delegation. Delegated failures count; conversion failures do not. High-priority zero default per model and store. |
+| `kvstore.attempted.reads` | counter | count | `model.id`, `store.type` | Requested read items before delegation: `Contains` and `Get` add one; `GetBatch` adds the key count after successful conversion and before delegation. Delegated failures count; conversion failures do not. |
 | `kvstore.writes` | counter | count | `model.id`, `store.type` | Write operations performed against a key-value store. |
 | `kvstore.deletes` | counter | count | `model.id`, `store.type` | Delete operations performed against a key-value store. |
 | `kvstore.item.count` | gauge | count | `model.id`, `store.type` | Estimated item count from a store's optional `SizedStore.EstimateSize()` implementation; the metric is not reported when that capability is unavailable. |
@@ -284,11 +312,13 @@ CloudWatch stream-level views, see the [shard-reader projection contract](/refer
 | `db.client.connections` | counter | count | none | SQL driver `Open` attempts since process start; one is recorded before each underlying driver's `Open` call. |
 | `db.repo.operation.duration` | histogram | ms | `operation.name`, `model.id`, `error.type` | Duration of a SQL repository operation. |
 | `db.repo.model_event.notifications` | counter | count | `model.id`, `error.type` | Model-event notifications a repository published, by error type. |
-| `db.repo.operations` | counter | count | `operation.name`, `model.id`, `error.type` | One after each SQL repository `Create`, `Read`, `Update`, `Delete`, or `Query` returns. Success uses `{{default}}`; failure uses `operation_failed`. High-priority zero defaults exist for both outcomes per model and operation. |
-| `ddb.operations` | counter | count | `operation.name`, `model.id`, `error.type` | One after the wrapped DynamoDB save returns (`operation.name="save"`). Success uses `{{default}}`; failure uses `operation_failed`. High-priority zero defaults exist for both outcomes per model. |
+| `db.repo.operations` | counter | count | `operation.name`, `model.id`, `error.type` | One after each SQL repository `Create`, `Read`, `Update`, `Delete`, or `Query` returns. Success uses `{{default}}`; failure uses `operation_failed`. |
+| `ddb.operations` | counter | count | `operation.name`, `model.id`, `error.type` | One after the wrapped DynamoDB save returns (`operation.name="save"`). Success uses `{{default}}`; failure uses `operation_failed`. |
 | `ddb.operation.duration` | histogram | ms | `operation.name`, `model.id`, `error.type` | Duration of a DynamoDB repository operation. |
 
-SQLC emits the same `db.client` metrics. See [SQLC connections in the database client reference](/reference/package-db#sqlc-connections) for emission and export details.
+SQLC emits the same `db.client` metrics. The used and idle gauges record actual pool counts,
+including zero, without a separate total/open series. See [SQLC connections in the database client
+reference](/reference/package-db#sqlc-connections) for emission and export details.
 
 ### `mdlsub`
 
@@ -300,16 +330,17 @@ SQLC emits the same `db.client` metrics. See [SQLC connections in the database c
 
 The duration histogram includes the full numeric status code. Only the response counters also
 include `response.status_class` (`1xx` through `5xx`). HTTP codes outside 100–599 use `{{default}}`
-for the class.
+for the class. Neither startup nor route registration creates synthetic zero samples for HTTP
+request, response, or rejection counters or their CloudWatch projections.
 
 | Canonical metric | Type | Authored unit | Dimensions | Description / actual measurement |
 |---|---|---|---|---|
-| `http.server.requests` | monotonic counter (high priority) | Count | `name` — configured server name | One count for each matched request at the named server, recorded after the middleware chain unwinds, including requests aborted by authentication, concurrency, or chaos middleware. Unmatched requests are excluded. Each configured server receives a zero-valued default. |
-| `http.server.routed.requests` | monotonic counter (high priority) | Count | `name` — configured server name; `route` — normalized route template; `request.method` — HTTP method | One count for each matched route, including `/health` and requests aborted after route matching. Unmatched requests are excluded. Registered application route/method pairs receive zero-valued defaults; the separately registered `/health` route has no pre-request zero default. |
-| `http.server.responses` | monotonic counter (high priority) | Count | `name`, `response.status_code` — decimal numeric status, `response.status_class` — `1xx` through `5xx` | One for each matched response after the middleware chain unwinds, including middleware-aborted responses and matched `/health` requests. Unmatched routes are excluded; no zero defaults are seeded. |
-| `http.server.routed.responses` | monotonic counter (high priority) | Count | `name`, `route`, `request.method`, `response.status_code` — decimal numeric status, `response.status_class` — `1xx` through `5xx` | One for each matched response after the middleware chain unwinds, including middleware-aborted responses and matched `/health` requests. Unmatched routes are excluded; no zero defaults are seeded. |
+| `http.server.requests` | monotonic counter (high priority) | Count | `name` — configured server name | One count for each matched request at the named server, recorded after the middleware chain unwinds, including requests aborted by authentication, concurrency, or chaos middleware. Unmatched requests are excluded. |
+| `http.server.routed.requests` | monotonic counter (high priority) | Count | `name` — configured server name; `route` — normalized route template; `request.method` — HTTP method | One count for each matched route, including `/health` and requests aborted after route matching. Unmatched routes are excluded. |
+| `http.server.responses` | monotonic counter (high priority) | Count | `name`, `response.status_code` — decimal numeric status, `response.status_class` — `1xx` through `5xx` | One for each matched response after the middleware chain unwinds, including middleware-aborted responses and matched `/health` requests. Unmatched routes are excluded. |
+| `http.server.routed.responses` | monotonic counter (high priority) | Count | `name`, `route`, `request.method`, `response.status_code` — decimal numeric status, `response.status_class` — `1xx` through `5xx` | One for each matched response after the middleware chain unwinds, including middleware-aborted responses and matched `/health` requests. Unmatched routes are excluded. |
 | `http.server.request.duration` | histogram | ms | `name`, `route`, `request.method`, `response.status_code` | Duration of a matched HTTP request; the histogram keeps the full response code but has no response-class dimension. |
-| `http.server.rejected.requests` | counter | count | `name`, `route`, `request.method` | Detailed raw Counter for requests explicitly rejected by the concurrency middleware, not every 4xx/5xx response; it has no response-status dimension, and registered routes receive zero-valued defaults. CloudWatch also receives a same-name server-wide `KindTotal` Count projection keyed only by `name`, with a zero-valued default per configured server. The projection has no OTEL or Prometheus series. |
+| `http.server.rejected.requests` | counter | count | `name`, `route`, `request.method` | Counts actual concurrency rejections, not every 4xx/5xx response; it has no response-status dimension. Each rejection also emits a same-name server-wide `KindTotal` Count projection in CloudWatch, keyed only by `name`. OpenTelemetry and Prometheus do not export the projection. |
 | `http.server.active_request.count` | gauge | count | `name` | HTTP requests the server is currently handling. |
 | `http.server.connection.count` | gauge | count | `name` | Connections the HTTP server currently holds open. |
 

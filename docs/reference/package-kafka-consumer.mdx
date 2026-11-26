@@ -26,6 +26,10 @@ These are canonical Gosoline names as authored in the `kafka.consumer` namespace
 
 ## Interpretation notes
 
+The consumer writes both work-set counts as Counter datums with count units. The `{{default}}`
+error marker denotes non-failed records, not a synthetic seed or proof of successful application
+side effects.
+
 Poll count and duration include empty polls and polls drained during graceful shutdown if the
 processing path returns without error. The per-record delay histogram includes only waits that
 finish without cancellation.

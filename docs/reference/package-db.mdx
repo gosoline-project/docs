@@ -8,7 +8,7 @@ title: Package db
 
 ## API and activation
 
-Use `db.ProvideConnection(ctx, config, logger, name)` to provide a named connection; it resolves the corresponding settings and creates the managed connection. The open-attempt counter is part of this connection setup, while the pool-state sampler starts after connection setup, lifecycle registration, and migrations succeed. There is no separate database-metrics switch: export still depends on the application's configured Gosoline metric writer. See [`ProvideConnection`](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/db/connection.go) and the [metric wrapper](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/db/metrics.go).
+Use `db.ProvideConnection(ctx, config, logger, name)` to provide a named connection; it resolves the corresponding settings and creates the managed connection. The open-attempt counter is part of this connection setup, while the pool-state sampler starts after connection setup, lifecycle registration, and migrations succeed. There is no separate database-metrics switch: export still depends on the application's configured Gosoline metric writer. See [`ProvideConnection`](https://github.com/justtrackio/gosoline/blob/167371af967763037120fc7aaed3e3e4da3cd9ce/pkg/db/connection.go) and the [metric wrapper](https://github.com/justtrackio/gosoline/blob/167371af967763037120fc7aaed3e3e4da3cd9ce/pkg/db/metrics.go).
 
 ## Metrics
 
@@ -23,7 +23,7 @@ The table lists names and units authored by Gosoline. The OpenTelemetry writer e
 
 In the standalone `sqlc` package, `NewDBFromSettings` installs the driver-open counter and starts the pool sampler after migrations succeed. `NewDBWithSettings` installs the counter but does not start the sampler.
 
-Both metrics are high priority. The counter uses `UnitCount`, and the gauge uses `UnitCountAverage`. See the [SQLC metric implementation](https://github.com/gosoline-project/sqlc/blob/89ede23e657a11d223f9b24f16dc42abfbb059cc/metrics.go).
+Both metrics are high priority. The counter uses `UnitCount`, and the gauge uses `UnitCountAverage`. See the [SQLC metric implementation](https://github.com/gosoline-project/sqlc/blob/d13d4ec2626e0e7de04f15168ff142c40f1c3697/metrics.go).
 
 SQLC has no separate switch for these metrics. To export them, add `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`.
 

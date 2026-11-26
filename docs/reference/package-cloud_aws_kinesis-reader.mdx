@@ -44,7 +44,7 @@ CloudWatch receives these eight same-name `KindTotal` projections for the reader
 | `sleep.duration` | `stream.name` | Average | ms / UnitMillisecondsAverage |
 | `wait.duration` | `stream.name` | Average | ms / UnitMillisecondsAverage |
 
-These projections do not change the raw stream-and-shard observations or instrument kinds. OpenTelemetry and Prometheus skip `KindTotal` and keep only the raw shard series. Existing raw count defaults for `reads` and the default `consumed.messages` outcome already omit `partition.id` (and the default error dimension), so they seed the stream-level count series; do not add duplicate projection defaults. The `processing_failed` projection has its own stream-level zero default because there is no raw failed default. Histograms, including `lag`, have no zero default; `lag` instead emits an actual initial zero observation and subsequent updates, including 15-second samples while the reader runs.
+These projections do not change the raw stream-and-shard observations or instrument kinds. OpenTelemetry and Prometheus skip `KindTotal` and keep only the raw shard series. The stream-only `KindTotal` count projections are emitted from real corresponding reader measurements; they do not seed raw or projected zero-count series. The default consumed total uses the `error.type={{default}}` sentinel, which is omitted from its projection; `processing_failed` retains `error.type=processing_failed`. Histograms, including `lag`, have no synthetic entries: `lag` instead emits an actual initial zero observation and subsequent updates, including 15-second samples while the reader runs.
 
 ## Related pages
 
