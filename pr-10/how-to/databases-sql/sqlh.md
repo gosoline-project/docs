@@ -4,7 +4,7 @@ The `sqlh` package provides typed CRUD handlers for SQLR entities. It uses the c
 
 ## Getting Started[​](#getting-started "Direct link to Getting Started")
 
-To use the coordinated security-update snapshots, select SQLH, SQLR, SQLC, HTTP server, and the Gosoline SDK together. These are pre-release versions, not release tags. Use Go 1.27.4 or newer:
+Run this command only in a new module with Go 1.27.4 or newer to try the coordinated pre-release snapshots. Do not run it in an existing application: exact version requests can downgrade dependencies. Use compatible releases when you upgrade an existing application.
 
 ```
 go get github.com/gosoline-project/sqlh@v0.9.2-0.20261119192959-e51cd6a2e6e2 \

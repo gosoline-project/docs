@@ -4,7 +4,7 @@ This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers. Use
 
 SQLH replaces repeated CRUD handlers with typed callbacks, SQLR entities, and transaction-aware operations. Do not replace domain rules with generic CRUD behavior.
 
-This guide targets the coordinated security-update snapshots of SQLH, SQLR, SQLC, HTTP server, and Gosoline. These are pre-release versions, not release tags. Use Go 1.27.4 or newer and select the versions together:
+For an existing service, use compatible releases and keep its newer dependencies. Run the following command only in a new module with Go 1.27.4 or newer to try the pre-release snapshots. Exact version requests can downgrade dependencies in an existing service.
 
 ```
 go get github.com/gosoline-project/sqlh@v0.9.2-0.20261119192959-e51cd6a2e6e2 \
