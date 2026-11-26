@@ -326,4 +326,4 @@ The table lists the canonical Gosoline-authored name, instrument, unit, and dime
 |---|---|---|---|---|
 | `metric.log.records` | Counter | `count` | `level`: `warn` or `error` | One count for each warning- or error-priority log record while the optional metric handler is configured; other levels are ignored. |
 
-The metric writer seeds zero-valued defaults for both `warn` and `error`. Those initial values do not represent observed log records.
+There are no startup zero samples for either level. A `warn` or `error` series appears only when a matching record is logged while the optional metric handler is configured.

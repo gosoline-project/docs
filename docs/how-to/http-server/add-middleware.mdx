@@ -23,6 +23,10 @@ Every httpserver automatically includes these middleware, applied in order:
 
 The server registers these middleware automatically. Chaos is opt-in, and [concurrent request limiting](./concurrency-and-connection-pressure.mdx#limiting-concurrent-requests) requires a positive `concurrency.max_requests` value.
 
+The metric middleware counts matched requests and responses, including requests aborted by middleware and matched `/health` requests. Unmatched paths do not contribute to request counts, response counts, or route durations, but they still update the active-request gauge. Route registration does not create metric samples. A missing series is not an observed zero. See the [HTTP server metrics reference](/reference/package-httpserver#metrics) for export settings, status dimensions, and CloudWatch projections.
+
+If you install the metric middleware yourself, `NewMetricMiddleware` now returns only the handler. Remove the route-setup callback and calls to `GetMetricMiddlewareDefaults`.
+
 ## Request body size limit
 
 Every server includes `MaxBodySizeMiddleware`. The default limit is 10 MiB:
@@ -37,7 +41,7 @@ Set `max_body_bytes` to `0` to disable the limit. Oversized bodies fail when a h
 
 ## Error privacy
 
-Every server includes error middleware. By default, 5xx responses hide internal error details and return `{"err":"internal server error"}`. Client errors with a status below 500 still expose their error message.
+Every server includes error middleware. With the default `private` setting, the middleware hides details for status 400 and for 5xx errors. The default JSON bodies are `{"err":"bad request"}` and `{"err":"internal server error"}`, respectively. Other 4xx errors keep their original messages.
 
 ```yaml
 httpserver:
@@ -46,7 +50,7 @@ httpserver:
       privacy: private
 ```
 
-Set `privacy` to `public` only when clients should see internal 5xx error messages, for example in local development or trusted internal services:
+Set `privacy` to `public` only when clients should see the original messages for 400 and 5xx errors, for example in local development:
 
 ```yaml
 httpserver:

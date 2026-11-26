@@ -34,6 +34,8 @@ If `retry_after` is set, a `Retry-After` header is included in the response with
 
 Set `max_requests: 0` (the default) to disable this limit.
 
+If you alert on the CloudWatch server-wide rejection count, see [Migrating from metric defaults](/reference/metric-schema#migrating-from-metric-defaults) for how to handle missing data during idle periods.
+
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `max_requests` | int | `0` | Maximum concurrent requests. `0` disables the limit. |
@@ -71,7 +73,7 @@ Set `max_connections: 0` (the default) to disable this limit.
 
 ### Metrics
 
-The server emits two gauge metrics (sampled every 10 seconds and on every change):
+The server records both gauges at startup, every 10 seconds, when the corresponding count changes, and during shutdown. A zero is a measurement of the current count, not a synthetic default.
 
 | Metric | Description |
 |---|---|

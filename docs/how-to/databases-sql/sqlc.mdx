@@ -14,7 +14,7 @@ The `sqlc` package provides a fluent API for building and executing SQL queries 
 Add the dependency to your Go module:
 
 ```bash
-go get github.com/gosoline-project/sqlc@v0.5.0
+go get github.com/gosoline-project/sqlc@v0.5.1-0.20261126111541-d13d4ec2626e
 ```
 
 Then import the package in your Go code:
@@ -66,6 +66,8 @@ Each connection requires driver and connection details as shown below:
 | `timeouts.timeout` | MySQL driver connection timeout. For PostgreSQL, use `parameters.connect_timeout`. | `0` |
 
 Use `parameters` for driver-specific settings such as PostgreSQL `sslmode` or `connect_timeout`. PostgreSQL connections use `uri.*` and `parameters`; the MySQL-specific settings above are ignored by the PostgreSQL driver.
+
+For driver-open counters and pool gauges, see the [SQLC connection metrics reference](/reference/package-db#sqlc-connections). The used and idle gauges record actual pool counts, including zero.
 
 ## Migrations
 
@@ -232,7 +234,7 @@ if err != nil {
 query := sqlc.From("users").OrderBy(expression)
 ```
 
-Columns must be simple or dot-qualified identifiers. SQL expressions, wildcards, and quoted identifiers are rejected. Direction accepts `asc` or `desc` without regard to case and defaults to `asc` when omitted. These checks validate syntax; applications can additionally restrict which columns callers may sort. See the [released implementation](https://github.com/gosoline-project/sqlc/blob/v0.4.1/json_order.go).
+Columns must be simple or dot-qualified identifiers. SQL expressions, wildcards, and quoted identifiers are rejected. Direction accepts `asc` or `desc` without regard to case and defaults to `asc` when omitted. These checks validate syntax; applications can additionally restrict which columns callers may sort. See the [pinned implementation](https://github.com/gosoline-project/sqlc/blob/d13d4ec2626e0e7de04f15168ff142c40f1c3697/json_order.go).
 
 ## UPDATE Operations
 

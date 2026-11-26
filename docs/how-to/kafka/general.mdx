@@ -247,6 +247,8 @@ This is to have a single source of truth for the settings and because the Kafka 
 
 Enable Gosoline's metric collection and configure a writer to export Kafka metrics. The tables show Gosoline metric names before export. For example, OpenTelemetry exports `kafka.consumer.process.duration` as `gosoline.kafka.consumer.process.duration` and converts milliseconds to seconds. See the [metric schema reference](/reference/metric-schema/) for how each writer names metrics and converts units.
 
+`kafka.consumer.consumed.messages` writes both the non-failed and callback-failed work-set counts as Counter datums with count units. The `{{default}}` error marker is an outcome dimension, not a source of synthetic zero samples.
+
 Kafka metrics are emitted by distinct package components. See the dedicated [Kafka client-hook](/reference/package-kafka), [Kafka consumer](/reference/package-kafka-consumer), and [Kafka producer](/reference/package-kafka-producer) pages. The tables here remain the complete cross-component view.
 
 For Kafka client metrics, `client.type` is `consumer` or `producer`, `client.name` is the configured input or output name, and `topic.name` is the resolved topic. `error.type` values are metric-specific and are documented in the dimension column.

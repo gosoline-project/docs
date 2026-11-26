@@ -236,29 +236,57 @@ httpserver.WithErrorHandler(func(statusCode int, err error) any {
 
 Pass this option to `NewServer` or `NewServerWithSettings`, or add it to `ServerDefinition.Options` for `RunServers`. The callback runs after middleware selects a status from the last recorded error.
 
-Status selection checks `ErrorWithStatus` first, then the first matching `WithErrorMapper`. Validation errors use `400 Bad Request`. All other errors use `500 Internal Server Error`.
+Status selection checks the error chain for `httpserver.StatusCode` first. This includes binding errors, which supply status 400. If no `StatusCode` applies, the first registered mapper that returns `handled == true` sets the status. Otherwise, validation errors use `400 Bad Request` and all other errors use `500 Internal Server Error`.
 
-The callback returns the body to send to the client, not another Go error. The endpoint still returns its error through its normal `(output, error)` result. A returned struct or map keeps the selected HTTP status. Private 5xx privacy passes `internal server error` to the callback.
+The callback returns the body to send to the client, not another Go error. The endpoint still returns its error through its normal `(output, error)` result. A returned struct or map keeps the selected HTTP status. In `private` mode (the default), middleware passes `bad request` for status 400 and `internal server error` for 5xx, and removes headers supplied by the original error. With the default callback, the JSON bodies are `{"err":"bad request"}` and `{"err":"internal server error"}`, respectively.
 
 A struct, map, or other serializable value that does not implement `httpserver.Response` uses the server's response negotiator. It selects a format from `Accept`, serializes the value, and sets `Content-Type`. JSON is the default. XML needs a negotiator that includes `XMLRepresentation()` and a value that `encoding/xml` can encode. In the pinned package version, error middleware falls back to JSON with the selected status if negotiation or encoding fails.
 
 An explicit `httpserver.Response` bypasses negotiation and sends its format regardless of `Accept`. It owns the status and headers, including `Content-Type`. It does not inherit the selected error status. For fixed JSON with that status, return `httpserver.NewJsonResponse(body, httpserver.WithStatusCode(statusCode))`.
 
-### [NewErrorWithStatus()](https://github.com/gosoline-project/httpserver/blob/main/error.go)
+### [StatusCode](https://github.com/gosoline-project/httpserver/blob/main/response.go)
 
-Return a zero output and a wrapped error to set an expected client-error status:
-
-```go
-return nil, httpserver.NewErrorWithStatus(http.StatusBadRequest, err)
-```
-
-For a struct output, replace `nil` with that struct's zero value.
-
-Middleware can attach the same wrapped error to the Gin context:
+An application error can implement `StatusCode() int` to set a specific HTTP status:
 
 ```go
-ginCtx.Error(httpserver.NewErrorWithStatus(http.StatusBadRequest, err))
+type userNotFoundError struct{}
+
+func (userNotFoundError) Error() string {
+    return "user not found"
+}
+
+func (userNotFoundError) StatusCode() int {
+    return http.StatusNotFound
+}
 ```
+
+Return `nil, userNotFoundError{}` from a handler with a pointer output. For a struct output, replace `nil` with that struct's zero value.
+
+Gin middleware can attach the same error. To stop the request and let httpserver render the error, abort without writing a response:
+
+```go
+ginCtx.Error(userNotFoundError{})
+ginCtx.Abort()
+return
+```
+
+### [WithErrorMapper()](https://github.com/gosoline-project/httpserver/blob/main/server_options.go)
+
+Use this server option to map domain errors that do not implement `StatusCode`. The mapper takes an `error` and returns `(statusCode int, handled bool)`. Return `0, false` for errors the mapper does not handle. For example, if the user store returns or wraps `errUserNotFound`:
+
+```go
+var errUserNotFound = errors.New("user not found")
+
+func mapUserError(err error) (int, bool) {
+    if errors.Is(err, errUserNotFound) {
+        return http.StatusNotFound, true
+    }
+
+    return 0, false
+}
+```
+
+Register it with `httpserver.NewServer("default", defineRoutes, httpserver.WithErrorMapper(mapUserError))`, where `defineRoutes` is your route factory. You can also pass the option to `NewServerWithSettings` or add it to `ServerDefinition.Options` for `RunServers`.
 
 ## Middleware
 
@@ -303,20 +331,21 @@ The following middleware is automatically applied to every server:
 
 ## Metrics
 
-**Source status:** The released HTTPServer baseline [`v0.6.5`](https://github.com/gosoline-project/httpserver/releases/tag/v0.6.5) includes the HTTP duration boundaries and server-wide CloudWatch rejection projection described below. The default-metric removal under development in [HTTPServer PR #16](https://github.com/gosoline-project/httpserver/pull/16) is not included. This describes module source only; it does not claim that any application has adopted or deployed this version.
+**Source status:** The released HTTPServer baseline [`v0.6.5`](https://github.com/gosoline-project/httpserver/releases/tag/v0.6.5) includes the HTTP duration boundaries and server-wide CloudWatch rejection projection described below. This reference uses [`v0.6.9-0.20261126111541-f0cbce27a933`](https://github.com/gosoline-project/httpserver/commit/f0cbce27a93385597893ed22573278ebe7cd8a04) for the behavior after [removal of metric defaults](https://github.com/gosoline-project/httpserver/pull/16). These source references do not imply that an application has deployed either revision.
 
-The middleware counts matched requests and responses, including requests it rejects, after the
-route's middleware chain completes. It does not count unmatched paths. No extra instrumentation
-hook is required. The table lists each metric's dimensions and zero defaults.
+The middleware counts matched requests and responses, including those it rejects and matched
+`/health` requests, after the route's middleware chain completes. It does not count unmatched paths.
+Startup and route registration do not produce synthetic zero samples. An absent series is not an
+observed zero. No extra instrumentation hook is required.
 
 | Metric | Instrument | Authored unit | Dimensions | Description |
 |---|---|---|---|---|
-| `http.server.requests` | monotonic counter (high priority) | Count | `name` — configured server name | One count for each matched request, including requests aborted after route matching. Unmatched requests are excluded. Configured servers receive a zero-valued default. |
-| `http.server.routed.requests` | monotonic counter (high priority) | Count | `name` — configured server name; `route` — normalized Gin route template; `request.method` — HTTP method | One count for each matched route, including `/health` and requests aborted after route matching. Unmatched requests are excluded. Registered application route/method pairs receive zero-valued defaults; the separately registered `/health` route has no pre-request zero default. |
-| `http.server.responses` | monotonic counter (high priority) | Count | `name` — configured server name; `response.status_code` — decimal numeric status; `response.status_class` — `1xx` through `5xx` (default outside 100–599) | One per matched response after the middleware chain unwinds, including responses from aborted requests and matched `/health`. Unmatched routes are excluded. No zero-valued defaults. |
-| `http.server.routed.responses` | monotonic counter (high priority) | Count | `name` — configured server name; `route` — normalized Gin route template; `request.method` — HTTP method; `response.status_code` — decimal numeric status; `response.status_class` — `1xx` through `5xx` (default outside 100–599) | One per matched response after the middleware chain unwinds, including responses from aborted requests and matched `/health`. Unmatched routes are excluded. No zero-valued defaults. |
+| `http.server.requests` | monotonic counter (high priority) | Count | `name` — configured server name | One sample for each matched request, including requests aborted after route matching. Unmatched requests produce no sample; an unobserved series is distinct from an observed zero. |
+| `http.server.routed.requests` | monotonic counter (high priority) | Count | `name` — configured server name; `route` — normalized Gin route template; `request.method` — HTTP method | One sample for each matched route, including `/health` and requests aborted after route matching. Unmatched requests produce no sample; route registration does not create a series. |
+| `http.server.responses` | monotonic counter (high priority) | Count | `name` — configured server name; `response.status_code` — decimal numeric status; `response.status_class` — `1xx` through `5xx` (default outside 100–599) | One per matched response after the middleware chain unwinds, including responses from aborted requests and matched `/health`. Unmatched routes produce no sample. |
+| `http.server.routed.responses` | monotonic counter (high priority) | Count | `name` — configured server name; `route` — normalized Gin route template; `request.method` — HTTP method; `response.status_code` — decimal numeric status; `response.status_class` — `1xx` through `5xx` (default outside 100–599) | One per matched response after the middleware chain unwinds, including responses from aborted requests and matched `/health`. Unmatched routes produce no sample. |
 | `http.server.request.duration` | histogram | ms | `name` — configured server name; `route` — normalized Gin route template; `request.method` — HTTP method; `response.status_code` — decimal response status | Duration of a matched HTTP request. The histogram retains the full response code but does not carry `response.status_class`; keep it for latency distributions. |
-| `http.server.rejected.requests` | high-priority counter | count | `name` — configured server name; `route` — registered Gin route; `request.method` — HTTP method | Detailed raw Counter for requests explicitly rejected by the concurrency middleware. Ordinary 4xx/5xx responses are not necessarily rejections; the Counter has no response-status dimension, and registered routes receive zero-valued defaults. CloudWatch also receives a same-name server-wide high-priority `KindTotal` Count projection keyed only by `name`, with a zero-valued default per configured server. The projection has no OTEL or Prometheus series. |
+| `http.server.rejected.requests` | high-priority counter | count | `name` — configured server name; `route` — registered Gin route; `request.method` — HTTP method | Detailed raw Counter for actual requests explicitly rejected by the concurrency middleware. Ordinary 4xx/5xx responses are not necessarily rejections; the Counter has no response-status dimension. CloudWatch also receives a same-name server-wide high-priority `KindTotal` Count projection keyed only by `name` when an actual rejection occurs. The projection has no OTEL or Prometheus series. |
 | `http.server.active_request.count` | gauge | count | `name` — configured server name | Current number of tracked active requests for the named server. Updated on request start/completion and sampled at startup, every 10 seconds, and during shutdown. |
 | `http.server.connection.count` | gauge | count | `name` — configured server name | Current number of tracked open connections for the named server. Updated on connection state changes and sampled at startup, every 10 seconds, and during shutdown. |
 
@@ -324,7 +353,10 @@ The published HTTPServer module version documented by this page uses the HTTP se
 
 Metric export requires the application metric daemon: wire `application.WithMetrics`, set `metric.enabled: true`, and configure at least one writer under `metric.writers`. These are authored Gosoline names and units; see [Metric schema](/reference/metric-schema) for writer-specific names and duration conversion.
 
-The documentation's HTTPServer pin is the released `v0.6.5` baseline; its [metric middleware source](https://github.com/gosoline-project/httpserver/blob/v0.6.5/middleware_metric.go) includes the standard HTTP duration profile and server-wide CloudWatch rejection projection described above. The library and the Gosoline SDK's separately implemented [HTTP server package](/reference/package-gosoline-httpserver) use the same eight canonical names and dimension keys. If both implementations send identical dimension values to the same backend, the series have no source-module dimension that distinguishes them. For backend-specific projection behavior and CloudWatch queries, see [Metric schema](/reference/metric-schema). For operational details, see [Add middleware](/how-to/http-server/add-middleware) and [Concurrency and connection pressure](/how-to/http-server/concurrency-and-connection-pressure).
+The pinned [metric middleware source](https://github.com/gosoline-project/httpserver/blob/f0cbce27a93385597893ed22573278ebe7cd8a04/middleware_metric.go) includes the standard HTTP duration profile and server-wide CloudWatch rejection projection described above. The library and the Gosoline SDK's separately implemented [HTTP server package](/reference/package-gosoline-httpserver) use the same eight canonical names and dimension keys. If both implementations send identical dimension values to the same backend, the series have no source-module dimension that distinguishes them. For backend-specific projection behavior and CloudWatch queries, see [Metric schema](/reference/metric-schema). For operational details, see [Add middleware](/how-to/http-server/add-middleware) and [Concurrency and connection pressure](/how-to/http-server/concurrency-and-connection-pressure).
+
+If you install the metric middleware yourself, `NewMetricMiddleware` returns only the handler;
+it does not take a route-setup callback. `GetMetricMiddlewareDefaults` is no longer part of the API.
 
 ## Validation
 
@@ -413,7 +445,7 @@ The origin pattern is anchored internally. For example, `https://example\.com` a
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `privacy` | string | `"private"` | `"private"` hides internal error details for 5xx responses. `"public"` exposes them. |
+| `privacy` | string | `"private"` | `"private"` hides error details for status 400 and 5xx. `"public"` exposes them. |
 
 ### RouterSettings
 

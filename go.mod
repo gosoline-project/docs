@@ -4,11 +4,11 @@ go 1.27.0
 
 require (
 	github.com/gin-gonic/gin v1.11.0
-	github.com/gosoline-project/httpserver v0.6.5
-	github.com/gosoline-project/sqlc v0.5.0
-	github.com/gosoline-project/sqlh v0.9.0
-	github.com/gosoline-project/sqlr v0.10.0
-	github.com/justtrackio/gosoline v0.69.0
+	github.com/gosoline-project/httpserver v0.6.9-0.20261126111541-f0cbce27a933
+	github.com/gosoline-project/sqlc v0.5.1-0.20261126111541-d13d4ec2626e
+	github.com/gosoline-project/sqlh v0.9.2-0.20261126111823-458aadcac7c3
+	github.com/gosoline-project/sqlr v0.10.1-0.20261126111713-cfb9936280de
+	github.com/justtrackio/gosoline v0.69.6-0.20261126111349-167371af9677
 )
 
 require (

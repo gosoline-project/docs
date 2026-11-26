@@ -8,7 +8,7 @@ import { CopyToClipboardButton } from '../components.jsx';
 
 # Migrating to the Standalone HTTP Server Package
 
-This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module pinned at the released `v0.6.5`.
+This guide explains how to migrate from the old `github.com/justtrackio/gosoline/pkg/httpserver` package directly to the standalone `github.com/gosoline-project/httpserver` module pinned at [`v0.6.9-0.20261126111541-f0cbce27a933`](https://github.com/gosoline-project/httpserver/commit/f0cbce27a93385597893ed22573278ebe7cd8a04).
 
 The new package keeps the Gin-based server lifecycle and middleware model, but it changes the application-facing API. Instead of building and returning a `*httpserver.Definitions` tree, you receive a `*httpserver.Router` and register routes on it directly. Instead of implementing handler interfaces and manually unpacking an `httpserver.Request`, handlers are plain functions or methods registered through `Bind`, `BindN`, `BindR`, or SSE binding helpers.
 
@@ -17,7 +17,7 @@ The new package keeps the Gin-based server lifecycle and middleware model, but i
 Add the standalone module:
 
 ```bash
-go get github.com/gosoline-project/httpserver@v0.6.5
+go get github.com/gosoline-project/httpserver@v0.6.9-0.20261126111541-f0cbce27a933
 ```
 
 Update imports:
@@ -513,13 +513,23 @@ func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
 }
 ```
 
-For an expected client error with a specific status, return the zero result and `NewErrorWithStatus`:
+For an expected client error with a specific status, return the zero result and an application error that implements `httpserver.StatusCode`:
 
 ```go
+type userNotFoundError struct{}
+
+func (userNotFoundError) Error() string {
+    return "user not found"
+}
+
+func (userNotFoundError) StatusCode() int {
+    return http.StatusNotFound
+}
+
 func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
     user, err := h.store.Get(ctx, input.Id)
     if errors.Is(err, ErrUserNotFound) {
-        return User{}, httpserver.NewErrorWithStatus(http.StatusNotFound, err)
+        return User{}, userNotFoundError{}
     }
     if err != nil {
         return User{}, fmt.Errorf("could not get user: %w", err)
@@ -529,18 +539,20 @@ func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, e
 }
 ```
 
+If a domain error should remain independent of HTTP, return it directly or wrap it with `%w`, and register a [mapper](/reference/package-httpserver#witherrormapper) with `httpserver.WithErrorMapper` when you create the server.
+
 Configure `WithErrorHandler` as a server option. Pass it to `NewServer` or `NewServerWithSettings`, or put it in `ServerDefinition.Options` for `RunServers`.
 
 The callback type is `func(statusCode int, err error) any`. Error middleware calls it after it selects the HTTP status from the last recorded error.
 
 Status selection follows this order:
 
-1. An `ErrorWithStatus`, such as `NewErrorWithStatus`, sets the status.
-2. Otherwise, the first matching `WithErrorMapper` sets the status.
+1. If the error chain contains a `httpserver.StatusCode`, its `StatusCode()` sets the status. This includes binding errors, which set status 400.
+2. Otherwise, the first registered mapper that returns `handled == true` sets the status.
 3. Otherwise, validation errors use `400 Bad Request`.
 4. All other errors use `500 Internal Server Error`.
 
-The endpoint still returns its error through the normal `(output, error)` result. This callback returns the body to send to the client, not another Go error. If it returns a body value such as the `ErrorBody` struct below, the framework keeps the selected HTTP status. With private 5xx privacy, middleware passes `internal server error` to the callback.
+The endpoint still returns its error through the normal `(output, error)` result. This callback returns the body to send to the client, not another Go error. If it returns a body value such as the `ErrorBody` struct below, the framework keeps the selected HTTP status. In `private` mode, middleware passes `bad request` to the callback for status 400 and `internal server error` for 5xx.
 
 Return a struct, map, or other serializable Go value that does not implement `httpserver.Response` to let the server choose the response format from the request's `Accept` header. The configured negotiator serializes that value and sets `Content-Type`. JSON is the default. XML requires a negotiator that includes `XMLRepresentation()` and a value that `encoding/xml` can encode, such as this struct:
 
@@ -565,9 +577,9 @@ httpserver.WithErrorHandler(func(statusCode int, err error) any {
 })
 ```
 
-The standalone package's default error handler exposes 4xx error messages but sanitizes 5xx responses as `{"err":"internal server error"}`. Binding and validation failures from `Bind` and `BindSse` are client errors and return `400 Bad Request`.
+With default privacy, the default JSON error body is `{"err":"bad request"}` for status 400 and `{"err":"internal server error"}` for 5xx. Other 4xx errors keep their original messages. Binding and validation failures from `Bind` and `BindSse` return `400 Bad Request`.
 
-The 5xx behavior is controlled by `httpserver.<name>.errors.privacy`. The default is `private`, which hides internal error details. Set it to `public` only when clients should receive the original internal error message:
+Set `httpserver.<name>.errors.privacy` to `public` only when clients should receive the original error details for 400 and 5xx responses:
 
 ```yaml
 httpserver:
@@ -576,10 +588,12 @@ httpserver:
       privacy: public
 ```
 
-If middleware attaches an error to the Gin context and needs a non-500 status code, wrap it with `NewErrorWithStatus`:
+Gin middleware can attach the same application error. To stop the request and let httpserver render the error, abort without writing a response:
 
 ```go
-ginCtx.Error(httpserver.NewErrorWithStatus(http.StatusBadRequest, err))
+ginCtx.Error(userNotFoundError{})
+ginCtx.Abort()
+return
 ```
 
 ## 11. Migrate Middleware
@@ -907,15 +921,21 @@ aggregate and per-route latency metrics. Aggregate across `response.status_code`
 all status codes. Use the [names and labels for your writer](/reference/metric-schema#authored-names-and-writer-output)
 in queries.
 
+No extra metric instrumentation hook is required. If you install the middleware yourself, use the
+handler returned by `NewMetricMiddleware` directly and remove the route-setup callback and any calls
+to `GetMetricMiddlewareDefaults`. In queries, distinguish an absent series from an observed zero.
+See the [HTTP server metrics reference](/reference/package-httpserver#metrics) for histogram
+boundaries and CloudWatch projections.
+
 | Area | Notes |
 |---|---|
 | Server name | `RunDefaultServer` reads `httpserver.default`. `NewServer("admin", ...)` reads `httpserver.admin`. |
 | Routes | `/health` is still registered by the server. Unhealthy modules are reported as `"unhealthy"`; underlying error strings are logged but not exposed in the response. |
-| HTTP metrics | Use `http.server.requests` for counts per server and `http.server.routed.requests` for counts per route and method. To break counts down by status code or class, use `http.server.responses` or `http.server.routed.responses`. No extra instrumentation hook is required. See the [HTTP server metrics reference](/reference/package-httpserver#metrics) for defaults, histogram boundaries, and CloudWatch series. |
+| HTTP metrics | Use `http.server.requests` for counts per server and `http.server.routed.requests` for counts per route and method. For counts by status code or class, use `http.server.responses` or `http.server.routed.responses`. Only matched requests and responses count, including middleware-aborted requests and matched `/health`. Route registration does not create samples. The rejection counter and CloudWatch's server-wide `KindTotal` projection record only actual concurrency rejections. |
 | Compression | Exclude SSE endpoints from compression. |
 | Request body limit | `max_body_bytes` defaults to `10485760` bytes (10 MiB). Set it to `0` to disable the limit or raise it for large upload endpoints. The limit is applied after request decompression. |
 | Binding errors | `Bind` and `BindSse` binding or validation failures return `400 Bad Request`. |
-| Error responses | The default handler exposes 4xx error messages and returns `{"err":"internal server error"}` for 5xx responses. Set `httpserver.<name>.errors.privacy` to `public` only when 5xx error details should be exposed. |
+| Error responses | In `private` mode (the default), the JSON body is `{"err":"bad request"}` for status 400 and `{"err":"internal server error"}` for 5xx. Other 4xx errors keep their original messages. |
 | CORS | Move old `api_cors_*` keys to `httpserver.<name>.cors.*`. `allowed_origin_pattern` is matched against the full `Origin` value, so partial regex matches do not allow origins. |
 | Profiling | Profiling is still configured under `profiling` and binds to `127.0.0.1:<port>`. |
 | Auth | Auth config is scoped below `httpserver.<name>.auth`; old global auth keys must be moved below the server name. |
@@ -1015,10 +1035,20 @@ func (h *UserHandler) ListUsers(ctx context.Context) ([]User, error) {
     return users, nil
 }
 
+type userNotFoundError struct{}
+
+func (userNotFoundError) Error() string {
+    return "user not found"
+}
+
+func (userNotFoundError) StatusCode() int {
+    return http.StatusNotFound
+}
+
 func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (User, error) {
     user, err := h.store.Get(ctx, input.Id)
     if errors.Is(err, ErrUserNotFound) {
-        return User{}, httpserver.NewErrorWithStatus(http.StatusNotFound, err)
+        return User{}, userNotFoundError{}
     }
     if err != nil {
         return User{}, err
@@ -1067,7 +1097,7 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 - Replace `request.ClientIp` with `ResolveClientIP(req)` in `BindR` or `BindNR` handlers.
 - Return typed values directly from ordinary bound handlers. Keep explicit responses for fixed media types, raw bodies, and bodyless status responses. See [Customizing responses](/how-to/http-server/build-an-http-service#customizing-responses).
 - Review `max_body_bytes`; keep the 10 MiB default, raise it, or set it to `0` intentionally.
-- Update tests for the current package behavior: binding errors return 400, default/private 5xx bodies are sanitized, `errors.privacy: public` exposes 5xx messages, CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
+- Update tests for the current package behavior: binding errors return 400; default `private` mode hides error details for 400 and 5xx; `errors.privacy: public` exposes them. CORS patterns match full origins, health responses hide module error details, and profiling binds to loopback.
 - Update test suites from definition setup to router factory setup.
 - Run your HTTP tests and exercise validation errors, client errors, and middleware behavior after migration.
 

@@ -1,4 +1,4 @@
-Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.6.5-0.20261026100922-13fdf9916b14, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
+Migrate the application from the old embedded package github.com/justtrackio/gosoline/pkg/httpserver directly to the standalone package github.com/gosoline-project/httpserver at v0.6.9-0.20261126111541-f0cbce27a933, while preserving intended HTTP behavior, routes, middleware, response codes, request binding, and tests.
 
 Scope discovery:
 
@@ -17,14 +17,14 @@ Scope discovery:
 - Find endpoints that accept large request bodies and check whether they need a max_body_bytes override for the current 10 MiB default.
 - Find tests or clients that assert internal error response bodies, binding error status codes, CORS partial-origin matching, health-check error details, or profiling listen addresses.
 - Find all router.UseFactory calls and custom httpserver.MiddlewareFactory implementations, because the target middleware factories receive server settings as a fourth argument.
-- Find any environment-specific need to expose internal 5xx error details, which now requires httpserver.<name>.errors.privacy: public.
+- Find any environment-specific need to expose original error details for 400 or 5xx responses, which now requires httpserver.<name>.errors.privacy: public.
 - Find old global CORS config keys: api_cors_allowed_origin_pattern, api_cors_allowed_headers, and api_cors_allowed_methods.
 
 Do not start with a global import replacement. First classify each usage, because the old package also contained auth and helper APIs that do not map one-to-one to the standalone package.
 
 Migration order:
 
-1. Add the new dependency with: go get github.com/gosoline-project/httpserver@v0.6.5-0.20261026100922-13fdf9916b14
+1. Add the new dependency with: go get github.com/gosoline-project/httpserver@v0.6.9-0.20261126111541-f0cbce27a933
 2. Migrate server startup and router factories.
 3. Migrate route definitions from returned Definitions to mutating *Router.
 4. Migrate middleware registration.
@@ -106,10 +106,10 @@ Response migration rules:
 - Keep NewTextResponse for a fixed text representation, NewStatusResponse for bodyless responses that must bypass negotiation (for example, to preserve 204 for an unsupported Accept value), and NewResponse options for raw bytes or a required media type.
 - Do not use Header() to replace the negotiated Content-Type. The response negotiator sets that header.
 - The Response interface exposes ContentType(), Body(), Header(), and StatusCode(). Do not access fields such as resp.StatusCode or resp.Header in tests.
-- For errors, return the zero value for O and the error. Use NewErrorWithStatus(status, err) when the error must set an explicit status.
+- For errors, return the zero value for O and the error. For an explicit HTTP status, return an application-owned error that implements Error() string and StatusCode() int. To keep domain errors independent of HTTP, register httpserver.WithErrorMapper(func(err error) (int, bool) {...}) as a server option and return or wrap the domain error.
+- Status selection checks the error chain for StatusCode() int first (including binding errors), then uses the first registered mapper that returns handled == true. If neither applies, validation errors map to 400 and other errors map to 500.
 - Custom error-body callbacks use func(statusCode int, err error) any. Return ordinary values for negotiation or a full Response to bypass it.
-- The target version's default error handler returns the actual error message for 4xx responses and returns {"err":"internal server error"} for 5xx responses.
-- The 5xx behavior is controlled by httpserver.<name>.errors.privacy. The default private value hides internal details. Set privacy to public only when exposing internal 5xx messages is intentional.
+- The default private setting keeps the status but hides the original error and any headers supplied by it for status 400 and 5xx. The default JSON bodies are {"err":"bad request"} and {"err":"internal server error"}, respectively. Other 4xx errors keep their original messages.
 
 Auth migration rules:
 
@@ -158,10 +158,11 @@ Configuration and runtime behavior rules for the target version:
 - The server adds /health automatically. Unhealthy modules are reported as "unhealthy"; underlying error messages are logged but not returned in the response body.
 - Incoming request bodies are limited by httpserver.<name>.max_body_bytes. The default is 10485760 bytes (10 MiB). Set it to 0 to disable the limit, or raise it when the old service intentionally accepted larger bodies.
 - The body limit is applied after decompression, so compressed uploads are limited by their decompressed size.
-- Internal 5xx error details are hidden by default and with httpserver.<name>.errors.privacy: private. Use privacy: public only when clients should see internal 5xx messages.
+- Set httpserver.<name>.errors.privacy to public only when clients should see original error details for 400 and 5xx responses.
 - CORS settings live under httpserver.<name>.cors. The allowed_origin_pattern is matched against the full Origin value. Do not rely on partial regex matches; use an explicit pattern that matches the complete allowed origin set.
 - Profiling is configured under profiling and, when enabled, listens on 127.0.0.1:<profiling.api.port>.
 - Keep compression exclusions for SSE endpoints; gzip buffering breaks real-time SSE streams.
+- The server installs metric middleware without a separate route-setup hook. If the application installs it manually, use the handler returned by NewMetricMiddleware directly and remove the setup callback and any calls to GetMetricMiddlewareDefaults. A missing metric series is not an observed zero.
 
 Validation checklist:
 
@@ -180,8 +181,7 @@ Validation checklist:
 - All old request.ClientIp usages are replaced with ResolveClientIP(req) in BindR or BindNR handlers.
 - All handled client errors still return the intended HTTP status code.
 - Large-body endpoints have an explicit max_body_bytes setting if the current 10 MiB default is too small.
-- Tests expecting binding failures now assert 400 Bad Request.
-- Tests expecting internal error details in 5xx JSON responses now assert the sanitized default/private body, configure httpserver.<name>.errors.privacy: public, or install a custom error handler intentionally.
+- Tests expecting binding failures assert 400 Bad Request and, with default settings, the sanitized error body. Check the same privacy behavior for 5xx errors. Use public privacy mode only when the application intentionally exposes the original details.
 - CORS tests use full-origin matches and do not depend on partial regex matching.
 - Health-check tests do not expect underlying module error strings in the HTTP response.
 - Profiling tests or deployment checks expect the profiling API on loopback only.

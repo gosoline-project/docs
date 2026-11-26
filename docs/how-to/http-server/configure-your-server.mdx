@@ -139,11 +139,11 @@ httpserver:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `privacy` | string | `"private"` | Error detail policy for 5xx responses. Use `"private"` to hide internal details, or `"public"` to return the original error message. |
+| `privacy` | string | `"private"` | Error detail policy for status 400 and 5xx. Use `"private"` to hide details or `"public"` to expose them. |
 
-With the default `private` setting, internal 5xx errors return `{"err":"internal server error"}`. Errors below 500 wrapped with `NewErrorWithStatus` still expose their message to API clients.
+With the default `private` setting, error middleware preserves the status but removes error-provided headers and replaces the error message. The default JSON body is `{"err":"bad request"}` for status 400 and `{"err":"internal server error"}` for 5xx. Other 4xx errors keep their original messages.
 
-Set `privacy` to `public` only when exposing internal 5xx error messages is intentional:
+Set `privacy` to `public` only when exposing the original messages and error-provided headers for 400 and 5xx errors is intentional:
 
 ```yaml
 httpserver:

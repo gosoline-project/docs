@@ -7,10 +7,11 @@ title: Package metric
 The Gosoline `metric` package exports framework metrics and provides an optional Prometheus scrape
 endpoint. It also provides a log handler that counts warnings and errors. See the
 [Metric schema reference](/reference/metric-schema) for metric names, units, dimensions, and writer output.
+If you previously registered metric defaults, see [Migrating from metric defaults](/reference/metric-schema#migrating-from-metric-defaults).
 
 ## Registering metrics and the Prometheus endpoint
 
-Register `application.WithMetrics` on the application to install the metric daemon and Prometheus metrics-server modules ([source](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/application/options.go)). The metric daemon is disabled by default, so set `metric.enabled: true` to export framework metric data. The scrape server starts only when the `prometheus` writer is selected and its API is enabled; API defaults are enabled, port `8092`, and path `/metrics` ([server source](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/metric/prometheus_metric_server.go)).
+Register `application.WithMetrics` on the application to install the metric daemon and Prometheus metrics-server modules ([source](https://github.com/justtrackio/gosoline/blob/167371af967763037120fc7aaed3e3e4da3cd9ce/pkg/application/options.go)). The metric daemon is disabled by default, so set `metric.enabled: true` to export framework metric data. The scrape server starts only when the `prometheus` writer is selected and its API is enabled; API defaults are enabled, port `8092`, and path `/metrics` ([server source](https://github.com/justtrackio/gosoline/blob/167371af967763037120fc7aaed3e3e4da3cd9ce/pkg/metric/prometheus_metric_server.go)).
 
 ```yaml
 metric:
@@ -27,7 +28,7 @@ metric:
 
 The `api.enabled` switch controls the scrape listener separately from `metric.enabled`: disabling the API removes the endpoint, while `metric.enabled` controls the metric daemon. CloudWatch and OTEL writers do not add writer-owned operational metrics to the Gosoline contract. The Prometheus writer also adds no Gosoline-authored operational metric names; the endpoint and its upstream collectors expose the separate library-owned data described below.
 
-To count logger records, also register `application.WithLoggerMetricHandler` ([source](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/application/options.go)). This attaches the metric handler to the application logger; it is separate from enabling the metric daemon and selecting an exporter. See the [log package reference](/reference/package-log) for logger and handler setup.
+To count logger records, also register `application.WithLoggerMetricHandler` ([source](https://github.com/justtrackio/gosoline/blob/167371af967763037120fc7aaed3e3e4da3cd9ce/pkg/application/options.go)). This attaches the metric handler to the application logger; it is separate from enabling the metric daemon and selecting an exporter. See the [log package reference](/reference/package-log) for logger and handler setup.
 
 ## Metrics
 
@@ -37,9 +38,9 @@ This framework metric is included in the current 80-name inventory in the [Metri
 
 | Metric | Instrument | Authored unit | Dimensions | Description |
 |---|---|---|---|---|
-| `metric.log.records` | counter | count | `level` = `warn` or `error` | Counts only warn- and error-level records delivered to the metric logger handler, separated by level. Other log levels are filtered out. |
+| `metric.log.records` | Counter | Count | `level` = `warn` or `error` | Counts only warn- and error-level records delivered to the metric logger handler, separated by level. Other log levels are filtered out. |
 
-The handler declares count-counter defaults for both levels and writes one increment for each matching record it receives ([handler source](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/metric/logger_handler.go)).
+The handler emits one `Count`/`Counter` increment for each matching record it receives ([handler source](https://github.com/justtrackio/gosoline/blob/167371af967763037120fc7aaed3e3e4da3cd9ce/pkg/metric/logger_handler.go)). It creates no synthetic zero samples: a level series appears only after a matching record; a missing series means no matching record has been observed, not an observed zero.
 
 ### Prometheus HTTP-handler metrics (upstream-owned)
 
