@@ -8,15 +8,19 @@ Record `Content-Type`, `Accept`, and response negotiation behavior.
 
 Use these downloaded sources as the API contract:
 
-- `github.com/gosoline-project/sqlh` at `v0.8.2-0.20261027132918-7e9d41caf9c9`
-- `github.com/gosoline-project/sqlr` at `v0.9.2-0.20261027132740-484c58e94d7b`
-- `github.com/gosoline-project/sqlc` at `v0.4.1`
-- `github.com/gosoline-project/httpserver` at `v0.6.4`
-- `github.com/justtrackio/gosoline` at `v0.63.5`
+- `github.com/gosoline-project/sqlh` at `v0.9.2-0.20261119192959-e51cd6a2e6e2`
+- `github.com/gosoline-project/sqlr` at `v0.10.1-0.20261119192756-5988af480e42`
+- `github.com/gosoline-project/sqlc` at `v0.5.1-0.20261119192756-91e407c0fb08`
+- `github.com/gosoline-project/httpserver` at `v0.6.9-0.20261119192757-bb29cac74e89`
+- `github.com/justtrackio/gosoline` at `v0.69.4-0.20261119192118-ea1ab1cd583b`
 
-The pinned SQLH version declares Go 1.27.0.
-Its `go.mod` requires SQLR `v0.9.2-0.20261027132740-484c58e94d7b`, SQLC v0.4.1, httpserver v0.6.4, and Gosoline v0.63.5.
-Keep compatible newer versions selected by Go.
+These are coordinated pre-release snapshots, not release tags.
+Use compatible releases for the service. Keep its newer dependencies.
+Run this command only in a new module with Go 1.27.4 or newer to try the snapshots:
+
+`go get github.com/gosoline-project/sqlh@v0.9.2-0.20261119192959-e51cd6a2e6e2 github.com/gosoline-project/sqlr@v0.10.1-0.20261119192756-5988af480e42 github.com/gosoline-project/sqlc@v0.5.1-0.20261119192756-91e407c0fb08 github.com/gosoline-project/httpserver@v0.6.9-0.20261119192757-bb29cac74e89 github.com/quic-go/quic-go@v0.59.1 github.com/quic-go/qpack@v0.6.0 github.com/justtrackio/gosoline@v0.69.4-0.20261119192118-ea1ab1cd583b`
+
+Review the service's selected dependency graph for other required security updates and compatibility.
 Do not downgrade dependencies or change unrelated imports.
 
 Do not carry over removed v0.7.x APIs:
