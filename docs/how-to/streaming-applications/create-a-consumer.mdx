@@ -191,10 +191,8 @@ an overlapping diagnostic subset, not another attempt; filter the default error 
 default marker is writer-specific: select `error_type=""` in Prometheus, an absent `error.type` attribute
 in OpenTelemetry, or the series without that dimension in CloudWatch. For processing-error totals,
 filter `error_type="processing_failed"` in Prometheus or its matching explicit `error.type` value in
-other writers. In a batch, totals and diagnostic Counters are record-based while `process.duration`
-records one observation for the whole callback. Cancellation does not emit `processing_failed`. These
-current V2 instruments supplement, rather than replace, the historical [stream consumer lifecycle
-migration](/migrations/stream-consumer-lifecycle/).
+other writers. In a batch, `stream.consumed.messages` counts records, while `process.duration`
+records one observation for the whole callback. Cancellation does not emit `processing_failed`.
 
 ## Graceful processing
 

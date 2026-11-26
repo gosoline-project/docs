@@ -217,9 +217,8 @@ KvStore expands `{store}` first and then passes the pattern to the underlying Re
 
 ### Metrics
 
-Metric emission has its own V2 schema and writer naming rules; it is separate from the resource naming
-patterns below. See the [Metric schema reference](/reference/metric-schema) for the current inventory,
-units, dimensions, help text, and backend-rendered names.
+Resource naming and metric naming use separate rules. See the [Metric schema reference](/reference/metric-schema)
+for metric names, units, dimensions, and how each writer exports them.
 
 **CloudWatch namespace**
 
@@ -228,22 +227,14 @@ units, dimensions, help text, and backend-rendered names.
 - **Delimiter config key:** `metric.writer_settings.cloudwatch.naming.namespace_delimiter`
 - **Default delimiter:** `/`
 
-This setting remains supported and formats the CloudWatch service namespace; it does not format each
-metric name.
+This setting names the CloudWatch namespace, not the individual metrics.
 
 **Prometheus metric prefix**
 
-The Prometheus writer uses the fixed `gosoline` prefix. The application identity belongs on the scrape
-target through service discovery/target labels, not in metric names. The former
-`metric.writer_settings.prometheus.naming.namespace_pattern` and
-`metric.writer_settings.prometheus.naming.namespace_delimiter` settings no longer control names.
+The Prometheus writer uses the fixed `gosoline` prefix. Put application identity on scrape-target
+labels rather than in metric names.
 
-:::info Historical note
-Earlier editions of this reference described a configurable Prometheus prefix and a metric-calculator
-leader-election table. Those are not current metric configuration: the prefix is now fixed, and the
-calculator configuration was removed. The Kinsumer autoscale leader-election table below remains an
-active resource-naming pattern.
-:::
+For settings to remove when you upgrade, see the [naming migration guide](/migrations/app-identity-and-naming-patterns#prometheus-metric-prefix).
 
 ### Tracing
 
