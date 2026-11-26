@@ -292,7 +292,7 @@ Review `kernel.kill_timeout` and the deployment termination budget together. All
 
 Verify callback dependencies also respect cancellation. Successful `Run` termination does not prove that deletion, commit, or checkpoint persistence succeeded; some shutdown cleanup failures are logged without failing the run.
 
-The named stream and Kafka metrics in this section describe the historical metric contract for the v0.66.0 lifecycle migration, including `WaitDuration`, `CommitFailures`, `SleepDuration`, `ProcessDuration`, `ProcessedCount`, `RetryPutCount`, and `RecordsConsumed`. They are not the current V2 metric names. See the [current metric schema reference](/docs/pr-5/reference/metric-schema/.md) for current names, types, authored and OpenTelemetry units, attributes, and exporter mappings.
+The metric names below apply to the Gosoline v0.66.0 lifecycle migration. For names and dimensions to use in current dashboards and alerts, see the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md).
 
 Update monitoring and metadata clients:
 

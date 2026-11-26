@@ -1,6 +1,6 @@
 # metric package
 
-The Gosoline `metric` package provides the framework metric writer pipeline and an optional Prometheus scrape endpoint. It also supplies a logger handler that records warn- and error-level log records as a framework metric. The [Metric schema reference](/docs/pr-5/reference/metric-schema/.md) remains the source of truth for canonical Gosoline metric names, units, dimensions, writer transformations, and migration history; this page covers package activation and endpoint-specific exports.
+The Gosoline `metric` package exports framework metrics and provides an optional Prometheus scrape endpoint. It also provides a log handler that counts warnings and errors. See the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md) for metric names, units, dimensions, and writer output.
 
 ## Registering metrics and the Prometheus endpoint[​](#registering-metrics-and-the-prometheus-endpoint "Direct link to Registering metrics and the Prometheus endpoint")
 
