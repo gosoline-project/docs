@@ -79,9 +79,14 @@ The file output makes the lifecycle visible without requiring a queue. In produc
 
 When all background runners are busy and the output channel reaches `buffer_size`, producer writes block until capacity becomes available. This is intentional backpressure; size the buffer and runner count for expected traffic instead of making the buffer unbounded.
 
-Remote output errors happen in a background runner after the producer call has returned. The daemon logs these errors and emits metrics including message count, batch size, aggregate size, and idle duration. Monitor daemon logs and metrics because callers cannot receive asynchronous output failures.
+Remote output errors happen in a background runner after the producer call has returned. The daemon logs these errors; callers cannot receive asynchronous output failures.
 
 On graceful kernel shutdown, the daemon flushes pending aggregates and batches before closing its output workers. Abrupt process termination can still lose buffered messages.
+
+## Metrics
+
+The producer daemon provides metrics for input volume, batch sizes, and worker wait time. See the
+[producer daemon metrics reference](/reference/metric-schema#producer-daemon-metrics).
 
 ## Transport limitations
 

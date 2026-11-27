@@ -1,0 +1,24 @@
+---
+title: Package blob
+---
+
+# blob package
+
+`pkg/blob` provides batched object-storage access through named stores and a worker-backed `BatchRunner`. The runner uses the configured S3 client and processes each object in a batch through separate read, write, copy, and delete workers.
+
+## API and activation
+
+Register `blob.ProvideBatchRunner(name)` as a kernel module and provide the matching `blob.ProvideStore` with the same name. The store queues object operations for that named runner; the runner loads its settings from `blob.<name>`. See the pinned [runner registration](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/blob/runner.go) and [store provider](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/blob/store.go).
+
+## Metrics
+
+The table lists names and units authored by Gosoline. The OpenTelemetry writer exports names with a `gosoline.` prefix and converts authored `ms` durations to the OpenTelemetry duration unit. See the [metric schema reference](/reference/metric-schema) for the writer contract and dimension conventions.
+
+| Metric | Instrument | Authored unit | Dimensions | Description |
+|--------|------------|---------------|------------|-------------|
+| `blob.batch.operations` | Counter | `count` | `operation`: `Read`, `Write`, `Copy`, `Delete` | Adds one after each object-level S3 runner operation returns, including calls that return an error. This is not one count per batch API call or per network/retry attempt; queued work cancelled before a worker runs is not recorded. |
+
+## Related references
+
+- [Metric schema](/reference/metric-schema)
+- [Batch operation implementation](https://github.com/justtrackio/gosoline/blob/e1a14ac09eab0404cf620e1f3ee8a0fd5db259c0/pkg/blob/runner.go)

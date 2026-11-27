@@ -40,10 +40,6 @@ sampling:
 - `sampling.enabled`: if set to `false`, the decider behaves as if everything is sampled.
 - `sampling.strategies`: list of strategy names in priority order. The first strategy that applies wins.
 
-:::info
-When sampling is enabled and a new decision is made, gosoline emits a metric `sampling_decision` (count) with dimension `sampled=true|false`.
-:::
-
 ### Built-in strategies
 
 Gosoline ships with a few strategies you can reference by name:
@@ -133,3 +129,8 @@ smpl.AddStrategy("my-strategy", func(ctx context.Context, config cfg.Config) (sm
 - **"It always says sampled"**: if `sampling.enabled` is `false` or no decision is stored, `smplctx.IsSampled(ctx)` returns `true` by default.
 - **"My strategy does nothing"**: some strategies only apply if required data exists on the context (e.g. `tracing` needs a trace in the context).
 - **"I called Decide but later code doesn't see it"**: ensure you propagate the returned context (`ctx = newCtx`).
+
+## Metrics
+
+Gosoline provides a metric for sampling decisions. See the
+[sampling metrics reference](/reference/metric-schema#sampling-decisions) for when it is emitted and how it is exported.

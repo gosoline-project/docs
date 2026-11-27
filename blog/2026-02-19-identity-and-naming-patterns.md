@@ -210,3 +210,6 @@ See the [Naming Patterns reference](/reference/naming-patterns#modelid-domain-pa
 ## Migration quick start
 
 For full step-by-step instructions covering stream input/output config, `mdlsub` publishers, Go code changes, and per-service pattern updates, see the [migration guide](/migrations/app-identity-and-naming-patterns).
+
+*Update:* The Prometheus writer uses the fixed `gosoline` prefix. Put application identity on
+scrape-target labels rather than in metric names. See the [Naming Patterns reference](/reference/naming-patterns#metrics).

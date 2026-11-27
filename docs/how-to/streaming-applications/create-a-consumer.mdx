@@ -29,7 +29,8 @@ func (c *consumer) Consume(ctx context.Context, order OrderCreated, attributes m
 }
 ```
 
-The boolean reports whether processing succeeded. The input determines how that result affects acknowledgement or redelivery:
+The callback boolean reports whether business processing succeeded. The input uses it to decide
+whether to acknowledge or redeliver a message.
 
 | Return | Meaning |
 |---|---|
@@ -37,7 +38,8 @@ The boolean reports whether processing succeeded. The input determines how that 
 | `false, nil` | Processing did not complete; use native redelivery or the configured retry handler |
 | `false, err` | Processing failed; record the error and retry where configured |
 
-Only return `true` after the business operation is complete. The boolean controls the retry decision independently of the error: `true, err` logs the error but still reports success.
+Only return `true` after the business operation is complete. The boolean controls the retry decision
+independently of the error: `true, err` logs the error but still reports success.
 
 | Input | Failure behavior |
 |---|---|
@@ -160,6 +162,16 @@ Batch consumers acknowledge primary messages when admitted to an **in-memory buf
 :::
 
 At input completion or shutdown, pending work is drained within the shared consumer grace deadline. See the [released runnable example](https://github.com/justtrackio/gosoline/tree/v0.68.3/examples/stream/batch-consumer), [callback API](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch_module_factory.go), and [batch implementation](https://github.com/justtrackio/gosoline/blob/v0.68.3/pkg/stream/consumer_batch.go) before choosing batching for an existing consumer.
+
+## Metrics
+
+Gosoline provides metrics for input volume, processing duration, and retries. Collected records
+are not necessarily successful records, and failure diagnostics can overlap. For example, when
+investigating a spike in processing failures, query the processing-failure count on its own
+instead of adding it to model lookup errors.
+
+See [stream consumer metrics](/reference/metric-schema#stream-consumer-metrics) for a query
+example and details about lookup failures and retries.
 
 ## Graceful processing
 

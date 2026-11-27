@@ -213,7 +213,7 @@ franz-go splits records into partition-specific batches; one `producer.Write` ca
 
 Without the producer daemon, Kafka output uses `ProduceSync`: `WriteOne` and `Write` wait for the records' produce results and return an error if any result fails. Pass a bounded context for an application-level deadline; `request_timeout` alone does not bound the complete operation, including buffering and retries.
 
-A batch can partially succeed. Gosoline returns the first produce error, not per-record results, while metrics count successful and failed records separately. An error is not evidence that the whole batch was rejected. Retrying the entire batch can duplicate records that succeeded; use idempotent business identifiers or downstream deduplication where retries are possible. The streaming output API does not expose transactional writes.
+A batch can partially succeed. Gosoline returns the first produce error, not per-record results. An error does not mean that Kafka rejected the entire batch. Retrying the entire batch can duplicate records that succeeded; use idempotent business identifiers or downstream deduplication where retries are possible. The streaming output API does not expose transactional writes.
 
 With the producer daemon, the application write confirms admission to its in-process buffer. Remote produce results arrive later in background workers and failures are logged rather than returned to the original caller. See [producer-daemon backpressure and errors](/how-to/streaming-applications/use-the-producer-daemon#backpressure-and-errors).
 
@@ -245,16 +245,11 @@ This is to have a single source of truth for the settings and because the Kafka 
 
 ### Metrics
 
-Enable Gosoline's metric collection and a writer to export Kafka metrics. The following are framework metric names; the exported naming/representation depends on the configured writer:
+Enable Gosoline metrics and configure a writer to monitor Kafka:
 
-| Area | Metrics |
-|---|---|
-| Consumer | `RecordsConsumed`, `RecordsConsumedFailed`, `PollCount`, `PollDuration`, `ProcessDuration`, `CommitDuration`, `RebalanceCount`, `SleepDuration` |
-| Producer | `RecordsSent`, `RecordsSentFailed`, `ProduceBatchSize`, `ProduceDuration` |
-| Broker connectivity and throttling | `BrokerConnects`, `BrokerConnectsFailed`, `BrokerThrottleCount`, `BrokerThrottleTime` |
-| Wire batches | `ProduceBatchRecords`, `ProduceBatchBytes`, `ProduceBatchBytesCompressed`, `FetchBatchRecords`, `FetchBatchBytes`, `FetchBatchBytesCompressed` |
-
-Client/topic metrics use `ClientType`, `Client`, and `Topic` dimensions. Wire-batch metrics include both topic totals and partition-level values with `Partition`; broker metrics use `Broker`. `Client` is the configured input/output name. Consumed counts and committed offsets do not establish business success; correlate failure counts, retry logs, and commit errors. Monitor application consumer metrics alongside Kafka-specific metrics for decoding and callback failures.
+- [Consumer metrics](/reference/package-kafka-consumer#metrics): watch processing failures, poll and commit latency, and incoming record throughput.
+- [Producer metrics](/reference/package-kafka-producer#metrics): watch send failures and outgoing record throughput.
+- [Kafka client metrics](/reference/package-kafka#metrics): check broker connectivity, throttling, and record and byte throughput on the wire.
 
 ### Topic creation and metadata
 

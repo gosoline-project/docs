@@ -71,14 +71,8 @@ Set `max_connections: 0` (the default) to disable this limit.
 
 ### Metrics
 
-The server emits two gauge metrics (sampled every 10 seconds and on every change):
-
-| Metric | Description |
-|---|---|
-| `HttpConcurrentRequests` | Number of requests currently being handled. |
-| `HttpOpenConnections` | Number of currently open TCP connections. |
-
-Both metrics carry a `ServerName` dimension set to the server name (e.g. `default`).
+The server provides metrics for active requests and open connections. See the
+[HTTP server metrics reference](/reference/package-httpserver#metrics).
 
 ## Connection lifecycle advisor
 

@@ -536,25 +536,6 @@ This section lists the configuration keys, their old and new defaults, and the c
 2. Replace old-style placeholders with new-style ones.
 3. If you need a custom delimiter, set `naming.table_delimiter`.
 
-### Metric Calculator DynamoDB Table
-
-| | Value |
-|---|---|
-| **Config Key** | `metric.calculator.dynamodb.naming.table_pattern` (renamed from `naming.pattern`) |
-| **Old Default** | `{project}-{env}-{family}` |
-| **New Default** | `{app.env}-metric-calculator-leaders` |
-
-:::warning
-The default pattern has changed significantly. It no longer uses `{project}` or `{family}` and now includes a descriptive suffix. If you relied on the old default, explicitly set the pattern:
-```yaml
-metric:
-  calculator:
-    dynamodb:
-      naming:
-        table_pattern: "{app.tags.project}-{app.env}-{app.tags.family}-metric-calculator-leaders"
-```
-:::
-
 ### CloudWatch Namespace
 
 | | Value |
@@ -565,17 +546,8 @@ metric:
 | **Delimiter Config** | `metric.writer_settings.cloudwatch.naming.namespace_delimiter` |
 | **Delimiter Default** | `/` |
 
-CloudWatch uses `/` as the delimiter, creating hierarchical namespaces in AWS Console.
-
-### Prometheus Namespace
-
-| | Value |
-|---|---|
-| **Config Key** | `metric.writer_settings.prometheus.naming.namespace_pattern` |
-| **Old Default** | `{project}-{env}-{family}-{group}-{app}` |
-| **New Default** | `{app.namespace}-{app.name}` |
-| **Delimiter Config** | `metric.writer_settings.prometheus.naming.namespace_delimiter` |
-| **Delimiter Default** | `_` (underscores, following Prometheus naming conventions) |
+This CloudWatch namespace setting remains supported. It controls the CloudWatch service namespace, not
+the rendered metric name.
 
 ### Redis Key Prefix
 
@@ -674,9 +646,8 @@ The following options were removed from `Default()` and must now be added explic
 | `WithConfigFileFlag` | `--config` CLI flag for specifying config files |
 | `WithHttpHealthCheck` | HTTP health check endpoint |
 | `WithMetadataServer` | HTTP server exposing build info and module metadata |
-| `WithMetricsCalculatorModule` | Metrics calculator module |
 | `WithLoggerApplicationTag("group")` | `group` tag added to all log entries |
-| `WithLoggerMetricHandler` | Logger metric handler (counts log entries by level) |
+| `WithLoggerMetricHandler` | Logger metric handler (counts warning- and error-level log entries, by level) |
 | `WithLoggerSentryHandler(...)` | Sentry error reporting integration |
 | `WithMetrics` | Metrics collection and export |
 | `WithProducerDaemon` | Background producer daemon for stream batching |
@@ -715,7 +686,6 @@ func main() {
 
         // Metrics & observability
         application.WithMetrics,
-        application.WithMetricsCalculatorModule,
         application.WithTracing,
         application.WithProfiling,
 

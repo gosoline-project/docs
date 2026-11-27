@@ -140,7 +140,16 @@ stream:
       group_id: audit-worker
 ```
 
-For Kafka-specific behavior and schema registry configuration, see the [Kafka guides](/how-to/kafka/general).
+For Redis list behavior, see the [Redis list input](/reference/package-stream-redis-list-input) and
+[Redis list output](/reference/package-stream-redis-list-output) references. For Kafka behavior and
+schema registry configuration, see the [Kafka guide](/how-to/kafka/general).
+
+## Metrics
+
+Kafka and Redis list transports provide metrics:
+
+- Kafka: [client metrics](/reference/package-kafka#metrics), [consumer metrics](/reference/package-kafka-consumer#metrics), and [producer metrics](/reference/package-kafka-producer#metrics).
+- Redis: [list input metrics](/reference/package-stream-redis-list-input#metrics) and [list output metrics](/reference/package-stream-redis-list-output#metrics).
 
 ## What's next?
 

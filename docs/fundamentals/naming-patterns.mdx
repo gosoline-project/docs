@@ -90,10 +90,9 @@ app:
 - **Define once, use everywhere**: Set your hierarchy in one place
 - **Easy updates**: Change your naming convention globally by updating one config value
 - **Simplified patterns**: Use `{app.namespace}` instead of repeating the same placeholders
-- **Delimiter flexibility**: Different services can use appropriate delimiters (CloudWatch uses `/`, Prometheus uses `_`, most AWS services use `-`)
+- **Delimiter flexibility**: Reuse the same pattern across services that use different separators
 
 ## How Naming Patterns Work
-
 ### Pattern Resolution
 
 Each service in Gosoline has configurable naming patterns. Here's how they're resolved:
