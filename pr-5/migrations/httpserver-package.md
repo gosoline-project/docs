@@ -1298,17 +1298,6 @@ Keep these points in mind while migrating:
 | Profiling          | Profiling is still configured under `profiling` and binds to `127.0.0.1:<port>`.                                                                                                                                  |
 | Auth               | Auth config is scoped below `httpserver.<name>.auth`; old global auth keys must be moved below the server name.                                                                                                   |
 
-### Metrics migration checklist[​](#metrics-migration-checklist "Direct link to Metrics migration checklist")
-
-If you are also moving from metrics schema version `v1.0` to `v2.0`, update your dashboards and alarms:
-
-* Replace old latency series with `http.server.request.duration`. Group by route or status code as needed. Aggregate across response codes for an overall view.
-* Use `http.server.requests` for per-server request counts and `http.server.routed.requests` for counts by route and method. Replace the canonical `ServerName`, `Path`, and `Method` dimensions with `name`, `route`, and `request.method`.
-* Use `http.server.responses` for server-wide status alarms or `http.server.routed.responses` for alarms by route. For CloudWatch route-level 5xx alarms, select the [response-class series](/docs/pr-5/reference/metric-schema/.md#cloudwatch-server-response-queries).
-* Check that each updated dashboard and alarm uses the [names and labels for its writer](/docs/pr-5/reference/metric-schema/.md#authored-names-and-writer-output) and returns the expected series.
-
-See the [HTTP server metrics reference](/docs/pr-5/reference/package-httpserver/.md#metrics) for dimensions, defaults, and histogram buckets.
-
 ## 13. Migrate Tests[​](#13-migrate-tests "Direct link to 13. Migrate Tests")
 
 Old test suites usually implemented definition-based setup:

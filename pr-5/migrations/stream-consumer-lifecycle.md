@@ -292,20 +292,12 @@ Review `kernel.kill_timeout` and the deployment termination budget together. All
 
 Verify callback dependencies also respect cancellation. Successful `Run` termination does not prove that deletion, commit, or checkpoint persistence succeeded; some shutdown cleanup failures are logged without failing the run.
 
-The metric names below apply to the Gosoline v0.66.0 lifecycle migration. For names and dimensions to use in current dashboards and alerts, see the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md).
+Review health checks and metadata clients:
 
-Update monitoring and metadata clients:
-
-| Change                                                                                                 | Migration action                                                                                      |
-| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| At the v0.66.0 migration, Kafka metrics moved to consumer/topic granularity from partition dimensions. | Update queries and alerts using `Partition`.                                                          |
-| Kafka `WaitDuration` and `CommitFailures` are no longer emitted after the v0.66.0 lifecycle change.    | Replace dashboards and alerts relying on those historical names.                                      |
-| Kafka/Kinesis expose `SleepDuration` with consumption delay; it contributes to `ProcessDuration`.      | Account for deliberate delay in latency and lag alerts.                                               |
-| Kafka `ProcessDuration` also includes commit work.                                                     | Review comparisons with previous callback timings.                                                    |
-| Health tracks active processing independently.                                                         | A slow callback can make the consumer unhealthy while others succeed; review health-check thresholds. |
-| Consumer metadata no longer includes `runner_count`.                                                   | Update metadata consumers and assertions.                                                             |
-
-At the v0.66.0 lifecycle migration boundary, `ProcessedCount` counted processing attempts, `RetryPutCount` counted retry-publication attempts, and Kafka `RecordsConsumed` counted fetched records, including work skipped during shutdown. These historical counters do not prove successful durable effects; correlate them with errors, queue depth, commits/checkpoints, and application outcomes.
+| Change                                               | Migration action                                                                                      |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Health tracks active processing independently.       | A slow callback can make the consumer unhealthy while others succeed; review health-check thresholds. |
+| Consumer metadata no longer includes `runner_count`. | Update metadata consumers and assertions.                                                             |
 
 ## 12. Review Message and Integration Compatibility[​](#12-review-message-and-integration-compatibility "Direct link to 12. Review Message and Integration Compatibility")
 

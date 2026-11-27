@@ -246,7 +246,7 @@ This setting names the CloudWatch namespace, not the individual metrics.
 
 The Prometheus writer uses the fixed `gosoline` prefix. Put application identity on scrape-target labels rather than in metric names.
 
-For settings to remove when you upgrade, see the [naming migration guide](/docs/pr-5/migrations/app-identity-and-naming-patterns/.md#prometheus-metric-prefix).
+For settings to remove when you upgrade, see the [metrics schema migration guide](/docs/pr-5/migrations/metrics-schema/.md#2-update-go-code-and-configuration).
 
 ### Tracing[​](#tracing "Direct link to Tracing")
 

@@ -2,10 +2,6 @@
 
 This guide details how to migrate your gosoline application to the new `Identity` system and dynamic resource naming.
 
-info
-
-This guide covers application identity and resource names. For metric names, units, and writer behavior, see the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md).
-
 ## 1. Update Configuration[​](#1-update-configuration "Direct link to 1. Update Configuration")
 
 The flat application hierarchy (`project`, `family`, `group`) has been replaced with a flexible tagging system. Move these keys into the `app.tags` structure.
@@ -725,10 +721,6 @@ This section lists the configuration keys, their old and new defaults, and the c
 2. Replace old-style placeholders with new-style ones.
 3. If you need a custom delimiter, set `naming.table_delimiter`.
 
-### Historical: Metric calculator DynamoDB table[​](#historical-metric-calculator-dynamodb-table "Direct link to Historical: Metric calculator DynamoDB table")
-
-When you upgrade to metrics schema version `v2.0`, remove `metric.calculator.dynamodb.naming.table_pattern`. Replace CloudWatch autoscaling policies based on `PerRunnerHttpServerRequests`, `PerRunnerStreamMessages`, `StreamMessagesAvailable`, or `StreamMessagesSent` with signals that measure your application's workload. This does not affect the [Kinsumer autoscale leader-election table](/docs/pr-5/reference/naming-patterns/.md#kinsumer-autoscale-leader-election-table).
-
 ### CloudWatch Namespace[​](#cloudwatch-namespace "Direct link to CloudWatch Namespace")
 
 |                       | Value                                                          |
@@ -740,10 +732,6 @@ When you upgrade to metrics schema version `v2.0`, remove `metric.calculator.dyn
 | **Delimiter Default** | `/`                                                            |
 
 This CloudWatch namespace setting remains supported. It controls the CloudWatch service namespace, not the rendered metric name.
-
-### Prometheus metric prefix[​](#prometheus-metric-prefix "Direct link to Prometheus metric prefix")
-
-When you upgrade to metrics schema version `v2.0`, remove `metric.writer_settings.prometheus.naming.namespace_delimiter` and `metric.writer_settings.prometheus.naming.namespace_pattern`. The writer uses the fixed `gosoline` prefix. Use scrape-target labels for application identity in your queries.
 
 ### Redis Key Prefix[​](#redis-key-prefix "Direct link to Redis Key Prefix")
 

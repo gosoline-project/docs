@@ -72,6 +72,7 @@
 - [Implement health checks](/how-to/write-health-checks.md): You can check the health of a running gosoline application.
 - [Migrating to Identity and Naming Patterns](/migrations/app-identity-and-naming-patterns.md): This guide details how to migrate your gosoline application to the new Identity system and dynamic resource naming.
 - [Migrating to the Standalone HTTP Server Package](/migrations/httpserver-package.md): This guide explains how to migrate from the old github.com/justtrackio/gosoline/pkg/httpserver package directly to the standalone github.com/gosoline-project/httpserver module pinned at the released v0.6.5.
+- [Migrate from metrics schema v1 to v2](/migrations/metrics-schema.md): This guide takes an application from metrics schema v1.0 (Gosoline v0.68.3) to v2.0 (Gosoline v0.69.0). The metrics schema version is separate from the Go module version. The metric daemon reports it as metric.schema_version in application metadata when enabled. Gosoline does not emit both schemas or provide aliases for the old names.
 - [Migrating an Existing Service to SQLH CRUD](/migrations/sqlh-crud.md): This guide covers migrations from SQLH v0.7.x and from custom CRUD handlers.
 - [Migrating to the Callback-Based Stream Consumer Lifecycle](/migrations/stream-consumer-lifecycle.md): This guide covers the breaking stream changes introduced in Gosoline v0.66.0 by commit 04b54462, stream: unify input processing and shutdown. Follow this guide when upgrading from an earlier release to v0.66.0 or later.
 - [Metric schema](/reference/metric-schema.md): This reference lists the metric names, instrument types, units, and dimensions Gosoline records.
@@ -16117,10 +16118,6 @@ Note that the kernel waits the `wait_interval` and checks the health of the appl
 
 This guide details how to migrate your gosoline application to the new `Identity` system and dynamic resource naming.
 
-info
-
-This guide covers application identity and resource names. For metric names, units, and writer behavior, see the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md).
-
 ## 1. Update Configuration[​](#1-update-configuration "Direct link to 1. Update Configuration")
 
 The flat application hierarchy (`project`, `family`, `group`) has been replaced with a flexible tagging system. Move these keys into the `app.tags` structure.
@@ -16840,10 +16837,6 @@ This section lists the configuration keys, their old and new defaults, and the c
 2. Replace old-style placeholders with new-style ones.
 3. If you need a custom delimiter, set `naming.table_delimiter`.
 
-### Historical: Metric calculator DynamoDB table[​](#historical-metric-calculator-dynamodb-table "Direct link to Historical: Metric calculator DynamoDB table")
-
-When you upgrade to metrics schema version `v2.0`, remove `metric.calculator.dynamodb.naming.table_pattern`. Replace CloudWatch autoscaling policies based on `PerRunnerHttpServerRequests`, `PerRunnerStreamMessages`, `StreamMessagesAvailable`, or `StreamMessagesSent` with signals that measure your application's workload. This does not affect the [Kinsumer autoscale leader-election table](/docs/pr-5/reference/naming-patterns/.md#kinsumer-autoscale-leader-election-table).
-
 ### CloudWatch Namespace[​](#cloudwatch-namespace "Direct link to CloudWatch Namespace")
 
 |                       | Value                                                          |
@@ -16855,10 +16848,6 @@ When you upgrade to metrics schema version `v2.0`, remove `metric.calculator.dyn
 | **Delimiter Default** | `/`                                                            |
 
 This CloudWatch namespace setting remains supported. It controls the CloudWatch service namespace, not the rendered metric name.
-
-### Prometheus metric prefix[​](#prometheus-metric-prefix "Direct link to Prometheus metric prefix")
-
-When you upgrade to metrics schema version `v2.0`, remove `metric.writer_settings.prometheus.naming.namespace_delimiter` and `metric.writer_settings.prometheus.naming.namespace_pattern`. The writer uses the fixed `gosoline` prefix. Use scrape-target labels for application identity in your queries.
 
 ### Redis Key Prefix[​](#redis-key-prefix "Direct link to Redis Key Prefix")
 
@@ -18408,17 +18397,6 @@ Keep these points in mind while migrating:
 | Profiling          | Profiling is still configured under `profiling` and binds to `127.0.0.1:<port>`.                                                                                                                                  |
 | Auth               | Auth config is scoped below `httpserver.<name>.auth`; old global auth keys must be moved below the server name.                                                                                                   |
 
-### Metrics migration checklist[​](#metrics-migration-checklist "Direct link to Metrics migration checklist")
-
-If you are also moving from metrics schema version `v1.0` to `v2.0`, update your dashboards and alarms:
-
-* Replace old latency series with `http.server.request.duration`. Group by route or status code as needed. Aggregate across response codes for an overall view.
-* Use `http.server.requests` for per-server request counts and `http.server.routed.requests` for counts by route and method. Replace the canonical `ServerName`, `Path`, and `Method` dimensions with `name`, `route`, and `request.method`.
-* Use `http.server.responses` for server-wide status alarms or `http.server.routed.responses` for alarms by route. For CloudWatch route-level 5xx alarms, select the [response-class series](/docs/pr-5/reference/metric-schema/.md#cloudwatch-server-response-queries).
-* Check that each updated dashboard and alarm uses the [names and labels for its writer](/docs/pr-5/reference/metric-schema/.md#authored-names-and-writer-output) and returns the expected series.
-
-See the [HTTP server metrics reference](/docs/pr-5/reference/package-httpserver/.md#metrics) for dimensions, defaults, and histogram buckets.
-
 ## 13. Migrate Tests[​](#13-migrate-tests "Direct link to 13. Migrate Tests")
 
 Old test suites usually implemented definition-based setup:
@@ -18670,6 +18648,71 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *GetUserInput) (http
 ## AI Agent Migration Instructions[​](#ai-agent-migration-instructions "Direct link to AI Agent Migration Instructions")
 
 If you want an AI agent to perform this migration, copy the prepared migration instructions and provide them as the task prompt. The instructions are intentionally operational and include discovery steps, migration order, API mappings, validation checks, and stop conditions.
+
+Copy AI migration instructions
+
+
+---
+
+# Migrate from metrics schema v1 to v2
+
+This guide takes an application from metrics schema `v1.0` (Gosoline `v0.68.3`) to `v2.0` ([Gosoline `v0.69.0`](https://github.com/justtrackio/gosoline/releases/tag/v0.69.0)). The metrics schema version is separate from the Go module version. The metric daemon reports it as `metric.schema_version` in application metadata when enabled. Gosoline does not emit both schemas or provide aliases for the old names.
+
+## 1. Find what uses the old metrics[​](#1-find-what-uses-the-old-metrics "Direct link to 1. Find what uses the old metrics")
+
+* Check the Gosoline version in the application and the metrics each deployed writer exports. If a separate module emits metrics, check its version and output too.
+* Find metric producers, names, and dimensions in Go code and tests. Search application config, dashboards, recording rules, alerts, and autoscaling policy definitions, including those generated from templates or maintained in a separate repository.
+* For each query, record what it measures, its unit, which labels it selects, and how it handles missing samples. Use actual exporter output for the old names; source names and exported names are not always the same.
+
+## 2. Update Go code and configuration[​](#2-update-go-code-and-configuration "Direct link to 2. Update Go code and configuration")
+
+Upgrade the Gosoline dependency in your application:
+
+```
+go get github.com/justtrackio/gosoline@v0.69.0
+```
+
+If you use older versions of independently released producers, upgrade them in the same `go get` command. Compatible releases include `github.com/gosoline-project/httpserver@v0.6.5` and `github.com/gosoline-project/sqlc@v0.5.0`. Include only the modules your application uses. Keep newer compatible versions and check the selected versions with `go list -m all`.
+
+* Update `metric.NewWriter` and `metric.NewWriterWithInterfaces` to take a namespace. Use `metric.NewWriter("", defaults...)` to keep existing custom names as full leaves. To use namespace `orders`, set the datum leaf to `created`, not `orders.created`. A writer supplies its namespace only when `Datum.Namespace` is empty. For writes directly to a backend writer, specify the intended namespace, instrument kind, and unit on the datum.
+* Update calls to `metric.NewPrometheusWriterWithInterfaces`: remove the namespace argument. Remove `metric.writer_settings.prometheus.naming.namespace_delimiter` and `metric.writer_settings.prometheus.naming.namespace_pattern` from config. The prefix is `gosoline`; select the application with scrape-target labels. The CloudWatch namespace setting is unchanged by this schema migration.
+* If you call `kafka.MetricPair`, pass a `kafka.MetricSpec` instead of positional arguments. Use `kafka.DimensionClientType` with `kafka.ClientTypeConsumer` or `kafka.ClientTypeProducer`. See the [release notes](https://github.com/justtrackio/gosoline/releases/tag/v0.69.0) for the complete list of Go API and constant changes.
+
+The metric calculator was removed in Gosoline `v0.69.0`.
+
+## 3. Update queries and alerts[​](#3-update-queries-and-alerts "Direct link to 3. Update queries and alerts")
+
+The left column lists old source-level names, not literal exporter names. Look up the matching names in your backend. The right column uses the [canonical names in the metrics reference](/docs/pr-5/reference/metric-schema/.md).
+
+| Previous metric or family                                               | What to query after the upgrade                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP server `HttpRequestCount` and `HttpRequestCountPerRoute`           | `http.server.requests` for server counts and `http.server.routed.requests` for route/method counts. Replace `ServerName`, `Path`, and `Method` with `name`, `route`, and `request.method` where applicable.                                                    |
+| HTTP server `HttpStatus1XX` through `HttpStatus5XX`                     | `http.server.responses` or `http.server.routed.responses` for counts by `response.status_code` or `response.status_class`. See [CloudWatch server response queries](/docs/pr-5/reference/metric-schema/.md#cloudwatch-server-response-queries) for 5xx alarms. |
+| `HttpRequestResponseTime` and `HttpRequestResponseTimePerRoute`         | Use `http.server.request.duration`. For a server-wide Prometheus percentile, sum bucket rates by `name` and `le` before applying `histogram_quantile`. For a per-route view, also keep `route` and `request_method`.                                           |
+| HTTP client `HttpClientRequest` and `HttpClientError`                   | `http.client.requests` for request starts. Use `http.client.completed.requests` with `error.type="request_failed"` for transport failures. Cancellations have a separate value, `request_canceled`.                                                            |
+| Kafka `RecordsConsumedFailed` and `RecordsSentFailed`                   | Select `processing_failed` on `kafka.consumer.consumed.messages` or `send_failed` on `kafka.producer.sent.messages`. In each metric the failure and default series are disjoint.                                                                               |
+| Logger leaves `warn` and `error`                                        | `metric.log.records`, filtered by the `level` dimension.                                                                                                                                                                                                       |
+| Repository `DbAccessLatency` and `DdbAccessLatency`                     | `db.repo.operation.duration` for SQL and `ddb.operation.duration` for DynamoDB. Use `db.repo.operations` or `ddb.operations` for operation counts, not histogram samples.                                                                                      |
+| Stream `ProcessedCount`, `stream.Error`, and `stream.UnknownModelError` | `stream.consumed.messages`: the default series counts collected input, not successful processing. Select `processing_failed` or `model_lookup_failed` directly; the diagnostic series can overlap each other and the total.                                    |
+
+Use the [release notes](https://github.com/justtrackio/gosoline/releases/tag/v0.69.0) for other former metric families and the [metrics reference](/docs/pr-5/reference/metric-schema/.md) for current measurement details. Check the operation boundary before treating any mapping as equivalent.
+
+### Check writer-specific names, units, and dimensions[​](#check-writer-specific-names-units-and-dimensions "Direct link to Check writer-specific names, units, and dimensions")
+
+* **CloudWatch:** Use the [rendered metric name](/docs/pr-5/reference/metric-schema/.md#authored-names-and-writer-output), the configured namespace, and the exact dimension set. Choose either a detailed series or a CloudWatch-only aggregate of the same observations; do not sum both.
+* **OpenTelemetry:** Framework names have a `gosoline.` prefix. Default dimensions such as a successful operation's `error.type` are absent, not literal markers. Check the unit on the instrument.
+* **Prometheus:** Use the rendered `gosoline_` name, the counter or unit suffix where applicable, and underscore labels such as `error_type`. To select a default error dimension, use `error_type=""`.
+* **Latency:** In Prometheus and OpenTelemetry, millisecond measurements export in seconds. Review thresholds and use histogram queries for framework duration metrics that were summaries. Existing samples are not rebucketed. Use a dedicated counter for event volume when the histogram measures a different event.
+
+## 4. Verify before rollout[​](#4-verify-before-rollout "Direct link to 4. Verify before rollout")
+
+1. Build and run the affected application tests. Update assertions that depend on metric names, dimensions, units, or types. Keep application behavior unchanged unless the migration requires it.
+2. Run the application in a test environment with its configured writers. Generate representative success and failure traffic. Inspect the exported samples, check `metric.schema_version` when the metric daemon is enabled, and confirm that dashboard queries and alert expressions select the expected series and units.
+3. Test alarms for missing data as well as threshold crossings. Coordinate the query and deployment changes: a mixed rollout can have both schemas across instances, but one instance does not write aliases for the other. Keep the prior query configuration available if you need to roll back.
+
+## Copyable AI migration instructions[​](#copyable-ai-migration-instructions "Direct link to Copyable AI migration instructions")
+
+The instructions ask an agent to inspect the application and its monitoring definitions, verify each mapping, and report anything it cannot verify.
 
 Copy AI migration instructions
 
@@ -19303,20 +19346,12 @@ Review `kernel.kill_timeout` and the deployment termination budget together. All
 
 Verify callback dependencies also respect cancellation. Successful `Run` termination does not prove that deletion, commit, or checkpoint persistence succeeded; some shutdown cleanup failures are logged without failing the run.
 
-The metric names below apply to the Gosoline v0.66.0 lifecycle migration. For names and dimensions to use in current dashboards and alerts, see the [Metric schema reference](/docs/pr-5/reference/metric-schema/.md).
+Review health checks and metadata clients:
 
-Update monitoring and metadata clients:
-
-| Change                                                                                                 | Migration action                                                                                      |
-| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| At the v0.66.0 migration, Kafka metrics moved to consumer/topic granularity from partition dimensions. | Update queries and alerts using `Partition`.                                                          |
-| Kafka `WaitDuration` and `CommitFailures` are no longer emitted after the v0.66.0 lifecycle change.    | Replace dashboards and alerts relying on those historical names.                                      |
-| Kafka/Kinesis expose `SleepDuration` with consumption delay; it contributes to `ProcessDuration`.      | Account for deliberate delay in latency and lag alerts.                                               |
-| Kafka `ProcessDuration` also includes commit work.                                                     | Review comparisons with previous callback timings.                                                    |
-| Health tracks active processing independently.                                                         | A slow callback can make the consumer unhealthy while others succeed; review health-check thresholds. |
-| Consumer metadata no longer includes `runner_count`.                                                   | Update metadata consumers and assertions.                                                             |
-
-At the v0.66.0 lifecycle migration boundary, `ProcessedCount` counted processing attempts, `RetryPutCount` counted retry-publication attempts, and Kafka `RecordsConsumed` counted fetched records, including work skipped during shutdown. These historical counters do not prove successful durable effects; correlate them with errors, queue depth, commits/checkpoints, and application outcomes.
+| Change                                               | Migration action                                                                                      |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Health tracks active processing independently.       | A slow callback can make the consumer unhealthy while others succeed; review health-check thresholds. |
+| Consumer metadata no longer includes `runner_count`. | Update metadata consumers and assertions.                                                             |
 
 ## 12. Review Message and Integration Compatibility[​](#12-review-message-and-integration-compatibility "Direct link to 12. Review Message and Integration Compatibility")
 
@@ -19370,6 +19405,8 @@ This reference covers [Gosoline v0.69.0](https://github.com/justtrackio/gosoline
 ## Schema version[​](#schema-version "Direct link to Schema version")
 
 The metrics schema version is `v2.0` (`metric.SchemaVersion`). When the metric daemon is enabled, Gosoline publishes this value as application metadata under `metric.schema_version`, not as a metric. Removing or renaming a metric or dimension, or changing how a unit is represented, is a breaking change. Adding a metric is a minor change.
+
+If you are upgrading an existing application, see the [metrics schema migration guide](/docs/pr-5/migrations/metrics-schema/.md).
 
 ## Authored names and writer output[​](#authored-names-and-writer-output "Direct link to Authored names and writer output")
 
@@ -19939,7 +19976,7 @@ This setting names the CloudWatch namespace, not the individual metrics.
 
 The Prometheus writer uses the fixed `gosoline` prefix. Put application identity on scrape-target labels rather than in metric names.
 
-For settings to remove when you upgrade, see the [naming migration guide](/docs/pr-5/migrations/app-identity-and-naming-patterns/.md#prometheus-metric-prefix).
+For settings to remove when you upgrade, see the [metrics schema migration guide](/docs/pr-5/migrations/metrics-schema/.md#2-update-go-code-and-configuration).
 
 ### Tracing[​](#tracing "Direct link to Tracing")
 

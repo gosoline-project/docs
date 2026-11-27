@@ -8,6 +8,8 @@ This reference covers [Gosoline v0.69.0](https://github.com/justtrackio/gosoline
 
 The metrics schema version is `v2.0` (`metric.SchemaVersion`). When the metric daemon is enabled, Gosoline publishes this value as application metadata under `metric.schema_version`, not as a metric. Removing or renaming a metric or dimension, or changing how a unit is represented, is a breaking change. Adding a metric is a minor change.
 
+If you are upgrading an existing application, see the [metrics schema migration guide](/docs/pr-5/migrations/metrics-schema/.md).
+
 ## Authored names and writer output[​](#authored-names-and-writer-output "Direct link to Authored names and writer output")
 
 A Gosoline metric is authored as a canonical namespace and leaf, joined with a dot—for example, `http.server` + `request.duration` becomes `http.server.request.duration`. The namespace identifies the emitting subsystem; it is not the application identity. A namespace-less application metric instead uses its leaf as its complete authored name.
