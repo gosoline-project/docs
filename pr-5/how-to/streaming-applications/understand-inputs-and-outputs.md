@@ -199,9 +199,14 @@ stream:
       group_id: audit-worker
 ```
 
-For Redis list component behavior and metrics, see the separate [Redis list input](/docs/pr-5/reference/package-stream-redis-list-input/.md) and [Redis list output](/docs/pr-5/reference/package-stream-redis-list-output/.md) references.
+For Redis list behavior, see the [Redis list input](/docs/pr-5/reference/package-stream-redis-list-input/.md) and [Redis list output](/docs/pr-5/reference/package-stream-redis-list-output/.md) references. For Kafka behavior and schema registry configuration, see the [Kafka guide](/docs/pr-5/how-to/kafka/general/.md).
 
-For Kafka-specific behavior and schema registry configuration, see the [Kafka guides](/docs/pr-5/how-to/kafka/general/.md); its Metrics section links the separate [Kafka client-hook](/docs/pr-5/reference/package-kafka/.md), [consumer](/docs/pr-5/reference/package-kafka-consumer/.md), and [producer](/docs/pr-5/reference/package-kafka-producer/.md) references.
+## Metrics[​](#metrics "Direct link to Metrics")
+
+Kafka and Redis list transports provide metrics:
+
+* Kafka: [client metrics](/docs/pr-5/reference/package-kafka/.md#metrics), [consumer metrics](/docs/pr-5/reference/package-kafka-consumer/.md#metrics), and [producer metrics](/docs/pr-5/reference/package-kafka-producer/.md#metrics).
+* Redis: [list input metrics](/docs/pr-5/reference/package-stream-redis-list-input/.md#metrics) and [list output metrics](/docs/pr-5/reference/package-stream-redis-list-output/.md#metrics).
 
 ## What's next?[​](#whats-next "Direct link to What's next?")
 

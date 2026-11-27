@@ -76,14 +76,7 @@ Set `max_connections: 0` (the default) to disable this limit.
 
 ### Metrics[​](#metrics "Direct link to Metrics")
 
-The server emits two gauge metrics (sampled every 10 seconds and on every change):
-
-| Metric                             | Description                                 |
-| ---------------------------------- | ------------------------------------------- |
-| `http.server.active_request.count` | Number of requests currently being handled. |
-| `http.server.connection.count`     | Number of currently open TCP connections.   |
-
-Both metrics carry the server name in the `name` attribute (for example, `default`).
+The server provides metrics for active requests and open connections. See the [HTTP server metrics reference](/docs/pr-5/reference/package-httpserver/.md#metrics).
 
 ## Connection lifecycle advisor[​](#connection-lifecycle-advisor "Direct link to Connection lifecycle advisor")
 

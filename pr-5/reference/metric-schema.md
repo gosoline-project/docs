@@ -73,33 +73,33 @@ Every framework metric has a registered description. Prometheus and OTEL use tha
 
 Metric namespaces are naming prefixes, not one-to-one component identifiers. The same namespace can be emitted by distinct packages or implementations, so these pages are organized by emitter rather than by namespace alone.
 
-| Namespace           | Component / emitter                                                         | Dedicated page                                                                          |
-| ------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `stream`            | `sdk.stream` consumer                                                       | [Stream consumer](/docs/pr-5/how-to/streaming-applications/create-a-consumer/.md)       |
-| `stream`            | `sdk.stream` producer daemon                                                | [Producer daemon](/docs/pr-5/how-to/streaming-applications/use-the-producer-daemon/.md) |
-| `stream`            | `sdk.stream` Redis-list input                                               | [Redis-list input](/docs/pr-5/reference/package-stream-redis-list-input/.md)            |
-| `stream`            | `sdk.stream` Redis-list output                                              | [Redis-list output](/docs/pr-5/reference/package-stream-redis-list-output/.md)          |
-| `kafka`             | `sdk.kafka.client-hook`                                                     | [Kafka client hooks](/docs/pr-5/reference/package-kafka/.md)                            |
-| `kafka.consumer`    | `sdk.kafka.consumer`                                                        | [Kafka consumer](/docs/pr-5/reference/package-kafka-consumer/.md)                       |
-| `kafka.producer`    | `sdk.kafka.producer`                                                        | [Kafka producer](/docs/pr-5/reference/package-kafka-producer/.md)                       |
-| `cloud.aws.kinesis` | `sdk.cloud.aws.kinesis` ShardReader                                         | [Kinesis shard reader](/docs/pr-5/reference/package-cloud_aws_kinesis-reader/.md)       |
-| `cloud.aws.kinesis` | `sdk.cloud.aws.kinesis` RecordWriter                                        | [Kinesis record writer](/docs/pr-5/reference/package-cloud_aws_kinesis-writer/.md)      |
-| `cloud.aws.kinesis` | `sdk.cloud.aws.kinesis` Kinsumer                                            | [Kinsumer](/docs/pr-5/reference/package-kinsumer/.md)                                   |
-| `blob`              | `sdk.blob` batch runner                                                     | [Blob package](/docs/pr-5/reference/package-blob/.md)                                   |
-| `conc.scheduler`    | `sdk.conc.scheduler`                                                        | [Concurrency scheduler](/docs/pr-5/reference/package-conc_scheduler/.md)                |
-| `db.client`         | `sdk.db` SQL database client                                                | [Database package](/docs/pr-5/reference/package-db/.md)                                 |
-| `db.repo`           | `sdk.db-repo` SQL repository wrapper                                        | [Database repository](/docs/pr-5/reference/package-db-repo/.md)                         |
-| `ddb`               | `sdk.ddb` DynamoDB repository                                               | [DynamoDB package](/docs/pr-5/reference/package-ddb/.md)                                |
-| `http.client`       | `sdk.http-client`                                                           | [HTTP client](/docs/pr-5/reference/package-http/.md)                                    |
-| `http.server`       | `sdk.httpserver` Gosoline SDK implementation                                | [Gosoline HTTP server](/docs/pr-5/reference/package-gosoline-httpserver/.md)            |
-| `http.server`       | `library.httpserver` published HTTPServer implementation                    | [HTTPServer library](/docs/pr-5/reference/package-httpserver/.md)                       |
-| `kvstore`           | `sdk.kvstore`                                                               | [Key-value store](/docs/pr-5/reference/package-kvstore/.md)                             |
-| `limit`             | `sdk.limit` rate limiter                                                    | [Rate limiter](/docs/pr-5/reference/package-limit/.md)                                  |
-| `mdlsub`            | `sdk.mdlsub` model subscription callback                                    | [Model subscription](/docs/pr-5/reference/package-mdlsub/.md)                           |
-| `metric`            | `sdk.metric` metric subsystem                                               | [Metric package and Prometheus endpoint](/docs/pr-5/reference/package-metric/.md)       |
-| `metric`            | `pkg/metric.LoggerHandler` integration (the same `metric.log.records` name) | [Logger package integration](/docs/pr-5/reference/package-log/.md)                      |
-| `rpc.server`        | `sdk.grpcserver`                                                            | [gRPC server](/docs/pr-5/reference/package-grpcserver/.md)                              |
-| `smpl`              | `sdk.smpl` sampling                                                         | [Sampling](/docs/pr-5/how-to/sampling/use-sampling/.md)                                 |
+| Namespace           | Component / emitter                                                         | Reference                                                                          |
+| ------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `stream`            | `sdk.stream` consumer                                                       | [Stream consumer metrics](#stream-consumer-metrics)                                |
+| `stream`            | `sdk.stream` producer daemon                                                | [Producer daemon metrics](#producer-daemon-metrics)                                |
+| `stream`            | `sdk.stream` Redis-list input                                               | [Redis-list input](/docs/pr-5/reference/package-stream-redis-list-input/.md)       |
+| `stream`            | `sdk.stream` Redis-list output                                              | [Redis-list output](/docs/pr-5/reference/package-stream-redis-list-output/.md)     |
+| `kafka`             | `sdk.kafka.client-hook`                                                     | [Kafka client hooks](/docs/pr-5/reference/package-kafka/.md)                       |
+| `kafka.consumer`    | `sdk.kafka.consumer`                                                        | [Kafka consumer](/docs/pr-5/reference/package-kafka-consumer/.md)                  |
+| `kafka.producer`    | `sdk.kafka.producer`                                                        | [Kafka producer](/docs/pr-5/reference/package-kafka-producer/.md)                  |
+| `cloud.aws.kinesis` | `sdk.cloud.aws.kinesis` ShardReader                                         | [Kinesis shard reader](/docs/pr-5/reference/package-cloud_aws_kinesis-reader/.md)  |
+| `cloud.aws.kinesis` | `sdk.cloud.aws.kinesis` RecordWriter                                        | [Kinesis record writer](/docs/pr-5/reference/package-cloud_aws_kinesis-writer/.md) |
+| `cloud.aws.kinesis` | `sdk.cloud.aws.kinesis` Kinsumer                                            | [Kinsumer](/docs/pr-5/reference/package-kinsumer/.md)                              |
+| `blob`              | `sdk.blob` batch runner                                                     | [Blob package](/docs/pr-5/reference/package-blob/.md)                              |
+| `conc.scheduler`    | `sdk.conc.scheduler`                                                        | [Concurrency scheduler](/docs/pr-5/reference/package-conc_scheduler/.md)           |
+| `db.client`         | `sdk.db` SQL database client                                                | [Database package](/docs/pr-5/reference/package-db/.md)                            |
+| `db.repo`           | `sdk.db-repo` SQL repository wrapper                                        | [Database repository](/docs/pr-5/reference/package-db-repo/.md)                    |
+| `ddb`               | `sdk.ddb` DynamoDB repository                                               | [DynamoDB package](/docs/pr-5/reference/package-ddb/.md)                           |
+| `http.client`       | `sdk.http-client`                                                           | [HTTP client](/docs/pr-5/reference/package-http/.md)                               |
+| `http.server`       | `sdk.httpserver` Gosoline SDK implementation                                | [Gosoline HTTP server](/docs/pr-5/reference/package-gosoline-httpserver/.md)       |
+| `http.server`       | `library.httpserver` published HTTPServer implementation                    | [HTTPServer library](/docs/pr-5/reference/package-httpserver/.md)                  |
+| `kvstore`           | `sdk.kvstore`                                                               | [Key-value store](/docs/pr-5/reference/package-kvstore/.md)                        |
+| `limit`             | `sdk.limit` rate limiter                                                    | [Rate limiter](/docs/pr-5/reference/package-limit/.md)                             |
+| `mdlsub`            | `sdk.mdlsub` model subscription callback                                    | [Model subscription](/docs/pr-5/reference/package-mdlsub/.md)                      |
+| `metric`            | `sdk.metric` metric subsystem                                               | [Metric package and Prometheus endpoint](/docs/pr-5/reference/package-metric/.md)  |
+| `metric`            | `pkg/metric.LoggerHandler` integration (the same `metric.log.records` name) | [Logger package integration](/docs/pr-5/reference/package-log/.md)                 |
+| `rpc.server`        | `sdk.grpcserver`                                                            | [gRPC server](/docs/pr-5/reference/package-grpcserver/.md)                         |
+| `smpl`              | `sdk.smpl` sampling                                                         | [Sampling decisions](#sampling-decisions)                                          |
 
 For broader workflow context, see the [AWS package reference](/docs/pr-5/reference/package-cloud_aws/.md), the [Kafka guide](/docs/pr-5/how-to/kafka/general/.md), the [SQL database overview](/docs/pr-5/how-to/databases-sql/.md), and the [streaming inputs and outputs guide](/docs/pr-5/how-to/streaming-applications/understand-inputs-and-outputs/.md). Those pages supplement the component pages above.
 
@@ -111,20 +111,42 @@ Gosoline records **80 metrics across 18 namespaces**. Values of `error.type` and
 
 ### `stream`[​](#stream "Direct link to stream")
 
-| Canonical metric            | Type      | Authored unit | Dimensions                                 | Description / actual measurement                                                                                                                                          |
-| --------------------------- | --------- | ------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stream.process.duration`   | histogram | ms            | `consumer.name`                            | Duration of one consumer processing operation; a batch consumer records one observation for the whole batch.                                                              |
-| `stream.consumed.messages`  | counter   | count         | `consumer.name`, `error.type`              | Messages a consumer took in from its input, by error type.                                                                                                                |
-| `stream.retry.operations`   | counter   | count         | `consumer.name`, `operation`, `error.type` | Retry-handler `get` and `put` attempts; normal attempts use `error.type="{{default}}"`. A failed `put` also emits the overlapping `retry_handler_put_failed` diagnostic.  |
-| `stream.produced.messages`  | counter   | count         | `producer.name`                            | Input messages in calls to a running daemon's `Write`, counted before aggregation and batching; this does not establish that those stages or remote delivery succeeded.   |
-| `stream.batch.messages`     | histogram | count         | `producer.name`                            | Messages passed to the configured output per batch after aggregation and batching; the observation is recorded after the output call returns even if it reports an error. |
-| `stream.aggregate.messages` | histogram | count         | `producer.name`                            | Messages combined by a producer daemon into one aggregate.                                                                                                                |
-| `stream.idle.duration`      | histogram | ms            | `producer.name`                            | Time an output worker waits for the next batch on the daemon's output channel, capped at the configured `interval`; it is not output or broker-request latency.           |
-| `stream.message.count`      | gauge     | count         | `list.name`                                | Messages currently held by a Redis list input.                                                                                                                            |
-| `stream.reads`              | counter   | count         | `list.name`                                | Read operations performed by a Redis list input.                                                                                                                          |
-| `stream.writes`             | counter   | count         | `list.name`                                | Messages supplied to a Redis-list output batch, counted after the list's `RPush` calls; not a Redis command count or confirmation that each item was stored.              |
+#### Stream consumer metrics[​](#stream-consumer-metrics "Direct link to Stream consumer metrics")
+
+| Canonical metric           | Type      | Authored unit | Dimensions                                 | Description / actual measurement                                                                                                                                         |
+| -------------------------- | --------- | ------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stream.process.duration`  | histogram | ms            | `consumer.name`                            | Duration of one consumer processing operation; a batch consumer records one observation for the whole batch.                                                             |
+| `stream.consumed.messages` | counter   | count         | `consumer.name`, `error.type`              | Messages a consumer took in from its input, by error type.                                                                                                               |
+| `stream.retry.operations`  | counter   | count         | `consumer.name`, `operation`, `error.type` | Retry-handler `get` and `put` attempts; normal attempts use `error.type="{{default}}"`. A failed `put` also emits the overlapping `retry_handler_put_failed` diagnostic. |
+
+For processing failures in the last five minutes, select the failure series directly. For example, in Prometheus:
+
+```
+sum by (consumer_name) (increase(gosoline_stream_consumed_messages_total{error_type="processing_failed"}[5m]))
+```
+
+Use `error_type=""` instead to count collected records. Do not add the diagnostic series to the collected total or subtract them to infer success.
 
 For `stream.consumed.messages`, `error.type="{{default}}"` counts collected input records before decoding; it is an input-volume total, not an all-processed or successful-record count. A single-message invocation contributes one collected message. A batch contributes its collected record count before decoding, including records later skipped by ignored model lookup, records whose lookup or decoding fails, and records in an empty decoded batch. `error.type="processing_failed"` is an overlapping per-record subset for non-canceled processing errors. For a batch callback error it counts decoded records with false or missing acknowledgements, not the whole collected batch. A false or missing acknowledgement with a nil callback error can request deferred processing or retry without emitting `processing_failed`. Every `GetModel` failure also emits `error.type="model_lookup_failed"`, including ignored failures; only non-ignored lookup failures overlap `processing_failed`. Both diagnostics overlap the collected total. Select `processing_failed` for processing-error counts rather than summing nondefault values. For retry-operation totals, select `error.type="{{default}}"`; `retry_handler_put_failed` is an overlapping failed-put subset, not an additional attempt. The default marker is writer-specific: select `error_type=""` in Prometheus, an absent `error.type` attribute in OpenTelemetry, or the series without that dimension in CloudWatch.
+
+#### Producer daemon metrics[​](#producer-daemon-metrics "Direct link to Producer daemon metrics")
+
+| Canonical metric            | Type      | Authored unit | Dimensions      | Description / actual measurement                                                                                                                                          |
+| --------------------------- | --------- | ------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stream.produced.messages`  | counter   | count         | `producer.name` | Input messages in calls to a running daemon's `Write`, counted before aggregation and batching; this does not establish that those stages or remote delivery succeeded.   |
+| `stream.batch.messages`     | histogram | count         | `producer.name` | Messages passed to the configured output per batch after aggregation and batching; the observation is recorded after the output call returns even if it reports an error. |
+| `stream.aggregate.messages` | histogram | count         | `producer.name` | Messages combined by a producer daemon into one aggregate.                                                                                                                |
+| `stream.idle.duration`      | histogram | ms            | `producer.name` | Time an output worker waits for the next batch on the daemon's output channel, capped at the configured `interval`; it is not output or broker-request latency.           |
+
+The daemon's metrics track messages accepted for writing, batch and aggregate sizes, and how long output workers wait for batches. They do not indicate successful delivery. Use daemon error logs to investigate failed asynchronous output calls.
+
+#### Redis list metrics[​](#redis-list-metrics "Direct link to Redis list metrics")
+
+| Canonical metric       | Type    | Authored unit | Dimensions  | Description / actual measurement                                                                                                                             |
+| ---------------------- | ------- | ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stream.message.count` | gauge   | count         | `list.name` | Messages currently held by a Redis list input.                                                                                                               |
+| `stream.reads`         | counter | count         | `list.name` | Read operations performed by a Redis list input.                                                                                                             |
+| `stream.writes`        | counter | count         | `list.name` | Messages supplied to a Redis-list output batch, counted after the list's `RPush` calls; not a Redis command count or confirmation that each item was stored. |
 
 ### `kafka.consumer`[​](#kafkaconsumer "Direct link to kafkaconsumer")
 
@@ -243,6 +265,24 @@ The duration histogram includes the full numeric status code. Only the response 
 
 When an HTTP server response has a code outside 100–599, the default `response.status_class` is an empty Prometheus label, an absent OpenTelemetry attribute, or an omitted CloudWatch dimension. For example, `gosoline_http_server_responses_total{response_status_class=""}` selects these nonstandard-status responses while the numeric code remains available for exact-code queries.
 
+#### CloudWatch server response queries[​](#cloudwatch-server-response-queries "Direct link to CloudWatch server response queries")
+
+CloudWatch writes `http.server.routed.responses` as `HttpServerRoutedResponses`. To query counts by exact status code in Metrics Insights, select the five-dimension series for codes 100–599:
+
+```
+SELECT SUM(HttpServerRoutedResponses)
+
+FROM SCHEMA("<CloudWatch namespace>", name, route, "request.method", "response.status_code", "response.status_class")
+
+GROUP BY "response.status_code"
+```
+
+To query codes outside 100–599, omit `"response.status_class"` from the `SCHEMA` clause but keep `"response.status_code"`: CloudWatch omits the class dimension for these responses.
+
+For a route's 5xx alarm, use a CloudWatch `MetricStat` with `Stat: Sum`. Set `name`, `route`, `request.method`, and `response.status_class="5xx"` and leave out `response.status_code`. That series counts the entire 500–599 class. Do not sum it with the exact-code series: they count the same responses.
+
+CloudWatch stores one additional series per observed class and server/route/method combination. Prometheus and OpenTelemetry export only the detailed series. The server-wide `http.server.responses` counter has no extra class-only series.
+
 ### `http.client`[​](#httpclient "Direct link to httpclient")
 
 | Canonical metric                 | Type      | Authored unit | Dimensions                                                                                                                     | Description / actual measurement                                                                                                                                                                                                                                                            |
@@ -252,10 +292,6 @@ When an HTTP server response has a code outside 100–599, the default `response
 | `http.client.request.duration`   | histogram | ms            | `request.method`, `response.status_code`, `error.type`                                                                         | Duration of an HTTP client request. This latency histogram does not carry `response.status_class`; its observation count and sum are not substitutes for the start/completion Counters.                                                                                                     |
 
 The default marker for missing code/class or success `error.type` is writer-specific. In Prometheus, the default is an empty label value, so failed completion volume can be selected with `sum(gosoline_http_client_completed_requests_total{response_status_code="", response_status_class="", error_type="request_failed"})` (use `request_canceled` for cancellations); successful status volume can filter `response_status_class="5xx"`. OpenTelemetry omits default attributes, so select failures by `error.type` while requiring `response.status_code` and `response.status_class` to be absent. CloudWatch omits default dimensions; select HTTP client failure series without the code/class dimensions and with the corresponding `error.type`.
-
-For the raw `http.server.routed.responses` counter in CloudWatch Metric Insights, fence the query to its five dimensions with `FROM SCHEMA("<CloudWatch namespace>", name, route, "request.method", "response.status_code", "response.status_class")`. CloudWatch also stores a second class-projected series under the same metric name, omitting `response.status_code`; for standard 100–599 statuses its dimensions are `name`, `route`, `request.method`, and `response.status_class`. OpenTelemetry and Prometheus export only the raw five-dimension Counter, without a second projection. Each observed class adds a CloudWatch time series for each name/route/method combination, so the projection adds per-class metric cost.
-
-For class totals and 5xx alarms, use a standard CloudWatch `MetricStat` with `Stat: Sum` for the projected metric and all four projection dimensions, including `response.status_class`; leave out `response.status_code`. Filter `response.status_class="5xx"` to include the whole 500–599 class rather than only 500–504. The separate `http.server.responses` counter has no class projection.
 
 ### `rpc.server`[​](#rpcserver "Direct link to rpcserver")
 
@@ -278,6 +314,10 @@ For class totals and 5xx alarms, use a standard CloudWatch `MetricStat` with `St
 | `metric.log.records`                 | counter   | count         | `level`                                                        | Log records written at warn or error level, by level.                                                                                                                |
 
 Limiter start, terminal, and throttle Counters describe separate event boundaries; do not sum them as one outcome set. `limit.takes` contains only terminal `allowed` or `error` outcomes, while a throttle is recorded independently in `limit.throttled.takes`.
+
+#### Sampling decisions[​](#sampling-decisions "Direct link to Sampling decisions")
+
+`smpl.decisions` counts new decisions made while sampling is enabled. The `sampled` dimension value is the string `"true"` or `"false"`. If no strategy applies, the decision is `true`. The decider does not emit a point when sampling is disabled, a decision is already stored on the context, or a strategy returns an error. OpenTelemetry exports `gosoline.smpl.decisions` with unit `{decision}`.
 
 ## Querying outcomes[​](#querying-outcomes "Direct link to Querying outcomes")
 
