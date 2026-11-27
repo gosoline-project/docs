@@ -1,0 +1,12 @@
+Migrate this application from Gosoline metrics schema v1.0 to v2.0. Gosoline v0.69.0 implements the target schema. Use the application's agreed target version; do not downgrade a newer dependency. Keep unrelated behavior and dependency changes out of scope.
+
+Read these sources before editing:
+- Migration guide: https://gosoline-project.github.io/docs/migrations/metrics-schema/
+- Current metric names, dimensions, units, and writer output: https://gosoline-project.github.io/docs/reference/metric-schema/
+- Released Go API changes and detailed mappings: https://github.com/justtrackio/gosoline/releases/tag/v0.69.0
+
+1. Find all metrics writers and producers in Go code, config, and tests. Check the installed versions of Gosoline and separately versioned producers. Find dashboards, recording rules, alerts, and scaling policies, including generated definitions and files in other repositories. List anything you cannot access.
+2. For each affected query or emitter, record its source, current purpose, exported name, dimensions, kind, and unit. Check the old deployment's output and the target source or reference. Do not use a blind string replacement: new counters can count different events, and default or aggregate series can overlap diagnostic series.
+3. Update the dependency, Go call sites, writer settings, and generated config sources as needed. Migrate queries to the target writer's names and labels. Review histogram queries, thresholds, and missing-data rules. If you cannot verify an equivalent signal, report the affected consumers and ask for a monitoring decision. Do not silently disable checks or alarms.
+4. Run focused tests and exercise representative success and failure paths in a test environment. Confirm actual writer output and the metric.schema_version metadata when the daemon is enabled. Check that migrated rules, dashboards, and alarms use the expected series and units. Do not deploy or change live monitoring unless authorized.
+5. Report changed files, the old and new selectors, checks run and their results, any inaccessible monitoring definitions, and rollout or rollback steps.
